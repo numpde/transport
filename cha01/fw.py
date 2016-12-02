@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-# R. Andreev, 2016-12-02
-
-# Ensure float division
-from __future__ import division
+# R. Andreev, 2016-12-03
 
 # Competing navigators
 import ai_clock, ai_klock, ai_greedy, ai_error, ai_simul
+
+# Bus capacity
+C = 3
+# Number of stations
+N = 6
 
 
 import random
@@ -22,7 +24,6 @@ class World :
 		self.i = None  # Iteration number (time)
 		self.NEWS = [None] # World trajectory record
 		self.rewind()
-	#/def
 	
 	#public:
 	def rewind(self) :
@@ -30,7 +31,6 @@ class World :
 		self.B = []
 		self.G = [[] for _ in range(self.N)]
 		self.i = 0
-	#/def
 	
 	#public:
 	def news(self) :
@@ -40,15 +40,12 @@ class World :
 			a = random.randint(0, self.N-1)
 			b = (a + random.randint(1, self.N-1)) % self.N
 			self.NEWS.append((a, b))
-		#/if
 		assert((0 <= self.i) and (self.i < len(self.NEWS)))
 		return self.NEWS[self.i]
-	#/def
 	
 	#public:
 	def look(self) :
 		return self.b, self.B, self.G
-	#/def
 	
 	#public:
 	def move(self, M, s) :
@@ -72,22 +69,17 @@ class World :
 		a, b = self.news()
 		# New passenger in queue
 		self.G[a].append(b)
-	#/def
 	
 	#private:
 	def check_suggestion(self, M, s) :
 		assert isinstance(M, (list)), "M should be a list (of indices)"
 		assert (s in [-1, 0, 1]), "s should be a sign: -1, +1 or 0"
 		assert (len(M) + len(self.B) <= self.C), "Exceeded the bus capacity"
-	#/def
 	
 	#public:
 	def get_w(self) :
 		# Number of people waiting in queue
 		return sum(len(P) for P in self.G)
-	#/def
-#/class
-
 
 
 class Profiler :
@@ -102,28 +94,35 @@ class Profiler :
 		while (wrd.i < I) :
 			wrd.move(*nav.step(*wrd.look()))
 			self.W.append(wrd.get_w())
-		#/while
-	#/def
-#/class
 
 
 
-# Bus capacity
-C = 3
-# Number of stations
-N = 6
+###
+print("1. Initializing navigators")
+###
 
-# Competing navigators
-NAV = [ai_clock.navigator(C, N), ai_klock.navigator(C, N), ai_greedy.navigator(C, N), ai_error.navigator(C, N), ai_simul.navigator(C, N)]
+NAV = []
+import sys
+#
+for module in [s for s in list(sys.modules) if s.startswith('ai_')] :
+	try :
+		Nav = getattr(__import__(module), 'navigator')
+		NAV.append(Nav(C, N))
+		print(" - Module " + module + " ok")
+	except Exception as err:
+		print(" - Module " + module + " failed:", err)
 
 def get_name(nav) :
 	try :
 		return nav.name
 	except :
 		return "Unknown"
-	#/try
-#/def
 
+
+
+###
+print("2. Profiling navigators")
+###
 
 # Number of iterations (time steps)
 I = 10000
@@ -132,8 +131,7 @@ I = 10000
 R = [None for _ in NAV]
 
 
-
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import numpy as np
 
 # While some ranks are undecided
@@ -149,8 +147,8 @@ while [r for r in R if r is None] :
 	for n, nav in enumerate(NAV) :
 		if (R[n] is not None) : continue
 		
+		print(" - Profiling:", get_name(nav))
 		try :
-			print("Profiling:", get_name(nav))
 			# Default navigator score = +oo
 			S[n] = +np.inf 
 			# Profile the navigator on the world
@@ -159,26 +157,26 @@ while [r for r in R if r is None] :
 			S[n] = np.mean(report.W)
 			#plt.plot(report.W)
 		except Exception as err :
-			print("Error:", err)
-		#/try
-	#/for
+			print("    - Error:", err)
+	
 	#plt.show()
 	
 	# Rank the losers
 	maxS = max(s for s in S if s is not None)
 	for n, s in enumerate(S) : 
 		if (s == maxS) : R[n] = rank
-	#/for
 	
 	for n, s in enumerate(S) :
 		print("# ", rank, n, s, R[n])
-	#/for
-#/while
 
-print("Final ranking:")
+
+
+###
+print("3. Final ranking:")
+###
+
 for r in sorted(R) : 
 	print(r, get_name(NAV[R.index(r)]))
-#/for
 
 
 

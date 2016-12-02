@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 
-# AI part
-
 class navigator :
 	name = "Greedy"
 	
 	def __init__(self, C, N) :
 		self.C = C
 		self.N = N
-	#/def
 
 	def step(self, b, B, G) :
 		# Number of passengers to board
@@ -29,6 +26,5 @@ class navigator :
 		s = (+1) if (t > 0) else (-1)
 		
 		return M, s
-	#/def
-#/class
+
 
