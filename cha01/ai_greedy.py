@@ -5,13 +5,12 @@
 class navigator :
 	name = "Greedy"
 	
-	def __init__(self, C, I, N) :
+	def __init__(self, C, N) :
 		self.C = C
-		self.I = I
 		self.N = N
 	#/def
 
-	def step(self, i, b, B, G) :
+	def step(self, b, B, G) :
 		# Number of passengers to board
 		z = min(len(G[b]), self.C - len(B))
 		# Passenger selection
