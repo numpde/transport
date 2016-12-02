@@ -9,22 +9,18 @@ from __future__ import division
 import ai_clock, ai_klock, ai_greedy, ai_error, ai_simul
 
 
-import random, copy
+import random
 #
 class World :
 
-	#NEWS = [] # World trajectory record
-	#C = None  # Bus capacity
-	#N = None  # Number of stations
-	#b = None  # Bus position
-	#B = None  # Bus passengers' destinations
-	#G = None  # People waiting
-	#i = None  # Iteration number (time)
-	
 	def __init__(self, C, N) :
-		self.C = C
-		self.N = N
-		self.NEWS = []
+		self.C = C     # Bus capacity
+		self.N = N     # Number of stations
+		self.b = None  # Bus position
+		self.B = None  # Bus passengers' destinations
+		self.G = None  # People waiting
+		self.i = None  # Iteration number (time)
+		self.NEWS = [None] # World trajectory record
 		self.rewind()
 	#/def
 	
@@ -34,17 +30,18 @@ class World :
 		self.B = []
 		self.G = [[] for _ in range(self.N)]
 		self.i = 0
-		self.prep_touch()
 	#/def
 	
 	#public:
 	def news(self) :
 		# Create news if necessary
-		while (len(self.NEWS) <= self.i) :
+		if (len(self.NEWS) <= self.i) :
+			# New passenger arrives at "a" with destination "b"
 			a = random.randint(0, self.N-1)
 			b = (a + random.randint(1, self.N-1)) % self.N
 			self.NEWS.append((a, b))
-		#/while
+		#/if
+		assert((0 <= self.i) and (self.i < len(self.NEWS)))
 		return self.NEWS[self.i]
 	#/def
 	
@@ -53,9 +50,8 @@ class World :
 		return self.b, self.B, self.G
 	#/def
 	
-	
 	#public:
-	def touch(self, M, s) :
+	def move(self, M, s) :
 		self.check_suggestion(M, s)
 		
 		# Passengers mount (in the given order)
@@ -66,25 +62,14 @@ class World :
 		# Advance bus
 		self.b = (self.b + s) % self.N
 		
-		self.post_touch()
-	#/def
-	
-	#private:
-	def post_touch(self) :
+		# Passengers unmount
+		self.B = [p for p in self.B if (p != self.b)]
+		
 		# Advance time
 		self.i += 1
 		
-		self.prep_touch()
-	#/def
-	
-	#private:
-	def prep_touch(self) :
-		# Passengers unmount
-		self.B = [p for p in self.B if p != self.b]
-		
 		# New passenger arrives at "a" with destination "b"
 		a, b = self.news()
-		
 		# New passenger in queue
 		self.G[a].append(b)
 	#/def
@@ -106,17 +91,16 @@ class World :
 
 
 class Profiler :
-	W = None # Number of people waiting
-	
 	def __init__(self, wrd, nav, I) :
+		self.W = [] # Number of people waiting
+		
 		assert((0 <= I) and (I <= 1e10))
 		
 		wrd.rewind()
 		assert(wrd.i == 0)
 		
-		self.W = []
 		while (wrd.i < I) :
-			wrd.touch(*nav.step(*wrd.look()))
+			wrd.move(*nav.step(*wrd.look()))
 			self.W.append(wrd.get_w())
 		#/while
 	#/def
