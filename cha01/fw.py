@@ -5,47 +5,41 @@
 # Ensure float division
 from __future__ import division
 
-import ai_clock, ai_klock, ai_greedy, ai_error
-import matplotlib.pyplot as plt
-import numpy as np
-import random as rnd
+import ai_clock, ai_klock, ai_greedy, ai_error, ai_simul
 
-
+import random, copy
+#
 class World :
-	# Deterministic trajectory record
-	NEWS = []
+
+	NEWS = [] # World trajectory record
+	C = None  # Bus capacity
+	N = None  # Number of stations
+	b = None  # Bus position
+	B = None  # Bus passengers' destinations
+	G = None  # People waiting
+	i = None  # Iteration number (time)
 	
-	C = None # Bus capacity
-	N = None # Number of stations
 	def __init__(self, C, N) :
 		self.C = C
 		self.N = N
-		
 		self.rewind()
 	#/def
 	
 	#public:
 	def rewind(self) :
-		# Bus location
 		self.b = 0
-		# Bus passengers
 		self.B = []
-		# Stations
 		self.G = [[] for _ in range(self.N)]
-		# Iteration number (time)
 		self.i = 0
-		# Number of people waiting in queue
-		self.w = 0
-		
 		self.prep_touch()
 	#/def
 	
 	#public:
 	def news(self) :
-		# Create news
+		# Create news if necessary
 		while (len(self.NEWS) <= self.i) :
-			a = rnd.randint(0, self.N-1)
-			b = (a + rnd.randint(1, self.N-1)) % self.N
+			a = random.randint(0, self.N-1)
+			b = (a + random.randint(1, self.N-1)) % self.N
 			self.NEWS.append((a, b))
 		#/while
 		return self.NEWS[self.i]
@@ -56,6 +50,7 @@ class World :
 		return self.b, self.B, self.G
 	#/def
 	
+	
 	#public:
 	def touch(self, M, s) :
 		self.check_suggestion(M, s)
@@ -64,8 +59,6 @@ class World :
 		for m in M : self.B.append(self.G[self.b][m])
 		# Remove them from the queue
 		for m in sorted(M, reverse=True) : self.G[self.b].pop(m)
-		# Number of people waiting
-		self.w -= len(M)
 		
 		# Advance bus
 		self.b = (self.b + s) % self.N
@@ -79,7 +72,6 @@ class World :
 		self.i += 1
 		
 		self.prep_touch()
-		self.check_consistency()
 	#/def
 	
 	#private:
@@ -92,7 +84,6 @@ class World :
 		
 		# New passenger in queue
 		self.G[a].append(b)
-		self.w += 1
 	#/def
 	
 	#private:
@@ -102,11 +93,13 @@ class World :
 		assert (len(M) + len(self.B) <= self.C), "Exceeded the bus capacity"
 	#/def
 	
-	#private:
-	def check_consistency(self) :
-		assert(self.w == sum(len(P) for P in self.G))
+	#public:
+	def get_w(self) :
+		# Number of people waiting in queue
+		return sum(len(P) for P in self.G)
 	#/def
 #/class
+
 
 
 class Profiler :
@@ -121,7 +114,7 @@ class Profiler :
 		self.W = []
 		while (wrd.i < I) :
 			wrd.touch(*nav.step(*wrd.look()))
-			self.W.append(wrd.w)
+			self.W.append(wrd.get_w())
 		#/while
 	#/def
 #/class
@@ -134,7 +127,7 @@ C = 3
 N = 6
 
 # Competing navigators
-NAV = [ai_clock.navigator(C, N), ai_klock.navigator(C, N), ai_greedy.navigator(C, N), ai_error.navigator(C, N)]
+NAV = [ai_clock.navigator(C, N), ai_klock.navigator(C, N), ai_greedy.navigator(C, N), ai_error.navigator(C, N), ai_simul.navigator(C, N)]
 
 def get_name(nav) :
 	try :
@@ -144,11 +137,17 @@ def get_name(nav) :
 	#/try
 #/def
 
+
 # Number of iterations (time steps)
 I = 10000
 
 # Ranks
 R = [None for _ in NAV]
+
+
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 # While some ranks are undecided
 while [r for r in R if r is None] :
@@ -171,12 +170,12 @@ while [r for r in R if r is None] :
 			report = Profiler(wrd, nav, I)
 			# Score = average number of people waiting
 			S[n] = np.mean(report.W)
-			plt.plot(report.W)
+			#plt.plot(report.W)
 		except Exception as err :
 			print("Error:", err)
 		#/try
 	#/for
-	plt.show()
+	#plt.show()
 	
 	# Rank the losers
 	maxS = max(s for s in S if s is not None)
