@@ -5,7 +5,7 @@
 # Ensure float division
 from __future__ import division
 
-import ai_clock, ai_klock, ai_greedy
+import ai_clock, ai_klock, ai_greedy, ai_error
 import matplotlib.pyplot as plt
 import numpy as np
 import random as rnd
@@ -134,51 +134,61 @@ C = 3
 N = 6
 
 # Competing navigators
-NAV = [ai_clock.navigator(C, N), ai_klock.navigator(C, N), ai_greedy.navigator(C, N)]
+NAV = [ai_clock.navigator(C, N), ai_klock.navigator(C, N), ai_greedy.navigator(C, N), ai_error.navigator(C, N)]
 
-# Ranks (default = 1)
-R = [1 for _ in NAV]
+def get_name(nav) :
+	try :
+		return nav.name
+	except :
+		return "Unknown"
+	#/try
+#/def
 
 # Number of iterations (time steps)
 I = 10000
 
-for r in range(len(NAV)-1) :
-	# A deterministic world
+# Ranks
+R = [None for _ in NAV]
+
+# While some ranks are undecided
+while [r for r in R if r is None] :
+	rank = sum((r is None) for r in R)
+	print("Number of competitors:", rank)
+
+	# Create a rewindable world
 	wrd = World(C, N)
 	
 	# Navigator scores (nonnegative; max score loses)
-	S = [-1 for _ in NAV]
+	S = [None for _ in NAV]
 	for n, nav in enumerate(NAV) :
-		if (R[n] != 1) : continue
-		
-		# Default navigator score = +oo
-		S[n] = +np.inf
+		if (R[n] is not None) : continue
 		
 		try :
-			print("Profiling:", nav.name)
-		except AttributeError as err :
-			print("Profiling a no-name navigator")
-		#/try
-		
-		try : 
+			print("Profiling:", get_name(nav))
+			# Default navigator score = +oo
+			S[n] = +np.inf 
 			# Profile the navigator on the world
 			report = Profiler(wrd, nav, I)
 			# Score = average number of people waiting
 			S[n] = np.mean(report.W)
 			plt.plot(report.W)
 		except Exception as err :
-			print("Error", err)
+			print("Error:", err)
 		#/try
 	#/for
 	plt.show()
 	
-	# Rank of the loser
-	R[S.index(max(S))] = sum((x == 1) for x in R)
-#/for
+	# Rank the losers
+	maxS = max(s for s in S if s is not None)
+	for n, s in enumerate(S) : 
+		if (s == maxS) : R[n] = rank
+	#/for
+#/while
 
-print("Ranking:")
+print("Final ranking:")
 for r in sorted(R) : 
-	print(r, NAV[R.index(r)].name)
+	print(r, get_name(NAV[R.index(r)]))
+#/for
 
 
 
