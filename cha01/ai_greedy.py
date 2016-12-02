@@ -26,7 +26,7 @@ class navigator :
 		t = (self.N/2 - ((t-b) % self.N))
 		
 		# Move towards that destination
-		s = (+1) if (t > 0) else (-1);
+		s = (+1) if (t > 0) else (-1)
 		
 		return M, s
 	#/def

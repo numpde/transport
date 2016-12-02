@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-# AI part
-
 class navigator :
 	name = "Clock"
 	
