@@ -5,23 +5,26 @@
 # Ensure float division
 from __future__ import division
 
+# Competing navigators
 import ai_clock, ai_klock, ai_greedy, ai_error, ai_simul
+
 
 import random, copy
 #
 class World :
 
-	NEWS = [] # World trajectory record
-	C = None  # Bus capacity
-	N = None  # Number of stations
-	b = None  # Bus position
-	B = None  # Bus passengers' destinations
-	G = None  # People waiting
-	i = None  # Iteration number (time)
+	#NEWS = [] # World trajectory record
+	#C = None  # Bus capacity
+	#N = None  # Number of stations
+	#b = None  # Bus position
+	#B = None  # Bus passengers' destinations
+	#G = None  # People waiting
+	#i = None  # Iteration number (time)
 	
 	def __init__(self, C, N) :
 		self.C = C
 		self.N = N
+		self.NEWS = []
 		self.rewind()
 	#/def
 	
@@ -181,6 +184,10 @@ while [r for r in R if r is None] :
 	maxS = max(s for s in S if s is not None)
 	for n, s in enumerate(S) : 
 		if (s == maxS) : R[n] = rank
+	#/for
+	
+	for n, s in enumerate(S) :
+		print("# ", rank, n, s, R[n])
 	#/for
 #/while
 
