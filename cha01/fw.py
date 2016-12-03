@@ -2,6 +2,9 @@
 
 # R. Andreev, 2016-12-03
 
+#-------------#
+#  Section 0  #
+#-------------#
 
 # Bus capacity
 C = 3
@@ -13,18 +16,21 @@ from world import World
 from numpy import mean
 #
 class Profiler :
-	def __init__(self, wrd, nav, I) :
+	# Number of iterations (time steps)
+	I = 1000
+	
+	def __init__(self, wrd, nav) :
 		# W[i] = average number of people waiting at time i
 		self.W = []   
 		# w = average over time
 		self.w = None
 
-		assert((0 < I) and (I <= 1e9))
+		assert((0 < self.I) and (self.I <= 1e9))
 
 		wrd.rewind()
 		assert(wrd.i == 0)
 
-		while (wrd.i < I) :
+		while (wrd.i < self.I) :
 			wrd.move(*nav.step(*wrd.look()))
 			self.W.append(wrd.get_w())
 		
@@ -33,7 +39,11 @@ class Profiler :
 
 
 
-#
+#-------------#
+#  Section 1  #
+#-------------#
+
+
 print("1. Initializing navigators")
 
 # Competing navigators
@@ -66,7 +76,10 @@ def get_name(nav) :
 
 
 
-#
+#-------------#
+#  Section 2  #
+#-------------#
+
 print("2. Profiling navigators")
 
 # Ranks
@@ -93,10 +106,8 @@ while [r for r in R if r is None] :
 		
 		print(" - Profiling:", get_name(nav))
 		try :
-			# Number of iterations (time steps)
-			I = 10000
 			# Profile the navigator on the world
-			report = Profiler(wrd, nav, I)
+			report = Profiler(wrd, nav)
 			# Score = average number of people waiting
 			score = report.w
 			# Record score
@@ -112,11 +123,22 @@ while [r for r in R if r is None] :
 		S[n].append(mean(S[n] + [s]))
 
 
-#
+#-------------#
+#  Section 3  #
+#-------------#
+
+
 print("3. Final ranking:")
 
 for r in sorted(list(set(R))) :
 	print(r, [get_name(NAV[i]) for i, rr in enumerate(R) if (r == rr)])
+
+# Dump the results
+import pickle
+Results = {'C': C, 'N': N, 'I': Profiler.I, 'R': R, 'C': C, 'names': [], 'S': S}
+Results['names'] = [get_name(nav) for nav in NAV]
+pickle.dump(Results, open('results.dat', 'wb'))
+# Note: use pickle.load(open('results.dat', 'rb')) to read
 
 
 import matplotlib.pyplot as plt
