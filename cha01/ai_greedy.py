@@ -7,9 +7,9 @@ class navigator :
 		self.C = C
 		self.N = N
 
-	def step(self, b, B, G) :
+	def step(self, b, B, Q) :
 		# Number of passengers to board
-		z = min(len(G[b]), self.C - len(B))
+		z = min(len(Q[b]), self.C - len(B))
 		# Passenger selection
 		M = [m for m in range(z)]
 		
@@ -17,7 +17,7 @@ class navigator :
 		if ((not B) and (not M)) : return [], 1
 		
 		# Next passenger's destination
-		t = (B + [G[b][m] for m in M])[0]
+		t = (B + [Q[b][m] for m in M])[0]
 		
 		# Destination relative to current position
 		t = (self.N/2 - ((t-b) % self.N))
