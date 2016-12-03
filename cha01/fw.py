@@ -39,13 +39,13 @@ print("1. Initializing navigators")
 # Competing navigators
 NAV = []
 
-# Load all local ai_* modules
-# Ref: http://stackoverflow.com/questions/8718885/
 from os.path import dirname, basename, isfile
 import glob, importlib, sys
+
+# Load all local ai_* modules
+# Ref: http://stackoverflow.com/questions/8718885/
 modules = glob.glob(dirname(__file__) + "/*.py")
 modules = [basename(f)[:-3] for f in modules if isfile(f)]
-#modules = list(set(modules)) # unique names
 modules = [m for m in modules if m.startswith("ai_")]
 for module in modules : 
 	try :
@@ -56,6 +56,8 @@ for module in modules :
 	except Exception as err:
 		print("Loading module", module, "failed:", err)
 
+
+# Helper function
 def get_name(nav) :
 	try :
 		return nav.name
@@ -69,7 +71,7 @@ print("2. Profiling navigators")
 
 # Ranks
 R = [None for _ in NAV]
-# Scores
+# Score histories
 S = [[] for _ in NAV]
 
 #import matplotlib.pyplot as plt
@@ -83,7 +85,8 @@ while [r for r in R if r is None] :
 	# Create a rewindable world
 	wrd = World(C, N)
 
-	# Navigator scores (nonnegative; max score loses)
+	# Navigator scores for this round
+	# (nonnegative; max score loses)
 	K = []
 	for n, nav in enumerate(NAV) :
 		if (R[n] is not None) : continue
@@ -95,15 +98,15 @@ while [r for r in R if r is None] :
 			# Profile the navigator on the world
 			report = Profiler(wrd, nav, I)
 			# Score = average number of people waiting
-			K.append((n, report.w))
+			score = report.w
+			# Record score
+			K.append((n, score))
 			#plt.plot(report.W) # History
 		except Exception as err :
 			R[n] = rank
-			print("    - Error:", err)
+			print("   *Error:", err)
 	
-	
-	
-	# Rank the losers
+	# Rank the losers of this round
 	for n, s in K :
 		if (s == max(s for n, s in K)) : R[n] = rank
 		S[n].append(mean(S[n] + [s]))
