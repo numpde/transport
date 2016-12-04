@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# R. Andreev, 2016-12-03
+# Date:   2016-12-04
+# Author: verybusybus.wordpress.com
 
 from random import randint
 from numpy import mean

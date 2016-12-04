@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# R. Andreev, 2016-12-03
+# Date:   2016-12-04
+# Author: verybusybus.wordpress.com
 
 #-------------#
 #  Section 0  #
@@ -17,7 +18,7 @@ from numpy import mean
 #
 class Profiler :
 	# Number of iterations (time steps)
-	I = 1000
+	I = 10000
 	
 	def __init__(self, wrd, nav) :
 		# W[i] = average number of people waiting at time i
@@ -54,7 +55,7 @@ import glob, importlib, sys
 
 # Load all local ai_* modules
 # Ref: http://stackoverflow.com/questions/8718885/
-modules = glob.glob(dirname(__file__) + "/*.py")
+modules = glob.glob("./*.py")
 modules = [basename(f)[:-3] for f in modules if isfile(f)]
 modules = [m for m in modules if m.startswith("ai_")]
 for module in modules : 
@@ -140,7 +141,7 @@ Results['names'] = [get_name(nav) for nav in NAV]
 pickle.dump(Results, open('results.dat', 'wb'))
 # Note: use pickle.load(open('results.dat', 'rb')) to read
 
-
+"""
 import matplotlib.pyplot as plt
 for s in S :
 	plt.plot(s, '-x')
@@ -149,5 +150,4 @@ plt.xlabel('Round')
 plt.ylabel('Score (less is better)')
 plt.legend([get_name(nav) for nav in NAV], numpoints=1)
 plt.show()
-
-
+"""
