@@ -5,7 +5,7 @@
 
 from random import randint
 from numpy import mean
-
+#
 class World :
 
 	def __init__(self, C, N) :
