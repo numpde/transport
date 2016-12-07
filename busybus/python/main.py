@@ -3,7 +3,8 @@
 # Template by verybusybus.wordpress.com, 2016-12-07
 
 # Author:
-# TODO: PLEASE WRITE YOUR NAME(S) HERE 
+# TODO: SAVE THIS FILE TO YOUR MACHINE
+#       WRITE YOUR NAME(S) HERE 
 
 
 #  Section 0: Classes
@@ -11,13 +12,13 @@
 
 
 # TODO: IMPLEMENT YOUR STRATEGY HERE
-class ai_my :
-	name = "My strategy" # Choose strategy name
+class AI_MY :
+	name = "MY UNNAMED STRATEGY" # Choose strategy name
 
 	def __init__(self, C, N) :
 		# Capacity of the bus (integer >= 1)
 		self.C = C
-		# Number of stations (integer >= 1)
+		# Number of stations (integer >= 2)
 		self.N = N
 
 	def step(self, b, B, Q) :
@@ -70,7 +71,7 @@ class ai_my :
 
 
 # "Always go in the same direction" strategy
-class ai_clock :
+class AI_CLOCK :
 	name = "Clock"
 
 	def __init__(self, C, N) :
@@ -90,9 +91,9 @@ class ai_clock :
 		return M, s
 
 
-# Mini-greedy strategy
-class ai_greedy :
-	name = "Greedy"
+# Modestly greedy strategy
+class AI_GREEDY :
+	name = "Modestly greedy"
 
 	def __init__(self, C, N) :
 		self.C = C
@@ -134,7 +135,7 @@ class World :
 		self.b = None      # Bus position
 		self.B = None      # Bus passengers' destinations [list]
 		self.Q = None      # Queues at stations [list of list]
-		self.i = None      # Iteration number (time)
+		self.i = None      # Iteration number (i.e. time)
 		self.NEWS = [None] # World trajectory record [list of tuple/None]
 		self.rewind()
 
@@ -146,7 +147,7 @@ class World :
 
 	def news(self) :
 		# Create news if necessary
-		if (len(self.NEWS) <= self.i) :
+		while (len(self.NEWS) <= self.i) :
 			# New person arrives at "a" with destination "b"
 			a = randint(0, self.N-1)
 			b = (a + randint(1, self.N-1)) % self.N
@@ -192,10 +193,10 @@ class World :
 		
 		# 0.
 		# C is an integer >= 1
-		# N is an integer >= 1
+		# N is an integer >= 2
 		
 		assert isinstance(C, int) and (C >= 1)
-		assert isinstance(N, int) and (N >= 1)
+		assert isinstance(N, int) and (N >= 2)
 		
 		is_station = lambda n : isinstance(n, int) and ((0 <= n) and (n < N))
 
@@ -265,11 +266,12 @@ from numpy import mean
 # Runs the systems with a particular strategy "nav"
 class Profiler :
 	# Number of iterations (time steps)
-	I = 10000 # This will be I = 1000*1000
+	# This will be I ~ 1e6
+	I = 10000
 	
 	def __init__(self, wrd, nav) :
 		# W[i] = average number of people waiting at time i
-		self.W = []   
+		self.W = []
 		# w = average over time
 		self.w = None
 
@@ -302,7 +304,7 @@ N = 6 # This will be around 20
 print("1. Initializing navigators")
 
 # Competing navigation strategies
-NAV = [ai_my(C, N), ai_clock(C, N), ai_greedy(C, N)]
+NAV = [AI_MY(C, N), AI_CLOCK(C, N), AI_GREEDY(C, N)]
 
 # Helper function
 def get_name(nav) :
@@ -339,6 +341,7 @@ while [r for r in R if r is None] :
 	# Navigator scores for this round
 	# (nonnegative; max score loses)
 	K = []
+	
 	for n, nav in enumerate(NAV) :
 		if (R[n] is not None) : continue
 		
