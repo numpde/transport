@@ -112,7 +112,7 @@ class AI_GREEDY :
 		t = (B + [Q[b][i] for i in M])[0]
 
 		# Destination relative to current position
-		t = (self.N/2 - ((t-b) % self.N))
+		t = (self.N - 2*((t-b+N) % self.N))
 
 		# Move towards that destination
 		s = (+1) if (t > 0) else (-1)
@@ -353,6 +353,7 @@ while [r for r in R if r is None] :
 			score = report.w
 			# Record score
 			K.append((n, score))
+			print("   *Momentary score:", score)
 		except Exception as err :
 			R[n] = rank
 			print("   *Error:", err)
@@ -372,6 +373,13 @@ print("3. Final ranking:")
 
 for r in sorted(list(set(R))) :
 	print(r, [get_name(NAV[i]) for i, rr in enumerate(R) if (r == rr)])
+	
+	
+# The history of scores of n-th competitor 
+# is available here as S[n]
+print("Averaged score history:")
+for n, H in enumerate(S) :
+	print("Contestant", n, ":", H)
 
 # (Un)comment the following line for the score history plot
 """

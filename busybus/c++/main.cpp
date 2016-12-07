@@ -38,6 +38,17 @@ struct Strategy {
 };
 
 
+// Print a vector's content, e.g. cout << response.M << endl;
+template <class T>
+std::ostream &operator<<(std::ostream &os, const std::vector<T>& v)
+{
+	os << "[ ";
+	for (const auto& i : v) os << i << ' '; 
+	os << "]";
+	return os;
+}
+
+
 /****************************************/
 //  TODO: IMPLEMENT YOUR STRATEGY HERE  //
 /****************************************/
@@ -148,17 +159,17 @@ struct AI_GREEDY : public Strategy {
 		// Passenger selection from Q[b]
 		// Take passengers number 0, 1, .., n-1
 		Targets M;
-		for (unsigned i=0; i<n; ++i) M.push_back(i);
+		for (unsigned i = 0; i < n; ++i) M.push_back(i);
 		
 		// No passengers?
 		if (B.empty() & M.empty()) return Response(M, +1);
 
 		// Next passenger's destination
-		unsigned t;
-		if (!B.empty()) t = B[0]; else t = M[0];
+		int t;
+		if (!B.empty()) t = B[0]; else t = Q[b][M[0]];
 
 		// Destination relative to current position
-		t = (N/2. - ((t-b) % N));
+		t = (N - 2*((t-b+N) % N));
 
 		// Move towards that destination
 		int s = (t > 0 ? +1 : -1);
@@ -234,7 +245,10 @@ struct World {
 	void move(Response res)
 	{
 		// Passengers mount (in the given order)
-		B.insert(B.end(), res.M.begin(), res.M.end());
+		{
+			for (auto i : res.M)
+				B.push_back(Q[b][i]);
+		}
 		
 		// Remove them from the queue
 		{
@@ -302,6 +316,7 @@ struct Profiler {
 			W.push_back(wrd.get_w());
 		}
 		
+		
 		assert(!W.empty());
 		w = mean(W);
 	}
@@ -365,7 +380,7 @@ int main() {
 			double score = report.w;
 			// Record score
 			K.push_back( Score(n, score) );
-			cout << "   *Score: " << score << endl;
+			cout << "   *Momentary score: " << score << endl;
 		}
 		
 		assert(!K.empty());
@@ -404,14 +419,9 @@ int main() {
 
 	// The history of scores of n-th competitor 
 	// is available here as S[n]
-	cout << "Score history:" << endl;
-	{
-		for (unsigned n = 0; n != S.size(); ++n) {
-			cout << "Contestant #" << n << ": ";
-			for (auto s : S[n]) cout << s << "; ";
-			cout << endl;
-		}
-	}
+	cout << "Averaged score history:" << endl;
+	for (unsigned n = 0; n != S.size(); ++n)
+		cout << "   Contestant #" << n << ": " << S[n] << endl;
 
 	return EXIT_SUCCESS;
 }
