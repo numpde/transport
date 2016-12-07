@@ -98,6 +98,7 @@ class AI_GREEDY :
 	def __init__(self, C, N) :
 		self.C = C
 		self.N = N
+		self.s = +1
 
 	def step(self, b, B, Q) :
 		# Number of passengers to board
@@ -105,19 +106,22 @@ class AI_GREEDY :
 		# Passenger selection from Q[b]
 		M = list(range(n))
 
-		# No passengers?
-		if ((not B) and (not M)) : return [], 1
+		# No passengers? Continue as before
+		if ((not B) and (not M)) : return [], self.s
 
 		# Next passenger's destination
-		t = (B + [Q[b][i] for i in M])[0]
+		if len(B) :
+			t = B[0]
+		else :
+			t = Q[b][M[0]]
 
-		# Destination relative to current position
-		t = (self.N - 2*((t-b+N) % self.N))
+		# Destination relative to the current position
+		t = self.N - 2*((t-b+self.N) % self.N)
 
-		# Move towards that destination
-		s = (+1) if (t > 0) else (-1)
+		# Move towards that destination (modify default direction)
+		self.s = (+1) if (t > 0) else (-1)
 
-		return M, s
+		return M, self.s
 
 
 
@@ -170,7 +174,7 @@ class World :
 		for m in sorted(M, reverse=True) : self.Q[self.b].pop(m)
 
 		# Advance bus
-		self.b = (self.b + s) % self.N
+		self.b = (self.b + (self.N + s)) % self.N
 
 		# Passengers unmount
 		self.B = [p for p in self.B if (p != self.b)]
@@ -304,7 +308,10 @@ N = 6 # This will be around 20
 print("1. Initializing navigators")
 
 # Competing navigation strategies
-NAV = [AI_MY(C, N), AI_CLOCK(C, N), AI_GREEDY(C, N)]
+NAV = []
+NAV.append(AI_MY(C, N))
+NAV.append(AI_CLOCK(C, N))
+NAV.append(AI_GREEDY(C, N))
 
 # Helper function
 def get_name(nav) :
@@ -353,7 +360,7 @@ while [r for r in R if r is None] :
 			score = report.w
 			# Record score
 			K.append((n, score))
-			print("   *Momentary score:", score)
+			print("   *Score for this round:", score)
 		except Exception as err :
 			R[n] = rank
 			print("   *Error:", err)
@@ -372,7 +379,7 @@ while [r for r in R if r is None] :
 print("3. Final ranking:")
 
 for r in sorted(list(set(R))) :
-	print(r, [get_name(NAV[i]) for i, rr in enumerate(R) if (r == rr)])
+	print("  ", r, [get_name(NAV[i]) for i, rr in enumerate(R) if (r == rr)])
 	
 	
 # The history of scores of n-th competitor 

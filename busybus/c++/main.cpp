@@ -116,6 +116,7 @@ struct AI_MY : public Strategy {
 
 
 // STRATEGY: "Always go in the same direction"
+#include <numeric>
 struct AI_CLOCK : public Strategy {
 	unsigned C;
 	unsigned N;
@@ -131,10 +132,10 @@ struct AI_CLOCK : public Strategy {
 		
 		// Passenger selection from Q[b]
 		// Take passengers number 0, 1, .., n-1
-		Targets M;
-		for (unsigned i=0; i<n; ++i) M.push_back(i);
+		Targets M(n);
+		std::iota(M.begin(), M.end(), 0);
 		
-		// Always go in one direction
+		// Always go in the same direction
 		int s = +1;
 		
 		return Response(M, s);
@@ -143,13 +144,17 @@ struct AI_CLOCK : public Strategy {
 
 
 // STRATEGY: Modestly greedy
+#include <numeric>
 struct AI_GREEDY : public Strategy {
 	const char* name;
 	unsigned C;
 	unsigned N;
+	int s;
 	
-	AI_GREEDY(unsigned C, unsigned N) : Strategy("Greedy"), C(C), N(N)
+	AI_GREEDY(unsigned C, unsigned N) : Strategy("Modestly greedy"), C(C), N(N)
 	{
+		// Default direction
+		s = +1;
 	}
 	
 	Response step(unsigned b, const Targets& B, const vector<Targets>& Q)
@@ -158,21 +163,21 @@ struct AI_GREEDY : public Strategy {
 		unsigned n = min(Q[b].size(), C - B.size());
 		// Passenger selection from Q[b]
 		// Take passengers number 0, 1, .., n-1
-		Targets M;
-		for (unsigned i = 0; i < n; ++i) M.push_back(i);
+		Targets M(n);
+		std::iota(M.begin(), M.end(), 0);
 		
-		// No passengers?
-		if (B.empty() & M.empty()) return Response(M, +1);
+		// No passengers? Continue as before
+		if (B.empty() & M.empty()) return Response(M, s);
 
 		// Next passenger's destination
 		int t;
 		if (!B.empty()) t = B[0]; else t = Q[b][M[0]];
 
-		// Destination relative to current position
-		t = (N - 2*((t-b+N) % N));
+		// Destination relative to the current position
+		t = N - 2*((t+N-b) % N);
 
-		// Move towards that destination
-		int s = (t > 0 ? +1 : -1);
+		// Move towards that destination (modify default direction)
+		s = (t > 0 ? +1 : -1);
 		
 		return Response(M, s);
 	}
@@ -261,7 +266,7 @@ struct World {
 		}
 		
 		// Advance bus
-		b = (b + res.s) % N;
+		b = (b + (N + res.s)) % N;
 		
 		// Passengers unmount
 		B.erase(std::remove(B.begin(), B.end(), b), B.end());
@@ -380,7 +385,7 @@ int main() {
 			double score = report.w;
 			// Record score
 			K.push_back( Score(n, score) );
-			cout << "   *Momentary score: " << score << endl;
+			cout << "   *Score for this round: " << score << endl;
 		}
 		
 		assert(!K.empty());
