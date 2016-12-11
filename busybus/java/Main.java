@@ -28,62 +28,68 @@ public class Main {
 		
 		List<Strategy> strategies = new ArrayList<>();
 		strategies.add(new AI_CLOCK(C, N));
-		strategies.add(new AI_KCLOCK(C, N));
+		strategies.add(new AI_KLOCK(C, N));
 		strategies.add(new AI_GREEDY(C, N));
 		
-		int rank = strategies.size();
 		
-		int[] ranks = new int[rank];
-		List<List<Double>> scores = new ArrayList<>();
-		for (int i = 0; i < rank; i++)
-			scores.add(new ArrayList<>());
+		System.out.println("Starting competition");
+		int[] ranks = new int[strategies.size()];
+		{
 		
-		while (rank > 0) {
-			System.out.println("Number of competitors: " + rank);
+			// Next rank to be assigned
+			int rank = ranks.length;
+		
+			List<List<Double>> scores = new ArrayList<>();
+			for (int i = 0; i < rank; i++)
+				scores.add(new ArrayList<>());
+		
+			while (rank > 0) {
+				System.out.println("Number of competitors: " + rank);
 			
-			World world = new World(C, N);
+				World world = new World(C, N);
 			
-			// Strategy scores for this round
-			// (nonnegative; max score loses)
-			List<Score> K = new ArrayList<>();
+				// Strategy scores for this round
+				// (nonnegative; max score loses)
+				List<Score> K = new ArrayList<>();
 			
-			for (int n = 0; n < strategies.size(); ++n) {
-				if (ranks[n] > 0) continue;
+				for (int n = 0; n < strategies.size(); ++n) {
+					if (ranks[n] > 0) continue;
 				
-				Strategy strategy = strategies.get(n);
+					Strategy strategy = strategies.get(n);
 				
-				System.out.println(" - Profiling " + strategy.name);
+					System.out.println(" - Profiling " + strategy.name);
 				
-				Profiler report = new Profiler(world, strategy);
-				double score = report.w;
+					Profiler report = new Profiler(world, strategy);
+					double score = report.w;
 
-				K.add(new Score(n, score));
-				System.out.println("   *Score for this round: " + score);
-			}
-			assert(!K.isEmpty());
+					K.add(new Score(n, score));
+					System.out.println("   *Score for this round: " + score);
+				}
+				assert(!K.isEmpty());
 			
-			Score maxScore = Collections.max(K);
+				Score maxScore = Collections.max(K);
 			
-			for (Score score : K) {
-				int n = score.constestant;
-				if (score.score == maxScore.score)
-					ranks[n] = rank;
-				List<Double> sc;
-				if (scores.size() > 0)
-					sc = new ArrayList<>(scores.get(n));
-				else
-					sc = new ArrayList<>();
-				sc.add(score.score);
-				scores.get(n).add(Utils.mean(sc));
+				for (Score score : K) {
+					int n = score.constestant;
+					if (score.score == maxScore.score)
+						ranks[n] = rank;
+					List<Double> sc;
+					if (scores.size() > 0)
+						sc = new ArrayList<>(scores.get(n));
+					else
+						sc = new ArrayList<>();
+					sc.add(score.score);
+					scores.get(n).add(Utils.mean(sc));
+				}
+				rank = 0;
+				for (int e : ranks)
+					if (e == 0) rank++;
 			}
-			rank = 0;
-			for (int e : ranks)
-				if (e == 0) rank += 1;
+			
 		}
 		
-		
 		System.out.println("Final ranking:");
-		for (rank = 1; rank <= ranks.length; ++rank) {
+		for (int rank = 1; rank <= ranks.length; ++rank) {
 			System.out.println("Rank " + rank);
 			for (int n = 0; n != ranks.length; ++n) {
 				if (ranks[n] != rank) continue;
