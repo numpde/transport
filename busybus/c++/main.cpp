@@ -303,8 +303,7 @@ struct Profiler {
 	// w = average over time
 	double w;
 
-	template <class Nav>
-	Profiler(World& wrd, Nav& nav) : W(), w(0)
+	Profiler(World& wrd, Strategy& nav) : W(), w(0)
 	{
 		assert((0 < I) & (I <= 1e9));
 		
