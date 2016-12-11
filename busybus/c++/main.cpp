@@ -296,7 +296,7 @@ struct World {
 struct Profiler {
 	// Number of iterations (time steps)
 	// This will be I ~ 1e6
-	static const unsigned I = 10000;
+	static const unsigned I = 100000;
 	
 	// W[i] = average number of people waiting at time i
 	vector<double> W;
@@ -327,11 +327,13 @@ struct Profiler {
 };
 
 
+// Helper function for checking rank
+bool is_zero(unsigned r) { return (r == 0); }
 
-bool is_zero(unsigned n) { return (n==0); }
 
 #include <algorithm>
 #include <memory>
+//
 int main() {
 
 	unsigned C = 3;
@@ -373,7 +375,7 @@ int main() {
 		// (nonnegative; max score loses)
 		vector<Score> K;
 		
-		for (unsigned n=0; n<NAV.size(); ++n) {
+		for (unsigned n = 0; n < NAV.size(); ++n) {
 			if (R[n]) continue;
 			Strategy& nav = *NAV[n];
 		
@@ -396,6 +398,7 @@ int main() {
 		for (auto i : K) {
 			// Append the score of the strategy to its history
 			S[i.n].push_back(i.v);
+			// Take the running average as the score
 			S[i.n].back() = mean(S[i.n]);
 			
 			// Filter losers
@@ -413,7 +416,7 @@ int main() {
 	cout << "Final ranking:" << endl;
 	{
 		for (unsigned rank = 1; rank <= R.size(); ++rank) {
-			cout << "Rank " << rank << ": " << endl;
+			cout << "Rank " << rank << endl;
 			for (unsigned n = 0; n != R.size(); ++n) {
 				if (R[n] != rank) continue;
 				cout << "   " << (NAV[n]->name) << endl;
@@ -423,7 +426,7 @@ int main() {
 
 	// The history of scores of n-th competitor 
 	// is available here as S[n]
-	cout << "Averaged score history:" << endl;
+	cout << "Running average score history:" << endl;
 	for (unsigned n = 0; n != S.size(); ++n)
 		cout << "   Contestant #" << n << ": " << S[n] << endl;
 
