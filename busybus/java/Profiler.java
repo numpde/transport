@@ -7,7 +7,7 @@ public class Profiler {
 	 * Number of iterations (time steps)
 	 * This will be I ~ 1e6
 	 */
-	final static int I = 10000000;
+	final static int I = 100000;
 	
 	/**
 	 * W.get(i) = average number of people waiting at time i.
