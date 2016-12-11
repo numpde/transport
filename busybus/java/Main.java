@@ -19,7 +19,7 @@ public class Main {
 		public int compareTo(Score o) {
 			double w = this.score - ((Score) o).score;
 			if (w < 0) return -1;
-			else if (w > 1) return 1;
+			else if (w > 0) return 1;
 			else return 0;
 		}
 	}
