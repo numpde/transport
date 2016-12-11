@@ -81,6 +81,8 @@ public class Main {
 					sc.add(score.score);
 					scores.get(n).add(Utils.mean(sc));
 				}
+				
+				// Next rank to be assigned
 				rank = 0;
 				for (int e : ranks)
 					if (e == 0) rank++;
