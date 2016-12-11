@@ -5,7 +5,7 @@ public class AI_KLOCK extends Strategy {
 
 	final public static String name = "Klock";
 	
-	public AI_KCLOCK(int C, int N) {
+	public AI_KLOCK(int C, int N) {
 		super(C, N, name);
 	}
 	
