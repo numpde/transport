@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Template by verybusybus.wordpress.com, 2016-12-09
+Template by verybusybus.wordpress.com
 
 Author:
 TODO: SAVE THIS FILE TO YOUR MACHINE
