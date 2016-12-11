@@ -5,7 +5,7 @@ Template by verybusybus.wordpress.com, 2016-12-09
 
 Author:
 TODO: SAVE THIS FILE TO YOUR MACHINE
-    WRITE YOUR NAME(S) HERE
+      WRITE YOUR NAME(S) HERE
 """
 
 from random import randint
@@ -45,7 +45,7 @@ class AI_MY:
                 No destination equals the location,
                 i.e. (t != n) for any t in Q[n].
 
-        The input variable may be modified within this function w/o consequence.
+        The input variables may be modified within this function w/o consequence.
 
         Returns:
             tuple (M, s):
@@ -66,7 +66,7 @@ class AI_MY:
 
 class AI_CLOCK:
     """
-    "Always go in the same direction" strategy
+    'Always go in the same direction' strategy
     """
     name = "Clock"
 
@@ -92,7 +92,7 @@ class AI_CLOCK:
 
 class AI_GREEDY:
     """
-    Modestly greedy strategy
+    'Modestly greedy' strategy
     """
     name = "Modestly greedy"
 
@@ -177,7 +177,7 @@ class World:
 
     def move(self, M, s):
         """
-        Performs the move indicated by an IA.
+        Performs the move indicated by an AI.
 
         Args:
             M (:obj: `list` of int): is a list of indices M = [i1, i2, .., im]
@@ -220,14 +220,14 @@ class World:
     def get_w(self):
         """
         Returns:
-                Number of people waiting in queue, averaged over the stations.
+            Number of people waiting in queue, averaged over the stations.
         """
-        return mean([len(P) for P in self.Q])
+        return mean([len(q) for q in self.Q])
 
     @staticmethod
     def check_consistency(C, N, b, B, Q, M, s):
         """
-        Checks consistency
+        Checks consistency of the input.
         """
 
         # 0.
@@ -299,7 +299,7 @@ class World:
 
 class Profiler:
     """
-    Runs the systems with a particular strategy "nav"
+    Runs the systems with a particular strategy "nav".
     """
 
     # Number of iterations (time steps)
@@ -437,3 +437,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
