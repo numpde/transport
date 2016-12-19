@@ -175,6 +175,19 @@ class World:
         """
         return self.b, self.B[:], [q[:] for q in self.Q]
 
+    def board1(self, m):
+        '''
+        Board one passenger
+        m is an element of M, see move(...)
+        '''
+        
+        # Check consistency from time to time
+        if randint(0, 100) == 0:
+            self.check_consistency(self.C, self.N, self.b, self.B, self.Q, M, s)
+            
+        self.B.append(self.Q[self.b][m])
+        self.Q[self.b].pop(m)
+    
     def move(self, M, s):
         """
         Performs the move indicated by an AI.
@@ -196,11 +209,9 @@ class World:
             self.check_consistency(self.C, self.N, self.b, self.B, self.Q, M, s)
 
         # Passengers mount (in the given order)
-        for m in M:
-            self.B.append(self.Q[self.b][m])
-        # Remove them from the queue
+        # and are removed from the queue
         for m in sorted(M, reverse=True):
-            self.Q[self.b].pop(m)
+            self.board1(m)
 
         # Advance bus
         self.b = (self.b + (self.N + s)) % self.N
