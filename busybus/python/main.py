@@ -180,10 +180,6 @@ class World:
         Board one passenger
         m is an element of M, see move(...)
         '''
-        
-        # Check consistency from time to time
-        if randint(0, 100) == 0:
-            self.check_consistency(self.C, self.N, self.b, self.B, self.Q, M, s)
             
         self.B.append(self.Q[self.b][m])
         self.Q[self.b].pop(m)
