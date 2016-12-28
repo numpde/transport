@@ -4,17 +4,18 @@ import java.util.concurrent.ThreadLocalRandom;
 public class Utils {
 	
 	public static double mean(List<? extends Number> list) {
-		assert list.size() != 0 : "empty list";
+		assert (!list.isEmpty()) : "Empty List";
 		
-		long l = 0;
-		for (Number e : list)
-			l += e.longValue();
-		return l / (double) list.size();
+		double sum = 0;
+		for (Number e : list) 
+			sum += e.doubleValue();
+		return sum / list.size();
 
 	}
 	
-	public static int randInt(int min, int max) {
-		return ThreadLocalRandom.current().nextInt(min, max + 1);
+	// Return a random integer from the interval [a, b]
+	public static int randInt(int a, int b) {
+		return ThreadLocalRandom.current().nextInt(a, b + 1);
 	}
 	
 }
