@@ -1,41 +1,90 @@
 
-import networkx as nx
+# RA, 2018-10-20
 
+## ================== IMPORTS :
+
+import networkx as nx
+import osmium
+from collections import defaultdict
+
+
+## ==================== NOTES :
+
+# Used some hints from
+# http://www.patrickklose.com/posts/parsing-osm-data-with-python/
+		
+# "Pyosmium" is available under the BSD 2-Clause License
+# https://github.com/osmcode/pyosmium
+
+# osmiumnode.location is "a geographic coordinate in WGS84 projection"
+# https://docs.osmcode.org/pyosmium/latest/ref_osm.html#osmium.osm.Location
+
+# OSM roads
+# https://wiki.openstreetmap.org/wiki/Key:highway
+
+
+## ==================== INPUT :
 
 IFILE = {
 	'OSM' : "OUTPUT/00/kaohsiung.osm",
 }
 
-# Requires the "pyosmium" package
-# Pyosmium is available under the BSD 2-Clause License
-# https://github.com/osmcode/pyosmium
-import osmium
 
-# Used some hints from
-# http://www.patrickklose.com/posts/parsing-osm-data-with-python/
+## ==================== PARAM :
+
+pass
+
+
+## =================== OUTPUT :
+
+OFILE = {
+}
+
+
+## ====================== AUX :
+
+pass
+
+
+## ===================== WORK :
 
 class RoadNetworkExtractor(osmium.SimpleHandler) :
 	def __init__(self) :
 		osmium.SimpleHandler.__init__(self)
 
 	def node(self, n) :
-		
-		# n.location is "a geographic coordinate in WGS84 projection"
-		# https://docs.osmcode.org/pyosmium/latest/ref_osm.html#osmium.osm.Location
 
-		self.locs[n.id] = n.location
+		self.locs[n.id] = (n.location.lon, n.location.lat)
 
 	def way(self, w) :
-		filter_tag = 'highway'
+		# Filter out the ways that do not have any of these tags:
+		filter_tags = ['highway', 'bridge', 'tunnel']
+		if not any(t in w.tags for t in filter_tags) : return
 
-		if (filter_tag in w.tags) :
-			self.way_nt[w.id] = { 
-				'nodes' : [n.ref for n in w.nodes], 
-				'tags' : { t.k : t.v for t in w.tags }
-			}
+		self.way_nodes[w.id] = [ n.ref for n in w.nodes ]
+		self.way_tags [w.id] = { t.k : t.v for t in w.tags }
 
 	def relation(self, r) :
-		pass
+		# Type of the relation
+		r_type = r.tags.get('type')
+			
+		# Ignore any relation with unknown type
+		if not r_type : return
+
+		# Ignore all but the following types, for now
+		if not r_type in ["route", "route_master"] : return
+
+		rel = dict()
+
+		# Relation members, grouped by type
+		for t in ['r', 'n', 'w'] :
+			rel[t] = [ m.ref for m in r.members if (m.type == t) ]
+
+		# Relation tags
+		rel['t'] = { t.k : t.v for t in r.tags }
+		
+		# All relations are grouped by type
+		self.rels[r.tags['type']][r.id] = rel
 
 	def apply_file(self, *args, **kwargs) :
 		# TODO: Throw Exception
@@ -44,39 +93,96 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		pass
 	
 	def get_graph(self, filename) :
+
+		# Step 0: read map file into buffers
+
 		self.locs = {}
-		self.way_nt = {}
+		self.way_nodes = {}
+		self.way_tags = {}
+		self.way_edges = defaultdict(dict)
+		self.rels = defaultdict(dict)
+
 		osmium.SimpleHandler.apply_file(self, filename)
+
+		# Step 1: insert all nodes as vertices of the graph
 		
-		G = nx.DiGraph()
+		self.G = nx.DiGraph()
 
-		# Step 1: construct edges of the graph
+		self.G.add_nodes_from(self.locs.keys())
 
-		for (way_id, nt) in self.way_nt.items() :
-			(way_nodes, way_tags) = (nt['nodes'], nt['tags'])
+		# Step 2: construct edges of the road graph
 
-			# look for an affirmative 'oneway' tag
-			if (way_tags.get('oneway', 'no') == 'yes') :
-				G.add_path(way_nodes)
+		def add_path(wnodes, wid, is_forward) :
+			wnodes = list(wnodes)
+			if not wnodes :
+				self.way_edges[wid][is_forward] = [] 
+				return
+			self.G.add_path(wnodes, wid=wid)
+			self.way_edges[wid][is_forward] = list(zip(wnodes[:-1], wnodes[1:]))
+
+		# Iterate over way IDs
+		for wid in self.way_nodes.keys() :
+			(wnodes, wtags) = (self.way_nodes[wid], self.way_tags[wid])
+
+			# Attach those attributes to all segments of the way
+			pathattr = { 'wid' : wid }
+
+			# Note: nx.get_edge_attributes(G, 'wid') returns
+			#       a dict of wid's keyed by edge (a, b)
+
+			if (wtags.get('oneway', "?") == "yes") :
+				# affirmative 'oneway' tag found
+				add_path(wnodes, wid, True)
+				add_path([], wid, False)
 			else : 
-				G.add_path(way_nodes)
-				G.add_path(reversed(way_nodes))
+				# add the way forward and backward
+				add_path(wnodes, wid, True)
+				add_path(reversed(wnodes), wid, False)
 
-		# Step 2: assign coordinates to vertices of the graph
-
-		for i in G.nodes() :
-			G.node[i]['coords'] = (self.locs[i].lon, self.locs[i].lat)
-
-		return G
+		return (self.G, self.locs, self.way_tags, self.way_edges, self.rels)
 
 
-p = RoadNetworkExtractor()
-G = p.get_graph(IFILE['OSM'])
+# Example of using the above class
+def illustration() :
 
-nodes = list(G.nodes())
-pos = { i : G.node[i]['coords'] for i in G.nodes() }
-nx.draw_networkx_nodes(G, pos=pos, nodelist=nodes, node_size=1)
+	(G, locs, way_tags, way_edges, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'])
 
-import matplotlib.pyplot as plt
-plt.show()
+	# Draw a bus route by its name
+	# route_name = "建國幹線(返程)" # the route should have the number 88
+	route_name = "0南路" # circular route
+
+	import matplotlib.pyplot as plt
+
+	plt.ion()
+	plt.show()
+
+	for r in rels['route'].values() :
+		if not (r['t'].get('name') == route_name) : continue
+		if not (r['t'].get('route') == "bus") : continue
+
+		try :
+			if len(r['n']) :
+				nx.draw_networkx_nodes(G, pos=locs, nodelist=r['n'], node_size=10)
+				nx.draw_networkx_nodes(G, pos=locs, nodelist=r['n'][0:1], node_size=40)
+
+			for i in r['w'] :
+				e = way_edges[i][True] + way_edges[i][False]
+				nx.draw_networkx_edges(G, pos=locs, edgelist=e, arrows=False)
+
+		except nx.NetworkXError as e :
+			print(e)
+
+	input()
+
+# Extract roads and routes, write to file
+def extract() :
+	# TODO
+	pass
+
+
+## ==================== ENTRY :
+
+if (__name__ == "__main__") :
+	extract()
+
 
