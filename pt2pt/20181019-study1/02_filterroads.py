@@ -5,6 +5,9 @@
 
 import networkx as nx
 import osmium
+import pickle
+import inspect
+import os
 from collections import defaultdict
 
 
@@ -26,24 +29,36 @@ from collections import defaultdict
 ## ==================== INPUT :
 
 IFILE = {
-	'OSM' : "OUTPUT/00/kaohsiung.osm",
+	'OSM' : "OUTPUT/01/UV/{region}.osm",
 }
-
-
-## ==================== PARAM :
-
-pass
 
 
 ## =================== OUTPUT :
 
 OFILE = {
+	'OSM-pickled' : "OUTPUT/02/UV/{region}.pkl",
+}
+
+# Create output directories
+for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+
+
+## ==================== PARAM :
+
+PARAM = {
+	'regions' : ["kaohsiung"],
 }
 
 
 ## ====================== AUX :
 
-pass
+# https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
+THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
+
+# Log which files are opened
+def logged_open(filename, mode='r', *argv, **kwargs) :
+	print("({}):\t{}".format(mode, filename))
+	return open(filename, mode, *argv, **kwargs)
 
 
 ## ===================== WORK :
@@ -157,6 +172,7 @@ def illustration() :
 	plt.show()
 
 	for r in rels['route'].values() :
+
 		if not (r['t'].get('name') == route_name) : continue
 		if not (r['t'].get('route') == "bus") : continue
 
@@ -170,19 +186,50 @@ def illustration() :
 				nx.draw_networkx_edges(G, pos=locs, edgelist=e, arrows=False)
 
 		except nx.NetworkXError as e :
+			# Happens if nonexisting nodes or ways
+			# are referenced by the relation
 			print(e)
 
 	input()
 
+
 # Extract roads and routes, write to file
-def extract() :
-	# TODO
-	pass
+def extract(region) :
+
+	(G, locs, way_tags, way_edges, rels) = (
+		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
+	)
+
+	pickle.dump(
+		{
+			# Road network as a graph
+			'G' : G, 
+
+			# lon-lat location of the graph vertices
+			'locs' : locs, 
+
+			# Tags of OSM's ways as a dict, indexed by way ID
+			'way_tags' : way_tags, 
+
+			# Edges of the graph for each way, indexed by way ID
+			'way_edges' : way_edges, 
+
+			# OSM's relations, index by OSM type, then by ID, 
+			# then as 'n'odes, 'w'ays, 'r'elations and 't'ags
+			'rels' : rels, 
+
+			# The contents of this script
+			'script' : THIS,
+		},
+		logged_open(OFILE['OSM-pickled'].format(region=region), 'wb'),
+		pickle.HIGHEST_PROTOCOL
+	)
 
 
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-	extract()
+	for region in PARAM['regions'] :
+		extract(region)
 
 
