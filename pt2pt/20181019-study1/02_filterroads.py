@@ -8,6 +8,7 @@ import osmium
 import pickle
 import inspect
 import os
+import geopy.distance
 from collections import defaultdict
 
 
@@ -15,7 +16,7 @@ from collections import defaultdict
 
 # Used some hints from
 # http://www.patrickklose.com/posts/parsing-osm-data-with-python/
-		
+
 # "Pyosmium" is available under the BSD 2-Clause License
 # https://github.com/osmcode/pyosmium
 
@@ -69,20 +70,31 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 	def node(self, n) :
 
-		self.locs[n.id] = (n.location.lon, n.location.lat)
+		self.locs[n.id] = (n.location.lat, n.location.lon)
 
 	def way(self, w) :
 		# Filter out the ways that do not have any of these tags:
 		filter_tags = ['highway', 'bridge', 'tunnel']
 		if not any(t in w.tags for t in filter_tags) : return
 
-		self.way_nodes[w.id] = [ n.ref for n in w.nodes ]
-		self.way_tags [w.id] = { t.k : t.v for t in w.tags }
+		wtags = { t.k : t.v for t in w.tags }
+		self.way_tags[w.id] = wtags
+
+		wnodes = [ n.ref for n in w.nodes ]
+		# Forward way
+		self.way_nodes[w.id][True] = wnodes
+
+		if (wtags.get('oneway', "?") == "yes") :
+			# An affirmative 'oneway' tag found
+			self.way_nodes[w.id][False] = []
+		else :
+			# Also add backward way
+			self.way_nodes[w.id][False] = list(reversed(wnodes))
 
 	def relation(self, r) :
 		# Type of the relation
 		r_type = r.tags.get('type')
-			
+
 		# Ignore any relation with unknown type
 		if not r_type : return
 
@@ -97,7 +109,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 		# Relation tags
 		rel['t'] = { t.k : t.v for t in r.tags }
-		
+
 		# All relations are grouped by type
 		self.rels[r.tags['type']][r.id] = rel
 
@@ -106,21 +118,20 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		import sys
 		sys.exit("Error: Use the wrapper member 'get_graph' instead")
 		pass
-	
+
 	def get_graph(self, filename) :
 
 		# Step 0: read map file into buffers
 
 		self.locs = {}
-		self.way_nodes = {}
+		self.way_nodes = defaultdict(dict)
 		self.way_tags = {}
-		self.way_edges = defaultdict(dict)
 		self.rels = defaultdict(dict)
 
 		osmium.SimpleHandler.apply_file(self, filename)
 
 		# Step 1: insert all nodes as vertices of the graph
-		
+
 		self.G = nx.DiGraph()
 
 		self.G.add_nodes_from(self.locs.keys())
@@ -128,16 +139,12 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		# Step 2: construct edges of the road graph
 
 		def add_path(wnodes, wid, is_forward) :
-			wnodes = list(wnodes)
-			if not wnodes :
-				self.way_edges[wid][is_forward] = [] 
-				return
 			self.G.add_path(wnodes, wid=wid)
-			self.way_edges[wid][is_forward] = list(zip(wnodes[:-1], wnodes[1:]))
+			#self.way_nodes[wid][is_forward] = list(wnodes)
 
 		# Iterate over way IDs
 		for wid in self.way_nodes.keys() :
-			(wnodes, wtags) = (self.way_nodes[wid], self.way_tags[wid])
+			(wnodes_bothways, wtags) = (self.way_nodes[wid], self.way_tags[wid])
 
 			# Attach those attributes to all segments of the way
 			pathattr = { 'wid' : wid }
@@ -145,22 +152,25 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 			# Note: nx.get_edge_attributes(G, 'wid') returns
 			#       a dict of wid's keyed by edge (a, b)
 
-			if (wtags.get('oneway', "?") == "yes") :
-				# affirmative 'oneway' tag found
-				add_path(wnodes, wid, True)
-				add_path([], wid, False)
-			else : 
-				# add the way forward and backward
-				add_path(wnodes, wid, True)
-				add_path(reversed(wnodes), wid, False)
+			self.G.add_path(wnodes_bothways[True], wid=wid)
+			self.G.add_path(wnodes_bothways[False], wid=wid)
 
-		return (self.G, self.locs, self.way_tags, self.way_edges, self.rels)
+		# Step 3: compute lengths of graph edges (in meters)
+
+		# Compute edge length representing distance, in meters
+		# Location expected as a (lat, lon) pair
+		# https://geopy.readthedocs.io/
+		# https://stackoverflow.com/a/43211266
+		lens = { (a, b): geopy.distance.geodesic(self.locs[a], self.locs[b]).m for (a, b) in self.G.edges() }
+		nx.set_edge_attributes(self.G, lens, name='len')
+
+		return (self.G, self.locs, self.way_tags, self.way_nodes, self.rels)
 
 
 # Example of using the above class
 def illustration() :
 
-	(G, locs, way_tags, way_edges, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'])
+	(G, locs, way_tags, way_nodes, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region="kaohsiung"))
 
 	# Draw a bus route by its name
 	# route_name = "建國幹線(返程)" # the route should have the number 88
@@ -171,10 +181,14 @@ def illustration() :
 	plt.ion()
 	plt.show()
 
+	def pathify(wnodes) :
+		return ([] and list(zip(list(wnodes)[:-1], list(wnodes)[1:])))
+
 	for r in rels['route'].values() :
 
-		if not (r['t'].get('name') == route_name) : continue
 		if not (r['t'].get('route') == "bus") : continue
+
+		if not (r['t'].get('name') == route_name) : continue
 
 		try :
 			if len(r['n']) :
@@ -182,7 +196,7 @@ def illustration() :
 				nx.draw_networkx_nodes(G, pos=locs, nodelist=r['n'][0:1], node_size=40)
 
 			for i in r['w'] :
-				e = way_edges[i][True] + way_edges[i][False]
+				e = pathify(way_nodes[i][True]) + pathify(way_nodes[i][False])
 				nx.draw_networkx_edges(G, pos=locs, edgelist=e, arrows=False)
 
 		except nx.NetworkXError as e :
@@ -196,27 +210,27 @@ def illustration() :
 # Extract roads and routes, write to file
 def extract(region) :
 
-	(G, locs, way_tags, way_edges, rels) = (
+	(G, locs, way_tags, way_nodes, rels) = (
 		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
 	)
 
 	pickle.dump(
 		{
 			# Road network as a graph
-			'G' : G, 
+			'G' : G,
 
 			# lon-lat location of the graph vertices
-			'locs' : locs, 
+			'locs' : locs,
 
 			# Tags of OSM's ways as a dict, indexed by way ID
-			'way_tags' : way_tags, 
+			'way_tags' : way_tags,
 
-			# Edges of the graph for each way, indexed by way ID
-			'way_edges' : way_edges, 
+			# Nodes for each OSM way, indexed by way ID, then by direction True/False
+			'way_nodes' : way_nodes,
 
-			# OSM's relations, index by OSM type, then by ID, 
+			# OSM's relations, index by OSM type, then by ID,
 			# then as 'n'odes, 'w'ays, 'r'elations and 't'ags
-			'rels' : rels, 
+			'rels' : rels,
 
 			# The contents of this script
 			'script' : THIS,
@@ -229,6 +243,9 @@ def extract(region) :
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
+
+	# illustration()
+
 	for region in PARAM['regions'] :
 		extract(region)
 
