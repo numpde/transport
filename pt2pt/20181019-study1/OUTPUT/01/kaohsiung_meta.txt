@@ -1,0 +1,9 @@
+# Bounding box:
+l=120.2593
+b=22.5828
+r=120.3935
+t=22.6886
+# Source:
+URL=https://overpass-api.de/api/map?bbox=120.2593,22.5828,120.3935,22.6886
+# Retrieval time:
+UTC=2018-10-20T16:17:30.829724
