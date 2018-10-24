@@ -4,10 +4,13 @@
 
 ## ================== IMPORTS :
 
+import os
 import pickle
 import inspect
 import numpy as np
 import networkx as nx
+import pint
+import pandas as pd
 
 ## ==================== NOTES :
 
@@ -22,8 +25,12 @@ IFILE = {
 ## =================== OUTPUT :
 
 OFILE = {
-	'timetable': "OUTPUT/03/{route_id}.txt",
+	'timetable': "OUTPUT/03/timetable_{route}.txt",
 }
+
+# Create output directories
+for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+
 
 ## ==================== PARAM :
 
@@ -208,6 +215,7 @@ def fake_timetable():
 
 	# Extract useful data
 	G = osm['G']
+	node_tags = osm['node_tags']
 	locs = osm['locs']
 	rels = osm['rels']
 	way_tags = osm['way_tags']
@@ -219,7 +227,8 @@ def fake_timetable():
 	# indexed by route ID
 	route_geo = {  }
 
-	print("Making time tables")
+	print("Making time tables...")
+
 	for (route_id, route) in rels['route'].items():
 		# Skip non-bus routes
 		if not (route['t'].get('route') == 'bus'): continue
@@ -227,8 +236,8 @@ def fake_timetable():
 		route_name = route['t'].get('name')
 		assert (route_name is not None)
 
-		# # A long circular route
-		# if not (route_name == '環狀東線') : continue
+		# # For debugging purposes
+		# if not (route_name == "環狀東線") : continue
 
 		try:
 
@@ -239,9 +248,9 @@ def fake_timetable():
 			print(e)
 			continue
 
-		print("Got route", route_name, "with nodes", routeway)
-
 		route_platforms = route['n']
+
+		print("Got route {} with {} stops.".format(route_name, len(route_platforms)))
 
 		# Match bus stop to a location on the route
 		from scipy.spatial.distance import cdist as dist_matrix
@@ -267,22 +276,73 @@ def fake_timetable():
 		route_geo[route_id] = {
 			# Platforms along the route (OSM node IDs)
 			'platform' : route_platforms,
+			# Stop names
+			'stopname' : [node_tags[n].get('name') for n in route_platforms],
 			# Estimated stop nodes on the route way (OSM node IDs)
 			'stopnode' : [routeway[j] for j in m],
 			# The composite route way (OSM node IDs)
 			'routeway' : routeway,
-			# Accumulated travel distance for stop nodes
+			# Accumulated travel distance for stop nodes in meters
 			'stopdist' : stopdist,
 		}
 
-		# # Visualization
-		# import matplotlib.pyplot as plt
-		# nx.draw_networkx_edges()
+		# Visualization
+		# A long circular route
+		if False and (route_name == "環狀東線") :
+			# Visualization of stop distance
+			import matplotlib.pyplot as plt
+			# Average bus speed in km/h
+			v = 17
+			# Arrival times in minutes
+			stoptime = np.asarray(stopdist) / (v * 1000 / 60)
+			# For reference, the first sunday bus (http://timetable.ibus.com.tw/168E.pdf)
+			stoptime_ref = [0, 2, 4, 6, 7, 8, 10, 12, 13, 15, 17, 19, 20, 21, 22, 23, 25, 26, 28, 29, 31, 34, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 47, 48, 50, 51, 52, 53, 54, 55, 56, 58, 60, 62, 63, 64, 66, 68, 70, 71, 73, 75, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 98, 100, 103, 105, 105, 105, 106]
+
+			plt.plot(stoptime, '.-')
+			plt.plot(stoptime_ref, '.-')
+			plt.title(route_name)
+			plt.show()
 
 
+	# Got route_geo
 
-	#print(route_geo)
+	from datetime import timedelta
+	import random
+	for (route_id, geodata) in route_geo.items() :
+		u = pint.UnitRegistry()
+		# Average bus velocity
+		v = 17 * (u.km / u.hour)
+		# Accumulated travel distance
+		d = geodata['stopdist'] * u.meter
+		# Check that the array has units of length
+		d.to(u.meter)
+		# Accumulated travel time
+		T0 = (d / v).to(u.minute)
+		# Bus frequency
+		busfreq = 4 / u.hour
+		# First bus
+		t = timedelta(hours=6, minutes=random.randint(0, 30))
+		# Last possible bus
+		tz = timedelta(hours=23, minutes=0)
 
+		# Time table
+		TT = pd.DataFrame(columns=range(len(geodata['platform'])))
+		TT.name = "Route {}".format(rels['route'][route_id]['t'].get('name'))
+		TT = TT.rename_axis("> Stop number >", axis='columns')
+
+		while (t <= tz) :
+			# Times of passage for this bus
+			T = [pd.Timedelta(seconds=s) for s in (T0 + (t.seconds * u.second)).to(u.second).magnitude]
+			TT = TT.append([ T ], ignore_index=True, sort=False)
+			# Next bus starts at:
+			t = t + timedelta(hours=(1 / busfreq).to(u.hour).magnitude)
+
+		filename = OFILE['timetable'].format(route=route_id)
+		with open(filename, 'w') as f :
+			TT.to_csv(f, sep='\t', index=False, header=False)
+
+		# Read with
+		# df.apply(pd.to_timedelta, pd.read_csv(filename, sep='\t', header=None, index_col=None), axis=0)
 
 ## ==================== ENTRY :
 
