@@ -69,7 +69,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		osmium.SimpleHandler.__init__(self)
 
 	def node(self, n) :
-
+		self.node_tags[n.id] = { t.k : t.v for t in n.tags }
 		self.locs[n.id] = (n.location.lat, n.location.lon)
 
 	def way(self, w) :
@@ -123,6 +123,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 		# Step 0: read map file into buffers
 
+		self.node_tags = {}
 		self.locs = {}
 		self.way_nodes = defaultdict(dict)
 		self.way_tags = {}
@@ -164,13 +165,13 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		lens = { (a, b): geopy.distance.geodesic(self.locs[a], self.locs[b]).m for (a, b) in self.G.edges() }
 		nx.set_edge_attributes(self.G, lens, name='len')
 
-		return (self.G, self.locs, self.way_tags, self.way_nodes, self.rels)
+		return (self.G, self.node_tags, self.locs, self.way_tags, self.way_nodes, self.rels)
 
 
 # Example of using the above class
 def illustration() :
 
-	(G, locs, way_tags, way_nodes, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region="kaohsiung"))
+	(G, node_tags, locs, way_tags, way_nodes, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region="kaohsiung"))
 
 	# Draw a bus route by its name
 	# route_name = "建國幹線(返程)" # the route should have the number 88
@@ -210,7 +211,7 @@ def illustration() :
 # Extract roads and routes, write to file
 def extract(region) :
 
-	(G, locs, way_tags, way_nodes, rels) = (
+	(G, node_tags, locs, way_tags, way_nodes, rels) = (
 		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
 	)
 
@@ -218,6 +219,9 @@ def extract(region) :
 		{
 			# Road network as a graph
 			'G' : G,
+
+			# OSM node info, indexed by node ID
+			'node_tags' : node_tags,
 
 			# lon-lat location of the graph vertices
 			'locs' : locs,
