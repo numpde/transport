@@ -27,7 +27,7 @@ IFILE = {
 ## =================== OUTPUT :
 
 OFILE = {
-	'BusStop-info-js' : "OUTPUT/04/kaohsiung_bus_routes/route_{route_id}_{lang}.json",
+	'BusStop-info-js' : "OUTPUT/04/kaohsiung_bus_routes/route_{route_id}.json",
 }
 
 # Create output directories
@@ -70,33 +70,49 @@ def download() :
 
 	for (route_id, route) in routes.items() :
 
+		print("")
 		print("Processing next:", route['NameZh'])
 
-		for (lang, url) in PARAM['BusStop-API-URL'].items() :
+		out = OFILE['BusStop-info-js'].format(route_id=route_id)
 
-			url = url.format(route_id=route_id)
-			out = OFILE['BusStop-info-js'].format(route_id=route_id, lang=lang)
+		if os.path.isfile(out) :
+			print("File {} already exists; skipping download".format(out))
+			continue
 
-			if os.path.isfile(out) :
+		urls = PARAM['BusStop-API-URL']
 
-				print("File {} already exists; skipping download".format(out))
+		# JSON structure for this route
+		J = { }
+
+		for (lang, url) in urls.items() :
+
+			# See if already downloaded (legacy)...
+
+			old = OFILE['BusStop-info-js'].format(route_id=("{}_{}".format(route_id, lang)))
+			if os.path.isfile(old) :
+
+				print("Loading from", old)
+
+				with open(old, 'r') as f :
+					j = json.load(f)
 
 			else :
 
-				print("File {} not found".format(out))
+				time.sleep(random.uniform(1, 2))
 
-				time.sleep(1)
+				url = url.format(route_id=route_id)
 				print("Loading from", url)
 
 				with urllib.request.urlopen(url) as response :
-					with logged_open(out, 'wb') as f :
-						f.write(response.read())
+					j = json.loads(response.read().decode("utf-8"))
 
-				time.sleep(random.uniform(2, 4))
+			J[lang] = j
 
-		print("")
+		with logged_open(out, 'w') as f :
+			json.dump(J, f)
 
 	print("DONE")
+
 
 ## ==================== ENTRY :
 
