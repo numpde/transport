@@ -59,22 +59,37 @@ def process() :
 
 		J = json.load(logged_open(filename, 'r'))
 
+		#id_key = 'SID'
+		id_key = 'Id'
+
+		# Note:
+		#
+		# 'SID' are different for back & forth directions
+		# but also sometimes for different routes.
+		#
+		# 'Id' are all the same.
+
 		for stop in J['zh'] :
-			sid = stop['SID']
+			sid = stop[id_key]
 			if not (sid in stops) :
 				stops[sid] = {
 					'lat' : stop['Latitude'],
 					'lon' : stop['Longitude'],
-					'routes' : set()
+					#'id' : stop['Id'],
+					'routes' : set(),
+					'SID' : set(),
 				}
+
 			stops[sid]['routes'].add(stop['RouteId'])
+			stops[sid]['SID'].add(stop['SID'])
 
 		for lang in J.keys() :
 			for stop in J[lang] :
-				stops[stop['SID']][lang] = stop['NameZh']
+				stops[stop[id_key]][lang] = stop['NameZh']
 
 	for sid in stops.keys() :
 		stops[sid]['routes'] = sorted(stops[sid]['routes'])
+		stops[sid]['SID'] = sorted(stops[sid]['SID'])
 
 	json.dump(stops, logged_open(OFILE['stops-json'], 'w'))
 
