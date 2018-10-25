@@ -57,7 +57,7 @@ def process() :
 
 	for filename in glob.glob(IFILE['route-json'].format(route_id="*")) :
 
-		J = json.load(logged_open(filename, 'rb'))
+		J = json.load(logged_open(filename, 'r'))
 
 		for stop in J['zh'] :
 			sid = stop['SID']
@@ -76,7 +76,7 @@ def process() :
 	for sid in stops.keys() :
 		stops[sid]['routes'] = sorted(stops[sid]['routes'])
 
-	json.dump(stops, open(OFILE['stops-json'], 'w'))
+	json.dump(stops, logged_open(OFILE['stops-json'], 'w'))
 
 ## ==================== ENTRY :
 
