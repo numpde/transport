@@ -306,6 +306,8 @@ def fake_timetable():
 
 	# Got route_geo
 
+	print("Writing timetables...")
+
 	from datetime import timedelta
 	import random
 	for (route_id, geodata) in route_geo.items() :
