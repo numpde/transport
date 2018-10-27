@@ -5,9 +5,13 @@
 ## ================== IMPORTS :
 
 import os
+import sklearn.neighbors
+import geopy.distance
+import numpy as np
 import builtins
 import json
 import inspect
+import pickle
 import glob
 import urllib.request
 from collections import defaultdict
@@ -20,22 +24,24 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'routes' : "request_cache/routes_{lang}.json",
-	'stops' : "request_cache/stops_{ID}-{Dir}_{lang}.json",
+	'request-routes' : "request_cache/routes_{lang}.json",
+	'request-stops'  : "request_cache/stops_{ID}-{Dir}_{lang}.json",
+
+	'compute-knn'    : "compute_cache/UV/knn.pkl",
 }
 
 
 ## =================== OUTPUT :
 
 OFILE = {
-	'routes' : IFILE['routes'],
-	'stops' : IFILE['stops'],
+	'request-routes' : IFILE['request-routes'],
+	'request-stops'  : IFILE['request-stops'],
 
-	#'stops-json' : "OUTPUT/05/kaohsiung_bus_stops.json",
+	'compute-knn'    : IFILE['compute-knn'],
 }
 
 # Create output directories
-#for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
 
 
 ## ==================== PARAM :
@@ -56,6 +62,8 @@ PARAM = {
 
 	'try-local-routes' : True,
 	'try-local-routestops' : True,
+
+	'force-recompute-knn' : False,
 }
 
 
@@ -102,9 +110,14 @@ def lang_reform(I, id_key) :
 
 	return J
 
+# Metric for (lat, lon) coordinates
+def geodesic(a, b) :
+	return geopy.distance.geodesic(a, b).m
+
+
 ## ================== CLASSES :
 
-class Routes :
+class RoutesMeta :
 
 	def routes_init_original(self, load_from_local=False) :
 
@@ -115,7 +128,7 @@ class Routes :
 			try :
 
 				for lang in self.routes_by_lang.keys() :
-					with open(IFILE['routes'].format(lang=lang), 'r') as f :
+					with open(IFILE['request-routes'].format(lang=lang), 'r') as f :
 						self.routes_by_lang[lang] = json.load(f)
 
 				return True
@@ -127,7 +140,7 @@ class Routes :
 		else :
 
 			for (lang, url) in PARAM['url-routes'].items() :
-				wget(url, OFILE['routes'].format(lang=lang))
+				wget(url, OFILE['request-routes'].format(lang=lang))
 
 			return self.routes_init_original(load_from_local=True)
 
@@ -165,31 +178,34 @@ class Routes :
 
 class Stops :
 
-	def init(self) :
+	def init(self, routesmeta) :
 
-		# self.routes[route_id][direction] is a list of stop SIDs
+		# self.trajs[route_id][direction] is a list of stop SIDs
 		self.routes = defaultdict(dict)
 		# self.stops is a dict of all stops/platforms keyed by SID
 		self.stops = defaultdict(dict)
 
 		for (lang, preurl) in PARAM['url-routestops'].items():
-			for (i, route) in self.R.routes.items() :
+			for (i, route) in routesmeta.routes.items() :
 
 				nroutes = int(route['routes'])
 				assert(nroutes in [1, 2])
 
+				self.routes[i] = route
+				self.routes[i]['Dir'] = { }
+
 				for Dir in [1, 2][:nroutes] :
 
 					url = preurl.format(ID=i, Dir=Dir)
-					filename = OFILE['stops'].format(ID=i, Dir=Dir, lang=lang)
+					filename = IFILE['request-stops'].format(ID=i, Dir=Dir, lang=lang)
 
 					if (not os.path.isfile(filename)) or (not PARAM['try-local-routestops']) :
 						wget(url, filename)
 
+					# Special cases:
+					#
 					# As of 2018-10-27, the following routes get an error response:
 					# 1602-1, 2173-2, 2482-1, 371-1
-
-					# Special cases:
 					#
 					# http://southeastbus.com/index/kcg/Time/248.htm
 					if (i == '2482') and (Dir == 1) : continue
@@ -211,13 +227,13 @@ class Stops :
 						raise RuntimeWarning("Expect a list in JSON response here")
 
 					# The SIDs of stops along this route will be written here in correct order
-					self.routes[i][Dir] = []
+					self.routes[i]['Dir'][Dir] = []
 
 					for stop in sorted(J, key=(lambda r : int(r['seqNo']))) :
 
 						n = stop['SID']
 
-						self.routes[i][Dir].append(n)
+						self.routes[i]['Dir'][Dir].append(n)
 
 						del stop['seqNo']
 
@@ -250,9 +266,9 @@ class Stops :
 							# Resolve 'Id' of 'MRT Metropolitan Park Station'
 							if (n == '5135') : stop['Id'] = '7508'
 
-							# ETC... WHATEVER, WE SIMPLY DELETE THE 'Id' FIELD
+							# ETC... WHATEVER, WE SIMPLY NULLIFY THE 'Id' FIELD
 
-							del stop['Id']
+							stop['Id'] = None
 
 
 						if n in self.stops[lang] :
@@ -263,15 +279,59 @@ class Stops :
 						else :
 							self.stops[lang][n] = stop
 
+		# Rekey by the Stop ID
 		self.stops = lang_reform(self.stops, 'SID')
 
 
+	def __init__(self, R) :
+
+		assert(type(R) is RoutesMeta), "Type checking failed"
+		self.init(R)
+
+
+class StopsKNN(Stops) :
 
 	def __init__(self, R) :
-		assert(type(R) is Routes), "Type checking failed"
+		Stops.__init__(self, R)
+		self.init_knn()
 
-		self.R = R
-		self.init()
+	def init_knn(self) :
+
+		if PARAM['force-recompute-knn'] or (not os.path.isfile(IFILE['compute-knn'])) :
+
+			(I, X) = zip(*[ (i, (float(s['latitude']), float(s['longitude']))) for (i, s) in self.stops.items() ])
+
+			self.knn = {
+				'SIDs' : I,
+				'tree' : sklearn.neighbors.BallTree(X, leaf_size=30, metric='pyfunc', func=geodesic),
+			}
+
+			with open(OFILE['compute-knn'], 'wb') as f :
+				pickle.dump(self.knn, f, pickle.HIGHEST_PROTOCOL)
+
+		else :
+
+			try :
+
+				with open(IFILE['compute-knn'], 'rb') as f :
+					self.knn = pickle.load(f)
+
+			except EOFError as e :
+
+				PARAM['force-recompute-knn'] = True
+				self.init_knn()
+
+	def get_nearest_stops(self, pos, k) :
+
+		# Note: assume a single sample pos, i.e. pos = (lat, lon)
+
+		(dist, ind) = self.knn['tree'].query(np.asarray(pos).reshape(1, -1), k=k)
+
+		return [
+			(d, self.stops[self.knn['SIDs'][n]])
+			for (d, n) in zip( dist.flatten(), ind.flatten() )
+		]
+
 
 ## ===================== WORK :
 
@@ -280,16 +340,35 @@ class Stops :
 ## ==================== TESTS :
 
 def test_001() :
-	R = Routes()
+	R = RoutesMeta()
 	assert(R.routes)
+
+	print("All bus routes:")
 	print(R.routes)
 
 def test_002() :
-	R = Routes()
-	S = Stops(R)
+	S = Stops(RoutesMeta())
+
+	print("Some bus trajectories:")
+	for r in list(S.routes.items())[0:10] :
+		print(r)
+
+	print("Some platforms:")
+	for s in list(S.stops.items())[0:10] :
+		print(s)
+
+def test_003() :
+	S = StopsKNN(RoutesMeta())
+
+	(lat, lon) = (22.63279, 120.33447)
+	print("Bus stops closest to (lat, lon) = ({}, {})".format(lat, lon))
+
+	for (d, s) in S.get_nearest_stops((lat, lon), 10) :
+		print("{}m -- {} (SID: {})".format(int(round(d)), s['nameZh']['en'], s['SID']))
+
 
 def tests() :
-	test_002()
+	test_003()
 
 ## ==================== ENTRY :
 
