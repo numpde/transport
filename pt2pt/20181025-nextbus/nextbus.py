@@ -12,7 +12,7 @@ import builtins
 import json
 import inspect
 import pickle
-import glob
+import time
 import urllib.request
 from collections import defaultdict
 
@@ -27,7 +27,7 @@ IFILE = {
 	'request-routes' : "request_cache/routes_{lang}.json",
 	'request-stops'  : "request_cache/stops_{ID}-{Dir}_{lang}.json",
 
-	'compute-knn'    : "compute_cache/UV/knn.pkl",
+	'compute-knn'    : "compute_cache/UV/stops-knn.pkl",
 }
 
 
@@ -48,6 +48,10 @@ for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
 
 PARAM = {
 	'logged-open' : True,
+
+	'wget-max-calls': 5,
+	'wget-throttle-seconds' : 1,
+	'wget-always-reuse-file' : True,
 
 	'url-routes' : {
 		'en' : "https://ibus.tbkc.gov.tw/KSBUSN/NewAPI/RealRoute.ashx?type=GetRoute&Lang=En",
@@ -80,29 +84,59 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 # Activate this function?
 if PARAM.get('logged-open') : open = logged_open
 
+# Class to fetch files via HTTP
+class wget :
 
-#
-def wget(url, filename) :
-	with urllib.request.urlopen(url) as response :
-		with open(filename, 'wb') as f :
-			f.write(response.read())
+	number_of_calls = 0
 
-# "Transpose" JSON, rekey by id_key
+	def __init__(self, url, filename=None) :
+
+		if filename and PARAM['wget-always-reuse-file'] :
+			if os.path.isfile(filename) :
+				return
+
+		wget.number_of_calls = wget.number_of_calls + 1
+
+		if (wget.number_of_calls > PARAM['wget-max-calls']) :
+			raise RuntimeError("Call limit exceeded for wget")
+
+		time.sleep(PARAM['wget-throttle-seconds'])
+
+		with urllib.request.urlopen(url) as response :
+			if filename :
+				with open(filename, 'wb') as f :
+					f.write(response.read())
+			else :
+				self.bytes = response.read()
+
+# Index a list _I_ of dict's by the return value of key_func
+def reindex_by_key(I, key_func) :
+	J = defaultdict(lambda: defaultdict(list))
+
+	for i in I :
+		for (k, v) in i.items() :
+			J[key_func(i)][k].append(v)
+
+	# Convert all defaultdict to dict
+	J = json.loads(json.dumps(J))
+
+	return J
+
+# "Turn" a JSON structure, rekey by id_key
+# Assume: I[lang] is a list of dict's, where each has a field id_key
 def lang_reform(I, id_key) :
 
 	J = defaultdict(lambda: defaultdict(dict))
 
-	for (lang, E) in I.items():
-		if type(E) is dict :
-			E = E.values()
+	for (lang, E) in I.items() :
 		for e in E :
-			for (k, v) in e.items():
+			for (k, v) in e.items() :
 				J[e[id_key]][k][lang] = v
 
-	for (i, e) in J.items():
-		for (k, V) in e.items():
+	for (i, e) in J.items() :
+		for (k, V) in e.items() :
 			V = V.values()
-			if (len(set(V)) == 1):
+			if (len(set(V)) == 1) :
 				J[i][k] = set(V).pop()
 
 	# Convert all defaultdict to dict
@@ -119,37 +153,24 @@ def geodesic(a, b) :
 
 class RoutesMeta :
 
-	def routes_init_original(self, load_from_local=False) :
-
-		self.routes_by_lang = { lang : None for lang in PARAM['url-routes'].keys() }
-
-		if load_from_local :
-
-			try :
-
-				for lang in self.routes_by_lang.keys() :
-					with open(IFILE['request-routes'].format(lang=lang), 'r') as f :
-						self.routes_by_lang[lang] = json.load(f)
-
-				return True
-
-			except FileNotFoundError as e :
-
-				return False
-
-		else :
-
-			for (lang, url) in PARAM['url-routes'].items() :
-				wget(url, OFILE['request-routes'].format(lang=lang))
-
-			return self.routes_init_original(load_from_local=True)
-
 	def routes_init(self) :
 
-		if not (self.routes_init_original(PARAM['try-local-routes']) or self.routes_init_original()) :
-			raise RuntimeError("Failed to load routes")
+		routes_by_lang = { }
 
-		self.routes = lang_reform(self.routes_by_lang, 'ID')
+		for (lang, url) in PARAM['url-routes'].items() :
+
+			filename = IFILE['request-routes'].format(lang=lang)
+
+			if PARAM['force-fetch-request-routes'] :
+				with open(filename, 'wb') as f :
+					f.write(wget(url).bytes)
+			else:
+				wget(url, filename)
+
+			with open(filename, 'r') as f :
+				routes_by_lang[lang] = json.load(f)
+
+		self.routes = lang_reform(routes_by_lang, 'ID')
 
 		# An entry of self.routes now looks like this:
 		# (assuming route_id_key is 'ID')
@@ -172,8 +193,8 @@ class RoutesMeta :
 		# }
 
 	def __init__(self) :
-		self.routes = None
 		self.routes_init()
+		assert(self.routes)
 
 
 class Stops :
@@ -270,7 +291,6 @@ class Stops :
 
 							stop['Id'] = None
 
-
 						if n in self.stops[lang] :
 							if not (self.stops[lang][n] == stop) :
 								print("Ex. A:", self.stops[lang][n])
@@ -280,8 +300,22 @@ class Stops :
 							self.stops[lang][n] = stop
 
 		# Rekey by the Stop ID
+		self.stops = { lang : stops.values() for (lang, stops) in self.stops.items() }
 		self.stops = lang_reform(self.stops, 'SID')
 
+
+		# Now, to each stop append the list of incident routes
+
+		for n in self.stops.keys() :
+			self.stops[n]['routes'] = defaultdict(list)
+
+		for (i, r) in self.routes.items() :
+			for (Dir, stops) in r['Dir'].items() :
+				for n in stops :
+					self.stops[n]['routes'][Dir].append(i)
+		
+		# Convert all defaultdict to dict
+		self.stops = json.loads(json.dumps(self.stops))
 
 	def __init__(self, R) :
 
@@ -326,11 +360,22 @@ class StopsKNN(Stops) :
 		# Note: assume a single sample pos, i.e. pos = (lat, lon)
 
 		(dist, ind) = self.knn['tree'].query(np.asarray(pos).reshape(1, -1), k=k)
+		(dist, ind) = (dist.flatten(), ind.flatten())
 
-		return [
-			(d, self.stops[self.knn['SIDs'][n]])
-			for (d, n) in zip( dist.flatten(), ind.flatten() )
-		]
+		# Convert ind to stop IDs
+		ind = [ self.knn['SIDs'][n] for n in ind ]
+
+		# Get the complete nearest stops info
+		stops = [ self.stops[j] for j in ind ]
+
+		# Append the 'distance' info to each nearest stop
+		for k in range(len(stops)) :
+			stops[k]['distance'] = dist[k]
+
+		# Index stops by ID
+		stops = dict(zip(ind, stops))
+
+		return stops
 
 
 ## ===================== WORK :
@@ -361,14 +406,28 @@ def test_003() :
 	S = StopsKNN(RoutesMeta())
 
 	(lat, lon) = (22.63279, 120.33447)
-	print("Bus stops closest to (lat, lon) = ({}, {})".format(lat, lon))
 
-	for (d, s) in S.get_nearest_stops((lat, lon), 10) :
-		print("{}m -- {} (SID: {})".format(int(round(d)), s['nameZh']['en'], s['SID']))
+	print("Finding bus stops closest to (lat, lon) = ({}, {})...".format(lat, lon))
 
+	kS = S.get_nearest_stops((lat, lon), 10)
+
+	for s in json.loads(json.dumps(kS)).values() :
+		assert(type(s['distance']) is float)
+
+	for (i, s) in kS.items() :
+		print("{}m -- {} (SID: {})".format(int(round(s['distance'])), s['nameZh']['en'], i))
+
+	print("Grouped by name:")
+	for (j, s) in reindex_by_key(kS.values(), (lambda s : s['nameZh']['tw'])).items() :
+		print(j, s)
+
+def test_004() :
+	for i in range(10) :
+		print("Executing wget call #{}".format(i+1))
+		wget("https://www.google.com/")
 
 def tests() :
-	test_003()
+	test_004()
 
 ## ==================== ENTRY :
 
