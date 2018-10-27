@@ -50,9 +50,9 @@ for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
 ## ==================== PARAM :
 
 PARAM = {
-	'logged-open' : True,
+	'logged-open' : False,
 
-	'wget-max-calls': 5,
+	'wget-max-calls': 15,
 	'wget-throttle-seconds' : 1,
 	'wget-always-reuse-file' : True,
 
@@ -71,7 +71,14 @@ PARAM = {
 
 	'force-fetch-request-routestops' : False,
 
+	'url-eta' :{
+		'en' : "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=En",
+		'tw' : "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=Cht",
+	},
+
 	'force-recompute-knn' : False,
+
+	'pref-lang' : 'en',
 }
 
 
@@ -466,21 +473,44 @@ def test_004() :
 
 	(lat, lon) = (22.63279, 120.33447)
 
-	kS = Stops.group_by_name(S.get_nearest_stops((lat, lon), 10))
+	kS = Stops.group_by_name(S.get_nearest_stops((lat, lon), 20))
 
 	for (j, s) in kS.items() :
-		print("STOP {} (distance: {})".format(s['nameZh']['tw'], s['distance']))
 
-		url = "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=Cht"
-		ETAs = json.loads(wget(url.format(stopname=s['nameZh']['tw']), wget.CACHE).bytes)
+		dist = s['distance']
+
+		if (type(dist) is list) :
+			dist = "{}~{}m".format(int(min(dist)), int(max(dist)))
+		else :
+			dist = "{}m".format(int(dist))
+
+		stopname = s['nameZh'][PARAM['pref-lang']]
+
+		print("")
+		print("STOP {} ({})".format(stopname, dist))
+		print("")
+
+		url = PARAM['url-eta'][PARAM['pref-lang']].format(stopname=stopname)
+		ETAs = json.loads(wget(url, wget.CACHE).bytes)
 
 		for g in ETAs :
 			#print(g['GroupNo'], g['Info'])
 			for car in g['Info'] :
 				#print(car['Pathid'], car['Goback'], car['Time'])
+
 				route = S.routes[car['Pathid']]
-				dest = { '1' : car['Dest'], '2' : car['Dept'] }[car['Goback']]
-				print("Line {}, going to {}, ETA {}.".format(route['nameZh']['tw'], dest, car['Time']))
+
+				car_dest = { '1' : route['destinationZh'], '2' : route['departureZh'] }[car['Goback']]
+				if (type(car_dest) is dict) : car_dest = car_dest[PARAM['pref-lang']]
+				car_dest = car_dest.strip()
+
+				route_name = route['nameZh']
+				if (type(route_name) is dict) : route_name = route_name[PARAM['pref-lang']]
+				route_name = route_name.strip()
+
+				eta = car['Time'].strip()
+
+				print('[{}] "{}" ~~> {}'.format(eta, route_name, car_dest))
 
 def tests() :
 	test_004()
