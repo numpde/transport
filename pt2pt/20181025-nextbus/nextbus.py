@@ -13,7 +13,8 @@ import json
 import inspect
 import pickle
 import time
-import urllib.request
+import urllib.request, urllib.parse
+import base64
 from collections import defaultdict
 
 ## ==================== NOTES :
@@ -38,6 +39,8 @@ OFILE = {
 	'request-stops'  : IFILE['request-stops'],
 
 	'compute-knn'    : IFILE['compute-knn'],
+
+	'wget-generic-cache' : "request_cache/wget/{ID}.dat",
 }
 
 # Create output directories
@@ -58,14 +61,15 @@ PARAM = {
 		'tw' : "https://ibus.tbkc.gov.tw/KSBUSN/NewAPI/RealRoute.ashx?type=GetRoute&Lang=Cht",
 	},
 
+	'force-fetch-request-routes' : False,
+
 	'url-routestops' : {
 		'en' : "https://ibus.tbkc.gov.tw/KSBUSN/NewAPI/RealRoute.ashx?type=GetStop&Data={ID}_,{Dir}&Lang=En",
 		'tw' : "https://ibus.tbkc.gov.tw/KSBUSN/NewAPI/RealRoute.ashx?type=GetStop&Data={ID}_,{Dir}&Lang=Cht",
 		# Note: 'Dir' is the direction there=1 and back=2, elsewhere keyed by 'GoBack' or 'Goback' instead
 	},
 
-	'try-local-routes' : True,
-	'try-local-routestops' : True,
+	'force-fetch-request-routestops' : False,
 
 	'force-recompute-knn' : False,
 }
@@ -88,11 +92,23 @@ if PARAM.get('logged-open') : open = logged_open
 class wget :
 
 	number_of_calls = 0
+	CACHE = '/'
 
-	def __init__(self, url, filename=None) :
+	def __init__(self, url, filename=CACHE) :
+
+		assert(url), "Illegal URL parameter"
+
+		# Encode potential Chinese characters
+		url = urllib.parse.quote(url, safe=':/?&=')
+
+		if (filename == wget.CACHE) :
+			# https://stackoverflow.com/a/295150
+			filename = OFILE['wget-generic-cache'].format(ID=base64.urlsafe_b64encode(url.encode('utf-8')).decode('utf-8'))
 
 		if filename and PARAM['wget-always-reuse-file'] :
 			if os.path.isfile(filename) :
+				with open(filename, 'rb') as f :
+					self.bytes = f.read()
 				return
 
 		wget.number_of_calls = wget.number_of_calls + 1
@@ -103,11 +119,13 @@ class wget :
 		time.sleep(PARAM['wget-throttle-seconds'])
 
 		with urllib.request.urlopen(url) as response :
+
+			self.bytes = response.read()
+
 			if filename :
 				with open(filename, 'wb') as f :
-					f.write(response.read())
-			else :
-				self.bytes = response.read()
+					f.write(self.bytes)
+
 
 # Index a list _I_ of dict's by the return value of key_func
 def reindex_by_key(I, key_func) :
@@ -116,6 +134,11 @@ def reindex_by_key(I, key_func) :
 	for i in I :
 		for (k, v) in i.items() :
 			J[key_func(i)][k].append(v)
+
+	for (j, i) in J.items() :
+		for (k, V) in i.items() :
+			if (1 == len(set(json.dumps(v) for v in V))) :
+				J[j][k] = next(iter(V))
 
 	# Convert all defaultdict to dict
 	J = json.loads(json.dumps(J))
@@ -201,7 +224,7 @@ class Stops :
 
 	def init(self, routesmeta) :
 
-		# self.trajs[route_id][direction] is a list of stop SIDs
+		# self.routes[route_id][direction] is a list of stop SIDs
 		self.routes = defaultdict(dict)
 		# self.stops is a dict of all stops/platforms keyed by SID
 		self.stops = defaultdict(dict)
@@ -215,12 +238,15 @@ class Stops :
 				self.routes[i] = route
 				self.routes[i]['Dir'] = { }
 
-				for Dir in [1, 2][:nroutes] :
+				for Dir in ['1', '2'][:nroutes] :
 
 					url = preurl.format(ID=i, Dir=Dir)
 					filename = IFILE['request-stops'].format(ID=i, Dir=Dir, lang=lang)
 
-					if (not os.path.isfile(filename)) or (not PARAM['try-local-routestops']) :
+					if PARAM['force-fetch-request-routestops'] :
+						with open(filename, 'wb') as f :
+							f.write(wget(url).bytes)
+					else :
 						wget(url, filename)
 
 					# Special cases:
@@ -229,13 +255,13 @@ class Stops :
 					# 1602-1, 2173-2, 2482-1, 371-1
 					#
 					# http://southeastbus.com/index/kcg/Time/248.htm
-					if (i == '2482') and (Dir == 1) : continue
+					if (i == '2482') and (int(Dir) == 1) : continue
 					# https://www.crowntaxi.com.tw/news.aspx?ID=49
-					if (i == '331') and (Dir == 1) : continue
+					if (i == '331') and (int(Dir) == 1) : continue
 					# http://southeastbus.com/index/kcg/Time/37.htm
-					if (i == '371') and (Dir == 1) : continue
+					if (i == '371') and (int(Dir) == 1) : continue
 					# 'http://southeastbus.com/index/kcg/Time/O7A.htm
-					if (i == '1602') and (Dir == 1) : continue
+					if (i == '1602') and (int(Dir) == 1) : continue
 
 					with open(filename, 'r') as f :
 						try :
@@ -322,6 +348,13 @@ class Stops :
 		assert(type(R) is RoutesMeta), "Type checking failed"
 		self.init(R)
 
+	def group_by_name(stops) :
+		assert(type(stops) is dict)
+		return reindex_by_key(stops.values(), (lambda s: "{} / {}".format(s['nameZh']['tw'], s['nameZh']['en'])))
+
+	def get_routes_through(self, ids) :
+		return { Dir : sorted(set(sum([ self.stops[i]['routes'].get(Dir, []) for i in ids ], []))) for Dir in ['1', '2'] }
+
 
 class StopsKNN(Stops) :
 
@@ -384,6 +417,12 @@ class StopsKNN(Stops) :
 
 ## ==================== TESTS :
 
+
+def test_000() :
+	for i in range(10) :
+		print("Executing wget call #{}".format(i+1))
+		wget("https://www.google.com/")
+
 def test_001() :
 	R = RoutesMeta()
 	assert(R.routes)
@@ -418,13 +457,30 @@ def test_003() :
 		print("{}m -- {} (SID: {})".format(int(round(s['distance'])), s['nameZh']['en'], i))
 
 	print("Grouped by name:")
-	for (j, s) in reindex_by_key(kS.values(), (lambda s : s['nameZh']['tw'])).items() :
+	for (j, s) in Stops.group_by_name(kS).items() :
 		print(j, s)
 
 def test_004() :
-	for i in range(10) :
-		print("Executing wget call #{}".format(i+1))
-		wget("https://www.google.com/")
+
+	S = StopsKNN(RoutesMeta())
+
+	(lat, lon) = (22.63279, 120.33447)
+
+	kS = Stops.group_by_name(S.get_nearest_stops((lat, lon), 10))
+
+	for (j, s) in kS.items() :
+		print("STOP {} (distance: {})".format(s['nameZh']['tw'], s['distance']))
+
+		url = "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=Cht"
+		ETAs = json.loads(wget(url.format(stopname=s['nameZh']['tw']), wget.CACHE).bytes)
+
+		for g in ETAs :
+			#print(g['GroupNo'], g['Info'])
+			for car in g['Info'] :
+				#print(car['Pathid'], car['Goback'], car['Time'])
+				route = S.routes[car['Pathid']]
+				dest = { '1' : car['Dest'], '2' : car['Dept'] }[car['Goback']]
+				print("Line {}, going to {}, ETA {}.".format(route['nameZh']['tw'], dest, car['Time']))
 
 def tests() :
 	test_004()
