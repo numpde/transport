@@ -15,6 +15,8 @@ import pickle
 import time
 import urllib.request, urllib.parse
 import base64
+import re
+import datetime as dt
 from collections import defaultdict
 
 ## ==================== NOTES :
@@ -28,6 +30,8 @@ IFILE = {
 	'request-routes' : "request_cache/routes_{lang}.json",
 	'request-stops'  : "request_cache/stops_{ID}-{Dir}_{lang}.json",
 
+	'bus-network'    : "compute_cache/UV/bus-network.json",
+
 	'compute-knn'    : "compute_cache/UV/stops-knn.pkl",
 }
 
@@ -37,6 +41,8 @@ IFILE = {
 OFILE = {
 	'request-routes' : IFILE['request-routes'],
 	'request-stops'  : IFILE['request-stops'],
+
+	'bus-network'    : IFILE['bus-network'],
 
 	'compute-knn'    : IFILE['compute-knn'],
 
@@ -49,11 +55,16 @@ for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
 
 ## ==================== PARAM :
 
+PARAM_PRODUCTION = False
+
 PARAM = {
-	'logged-open' : False,
+
+	'pref-lang' : 'tw',
+
+	'logged-open' : not PARAM_PRODUCTION,
 
 	'wget-max-calls': 15,
-	'wget-throttle-seconds' : 1,
+	'wget-throttle-seconds' : (0.1 if PARAM_PRODUCTION else 1),
 	'wget-always-reuse-file' : True,
 
 	'url-routes' : {
@@ -61,6 +72,7 @@ PARAM = {
 		'tw' : "https://ibus.tbkc.gov.tw/KSBUSN/NewAPI/RealRoute.ashx?type=GetRoute&Lang=Cht",
 	},
 
+	# If True, should override 'wget-always-reuse-file'
 	'force-fetch-request-routes' : False,
 
 	'url-routestops' : {
@@ -69,17 +81,20 @@ PARAM = {
 		# Note: 'Dir' is the direction there=1 and back=2, elsewhere keyed by 'GoBack' or 'Goback' instead
 	},
 
+	# If True, should override 'wget-always-reuse-file'
 	'force-fetch-request-routestops' : False,
+
+	'force-recompute-bus-network' : False,
+
+	'force-recompute-knn' : False,
 
 	'url-eta' :{
 		'en' : "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=En",
 		'tw' : "https://ibus.tbkc.gov.tw/KSBUSN/newAPI/CrossRoute.ashx?stopname={stopname}&Lang=Cht",
 	},
 
-	'force-recompute-knn' : False,
-
-	'pref-lang' : 'en',
 }
+
 
 
 ## ====================== AUX :
@@ -95,7 +110,7 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 # Activate this function?
 if PARAM.get('logged-open') : open = logged_open
 
-# Class to fetch files via HTTP
+# Class to fetch files from WWW
 class wget :
 
 	number_of_calls = 0
@@ -130,8 +145,11 @@ class wget :
 			self.bytes = response.read()
 
 			if filename :
-				with open(filename, 'wb') as f :
-					f.write(self.bytes)
+				try :
+					with open(filename, 'wb') as f :
+						f.write(self.bytes)
+				except IOError as e :
+					pass
 
 
 # Index a list _I_ of dict's by the return value of key_func
@@ -194,7 +212,7 @@ class RoutesMeta :
 			if PARAM['force-fetch-request-routes'] :
 				with open(filename, 'wb') as f :
 					f.write(wget(url).bytes)
-			else:
+			else :
 				wget(url, filename)
 
 			with open(filename, 'r') as f :
@@ -227,9 +245,22 @@ class RoutesMeta :
 		assert(self.routes)
 
 
-class Stops :
+class BusNetwork :
 
-	def init(self, routesmeta) :
+	def init(self) :
+
+		if os.path.isfile(IFILE['bus-network']) and not PARAM['force-recompute-bus-network'] :
+			try :
+				with open(IFILE['bus-network'], 'r') as f :
+					network = json.load(f)
+
+				(self.routes, self.stops) = (network['routes'], network['stops'])
+
+				return
+			except json.JSONDecodeError as e :
+				pass
+
+		routesmeta = RoutesMeta()
 
 		# self.routes[route_id][direction] is a list of stop SIDs
 		self.routes = defaultdict(dict)
@@ -346,27 +377,48 @@ class Stops :
 			for (Dir, stops) in r['Dir'].items() :
 				for n in stops :
 					self.stops[n]['routes'][Dir].append(i)
-		
+
+
 		# Convert all defaultdict to dict
+		self.routes = json.loads(json.dumps(self.routes))
 		self.stops = json.loads(json.dumps(self.stops))
 
-	def __init__(self, R) :
+		# Save to disk
+		with open(OFILE['bus-network'], 'w') as f :
+			json.dump({ 'routes' : self.routes, 'stops' : self.stops }, f)
 
-		assert(type(R) is RoutesMeta), "Type checking failed"
-		self.init(R)
+	def __init__(self) :
+
+		self.init()
 
 	def group_by_name(stops) :
 		assert(type(stops) is dict)
-		return reindex_by_key(stops.values(), (lambda s: "{} / {}".format(s['nameZh']['tw'], s['nameZh']['en'])))
+
+		stops = reindex_by_key(stops.values(), (lambda s: "{} / {}".format(s['nameZh']['tw'], s['nameZh']['en'])))
+
+		for (k, stop) in stops.items() :
+
+			if not ('distance' in stop) : continue
+
+			d = stop['distance']
+
+			if type(d) is list:
+				stops[k]['distance-min'] = int(min(d))
+				stops[k]['distance-tty'] = "{}~{}m".format(int(min(d)), int(max(d)))
+			else:
+				stops[k]['distance-min'] = int(d)
+				stops[k]['distance-tty'] = "{}m".format(int(d))
+
+		return stops
 
 	def get_routes_through(self, ids) :
 		return { Dir : sorted(set(sum([ self.stops[i]['routes'].get(Dir, []) for i in ids ], []))) for Dir in ['1', '2'] }
 
 
-class StopsKNN(Stops) :
+class BusNetworkKNN(BusNetwork) :
 
-	def __init__(self, R) :
-		Stops.__init__(self, R)
+	def __init__(self) :
+		BusNetwork.__init__(self)
 		self.init_knn()
 
 	def init_knn(self) :
@@ -395,7 +447,7 @@ class StopsKNN(Stops) :
 				PARAM['force-recompute-knn'] = True
 				self.init_knn()
 
-	def get_nearest_stops(self, pos, k) :
+	def get_nearest_stops(self, pos, k=10) :
 
 		# Note: assume a single sample pos, i.e. pos = (lat, lon)
 
@@ -409,14 +461,96 @@ class StopsKNN(Stops) :
 		stops = [ self.stops[j] for j in ind ]
 
 		# Append the 'distance' info to each nearest stop
-		for k in range(len(stops)) :
-			stops[k]['distance'] = dist[k]
+		for (k, d) in enumerate(dist) :
+			stops[k]['distance'] = d
 
 		# Index stops by ID
 		stops = dict(zip(ind, stops))
 
 		return stops
 
+
+class BusOracle(BusNetworkKNN) :
+
+	def __init__(self) :
+		BusNetworkKNN.__init__(self)
+
+	# Returns an iterable over bus ETA's in chronological order
+	def eta_by_stopname(self, stopname, force_fetch=PARAM_PRODUCTION) :
+
+		url = PARAM['url-eta'][PARAM['pref-lang']].format(stopname=stopname)
+		eta_groups = json.loads(wget(url, (None if force_fetch else wget.CACHE)).bytes)
+
+		ETA_INFO = []
+
+		for group in eta_groups :
+			for car in group['Info'] :
+				#print(car['Pathid'], car['Goback'], car['Time'])
+
+				route = self.routes[car['Pathid']]
+
+				car_dest = { '1' : route['destinationZh'], '2' : route['departureZh'] }[car['Goback']]
+				if (type(car_dest) is dict) : car_dest = car_dest[PARAM['pref-lang']]
+				car_dest = car_dest.strip()
+
+				route_name = route['nameZh']
+				if (type(route_name) is dict) : route_name = route_name[PARAM['pref-lang']]
+				route_name = route_name.strip()
+
+				eta = car['Time'].strip()
+
+				try :
+					# Is the ETA in the format Hour:Minute?
+					eta = dt.timedelta(
+						hours =   int(re.match(r'(?P<hour>\d+):(?P<min>\d+)', eta).group('hour')),
+						minutes = int(re.match(r'(?P<hour>\d+):(?P<min>\d+)', eta).group('min'))
+					) + dt.datetime.combine(dt.date.today(), dt.time())
+				except AttributeError :
+					try :
+						# Is ETA in the format XMinutes?
+						eta = dt.timedelta(
+							minutes = int(re.match(r'(?P<min>^\d+)', eta).group('min'))
+						) + dt.datetime.now()
+					except AttributeError :
+						pass
+
+				ETA_INFO.append( (eta, route_name, car_dest, route, car ) )
+
+		ETA_INFO_1 = sorted(filter(lambda ei : type(ei[0]) is dt.datetime, ETA_INFO))
+		ETA_INFO_2 = sorted(filter(lambda ei : not type(ei[0]) is dt.datetime, ETA_INFO))
+
+		for (eta, route_name, car_dest, route, car) in ETA_INFO_1 :
+			yield {
+				'eta' : "{0:%H:%M}".format(eta),
+				'route_name' : route_name,
+				'car_dest' : car_dest,
+				'route' : route,
+				'car' : car
+			}
+
+		for (eta, route_name, car_dest, route, car) in ETA_INFO_2 :
+			yield {
+				'eta' : eta,
+				'route_name' : route_name,
+				'car_dest' : car_dest,
+				'route' : route,
+				'car' : car
+			}
+
+		return
+
+	def eta_by_loc(self, loc, k=20) :
+
+		return sorted(
+			[
+				{
+					'stop' : s,
+					'etas' : list(self.eta_by_stopname(s['nameZh'][PARAM['pref-lang']]))
+				}
+				for (j, s) in BusOracle.group_by_name(self.get_nearest_stops(loc, k=k)).items()
+			],
+			key=(lambda stop_etas : stop_etas['stop']['distance-min'])
+		)
 
 ## ===================== WORK :
 
@@ -438,7 +572,7 @@ def test_001() :
 	print(R.routes)
 
 def test_002() :
-	S = Stops(RoutesMeta())
+	S = BusNetwork()
 
 	print("Some bus trajectories:")
 	for r in list(S.routes.items())[0:10] :
@@ -449,7 +583,7 @@ def test_002() :
 		print(s)
 
 def test_003() :
-	S = StopsKNN(RoutesMeta())
+	S = BusNetworkKNN()
 
 	(lat, lon) = (22.63279, 120.33447)
 
@@ -464,56 +598,45 @@ def test_003() :
 		print("{}m -- {} (SID: {})".format(int(round(s['distance'])), s['nameZh']['en'], i))
 
 	print("Grouped by name:")
-	for (j, s) in Stops.group_by_name(kS).items() :
+	for (j, s) in BusNetworkKNN.group_by_name(kS).items() :
 		print(j, s)
 
 def test_004() :
 
-	S = StopsKNN(RoutesMeta())
+	oracle = BusOracle()
 
 	(lat, lon) = (22.63279, 120.33447)
 
-	kS = Stops.group_by_name(S.get_nearest_stops((lat, lon), 20))
+	kS = BusOracle.group_by_name(oracle.get_nearest_stops((lat, lon), k=20))
 
 	for (j, s) in kS.items() :
 
-		dist = s['distance']
-
-		if (type(dist) is list) :
-			dist = "{}~{}m".format(int(min(dist)), int(max(dist)))
-		else :
-			dist = "{}m".format(int(dist))
-
-		stopname = s['nameZh'][PARAM['pref-lang']]
+		(dist, dist_nice, stopname) = (s['distance'], s['distance-tty'], s['nameZh'][PARAM['pref-lang']])
 
 		print("")
-		print("STOP {} ({})".format(stopname, dist))
+		print("{} ({})".format(stopname, dist_nice))
 		print("")
 
-		url = PARAM['url-eta'][PARAM['pref-lang']].format(stopname=stopname)
-		ETAs = json.loads(wget(url, wget.CACHE).bytes)
+		for eta_info in oracle.eta_by_stopname(stopname) :
+			print('[{}] "{}" ~~> {}'.format(eta_info['eta'], eta_info['route_name'], eta_info['car_dest']))
 
-		for g in ETAs :
-			#print(g['GroupNo'], g['Info'])
-			for car in g['Info'] :
-				#print(car['Pathid'], car['Goback'], car['Time'])
+def test_005() :
 
-				route = S.routes[car['Pathid']]
+	(lat, lon) = (22.63279, 120.33447)
 
-				car_dest = { '1' : route['destinationZh'], '2' : route['departureZh'] }[car['Goback']]
-				if (type(car_dest) is dict) : car_dest = car_dest[PARAM['pref-lang']]
-				car_dest = car_dest.strip()
+	ETA = BusOracle().eta_by_loc((lat, lon))
 
-				route_name = route['nameZh']
-				if (type(route_name) is dict) : route_name = route_name[PARAM['pref-lang']]
-				route_name = route_name.strip()
+	for stop_etas in ETA :
 
-				eta = car['Time'].strip()
+		print("")
+		print("{} ({})".format(stop_etas['stop']['nameZh'][PARAM['pref-lang']], stop_etas['stop']['distance-tty']))
+		print("")
 
-				print('[{}] "{}" ~~> {}'.format(eta, route_name, car_dest))
+		for eta in stop_etas['etas'] :
+			print('[{}] "{}" ~~> {}'.format(eta['eta'], eta['route_name'], eta['car_dest']))
 
 def tests() :
-	test_004()
+	test_005()
 
 ## ==================== ENTRY :
 
