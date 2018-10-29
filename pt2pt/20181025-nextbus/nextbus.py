@@ -641,5 +641,6 @@ def tests() :
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-	tests()
+
+	raise RuntimeWarning("Please include this file as a module")
 
