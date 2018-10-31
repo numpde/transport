@@ -1,6 +1,9 @@
 
 # RA, 2018-10-29
 
+# scp ~/repos/numpde/transport/pt2pt/*BusCal/buscal.py 192.168.100.201:~/BusCal-AS/
+
+# pip3 install --upgrade google-api-python-client
 from google.oauth2 import service_account
 
 # For Scopes, see
@@ -96,6 +99,8 @@ def insert_arrivals(calId) :
 				print(" o) Location:", location)
 
 				stops = re.findall('\|([^_]+)_,(\d+)_,([^_]+)_,([^_@]+)', stops)
+
+				if not stops : continue
 
 				# ETA in seconds
 				for k in range(len(stops)) :
