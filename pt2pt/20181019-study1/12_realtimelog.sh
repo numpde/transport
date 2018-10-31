@@ -37,7 +37,7 @@ while true; do
 	echo ----
 
 	# The API data is not updated very frequently
-	sleep 100
+	sleep 50
 
 done
 
@@ -119,9 +119,11 @@ BusA1Data {
 
     BusStatus (string, optional):
     行車狀況 = ['0: 正常', '1: 車禍', '2: 故障', '3: 塞車', '4: 緊急求援', '5: 加油', '90: 不明', '91: 去回不明', '98: 偏移路線', '99: 非營運狀態', '100: 客滿', '101: 包車出租', '255: 未知'],
+    Driving status = ['0: normal', '1: car accident', '2: fault', '3: traffic jam', '4: emergency help', '5: refueling', '90: unknown', '91: go back to unknown ', '98: offset route', '99: non-operational status', '100: full passenger', '101: charter rental', '255: unknown'],
 
     MessageType (string, optional):
     資料型態種類 = ['0: 未知', '1: 定期', '2: 非定期'],
+    Type of data type = ['0: Unknown', '1: Regular', '2: Non-periodic'],
 
     GPSTime (DateTime):
     車機時間(ISO8601格式:yyyy-MM-ddTHH:mm:sszzz) ,
