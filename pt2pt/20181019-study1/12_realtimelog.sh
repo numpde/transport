@@ -5,15 +5,19 @@
 
 CITY=Kaohsiung
 
-# Output directory
+# Root output directory
 OUT="OUTPUT/12/${CITY}/UV"
-# Create it, if needed
-mkdir -p ${OUT}
 
 while true; do
 
-	f=${OUT}/$(date +"%Y%m%d-%H%M%S").json
-	echo "Downloading to $f"
+	# Output directory for today
+	d=${OUT}/$(date +"%Y%m%d")
+
+	# Create output directory, if needed
+	mkdir -p ${d}
+
+	f=${d}/$(date +"%H%M%S").json
+	echo "Downloading to file $f"
 
 	# Authorization mechanism
 	MSG="x-date: "$(LANG=US date -u +"%a, %d %b %Y %H:%M:%S GMT")
@@ -37,14 +41,16 @@ while true; do
 	echo ----
 
 	# The API data is not updated very frequently
-	sleep 50
+	sleep 30
 
 done
 
 
 
-
 exit
+
+##### END OF SCRIPT #####
+
 
 
 # The following was used to make this download script
