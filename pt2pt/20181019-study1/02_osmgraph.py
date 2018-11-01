@@ -114,10 +114,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		self.rels[r.tags['type']][r.id] = rel
 
 	def apply_file(self, *args, **kwargs) :
-		# TODO: Throw Exception
-		import sys
-		sys.exit("Error: Use the wrapper member 'get_graph' instead")
-		pass
+		raise RuntimeError("Use the wrapper member 'get_graph' instead")
 
 	def get_graph(self, filename) :
 
