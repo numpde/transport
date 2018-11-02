@@ -47,8 +47,20 @@ KEYS = {
 	'routeid': 'SubRouteUID',
 	'dir': 'Direction',
 
+	'speed': 'Speed',
+	'azimuth': 'Azimuth',
+
 	'time': 'GPSTime',
 	'pos': 'BusPosition',
+
+	#'bus_stat' : 'BusStatus', # Not all records have this
+	#'duty_stat' : 'DutyStatus',
+}
+
+# The subkeys of KEYS['pos']
+KEYS_POS = {
+	'Lat': 'PositionLat',
+	'Lon': 'PositionLon',
 }
 
 BUSID_OF = (lambda b: b[KEYS['busid']])
@@ -102,7 +114,12 @@ def segments(bb):
 			# However, if the timestamp is the same,
 			if (b[KEYS['time']] == s[-1][KEYS['time']]):
 				# ... then the rest of the record should be the same
-				assert (b == s[-1])
+				if not (b == s[-1]) :
+					# Timestamp is the same but the complete record is not
+					pos = (lambda r : (r[KEYS['pos']][KEYS_POS['Lat']], r[KEYS['pos']][KEYS_POS['Lon']]))
+					d = commons.geodesic(pos(b), pos(s[-1]))
+					# Grace of 100 meters: displacement + GPS inaccuracy
+					assert(d <= 100)
 				# Skip this redundant record
 				continue
 
@@ -115,7 +132,6 @@ def segments(bb):
 		yield next(iter(commons.index_dicts_by_key(s, BUSID_OF).values()))
 
 	return
-
 
 
 ## ===================== WORK :
@@ -131,11 +147,7 @@ def extract_busses() :
 		BUSID_OF
 	)
 
-	i = 'KOffice_test'; B = { i : B[i] }
-
 	print("Found {} physical busses".format(len(B)))
-
-	#print(set(B[i][keys['routeid']])); exit(39)
 
 	# Overview:
 	# For each physical bus (identified by plate number)
@@ -146,27 +158,21 @@ def extract_busses() :
 			# {'PlateNumb': '756-V2', 'SubRouteUID': 'KHH912', 'Direction': 1, 'GPSTime': [List of time stamps], 'BusPosition': [List of positions]}
 			pass
 
-	# The subkeys of keys['pos']
-	keys_pos = {
-		'Lat' : 'PositionLat',
-		'Lon' : 'PositionLon',
-	}
-
-	# Function to compress the list of positions for a segment
+	# Function to "unwrap" the list of positions for a segment
 	def unwrap_pos(s) :
 
-		def listify(V) :
-			return (V if (type(V) is list) else [V])
+		listify = (lambda V : V if (type(V) is list) else [V])
 
-		s[KEYS['pos']] = listify(s[KEYS['pos']])
-
-		(s[keys_pos['Lat']], s[keys_pos['Lon']]) = (
+		(s[KEYS_POS['Lat']], s[KEYS_POS['Lon']]) = (
 			list(coo) for coo in
-			zip(*[tuple(bp[k] for k in keys_pos.values()) for bp in s[KEYS['pos']]])
+			zip(*[
+				tuple(bp[k] for k in KEYS_POS.values()) for bp in listify(s[KEYS['pos']])
+			])
 		)
+
 		del s[KEYS['pos']]
 
-		# The position is a list; accord the time stamps, for convenience
+		# The position is a list, possibly a singleton; accord the timestamp, if single
 		if PARAM['listify-timestamp'] :
 			s[KEYS['time']] = listify(s[KEYS['time']])
 
@@ -175,8 +181,7 @@ def extract_busses() :
 	# Dump info to disk
 	for (busid, b) in B.items() :
 		J = list(unwrap_pos(s) for s in segments(follow(b)))
-		fn = OFILE['busses'].format(busid=busid)
-		with open(fn, 'w') as fd :
+		with open(OFILE['busses'].format(busid=busid), 'w') as fd :
 			json.dump(J, fd)
 
 
