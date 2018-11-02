@@ -3,6 +3,14 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import geopy.distance
+
+# Metric for (lat, lon) coordinates
+def geodesic(a, b) :
+	return geopy.distance.geodesic(a, b).m
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import os
 
 # Create output directories
