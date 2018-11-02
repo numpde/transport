@@ -41,10 +41,81 @@ PARAM = {
 	'listify-timestamp' : True,
 }
 
+KEYS = {
+	'busid': 'PlateNumb',
+
+	'routeid': 'SubRouteUID',
+	'dir': 'Direction',
+
+	'time': 'GPSTime',
+	'pos': 'BusPosition',
+}
+
+BUSID_OF = (lambda b: b[KEYS['busid']])
+
 ## ====================== AUX :
 
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
+
+
+# Undo index_dicts_by_key on an element
+def follow(b):
+	# In case of a non-list, return a list with repeated element
+	def listify(V):
+		if type(V) is list:
+			return V
+		else:
+			return [V] * len(b[KEYS['time']])
+
+	# Note: the following does not work
+	# assert(commons.is_distinct(b[key['time']]))
+	# but duplicates will be eliminated later
+
+	for x in zip(*[listify(b[k]) for k in KEYS.values()]):
+		yield (dict(zip(KEYS.values(), x)))
+
+	return
+
+# Segment a list-like bb of bus records
+# by route/direction
+def segments(bb):
+	# Put segment boundary when any of these keys change
+	indicators = [KEYS['routeid'], KEYS['dir']]
+
+	# Reverse list for easy pop-ing
+	bb = list(reversed(list(bb)))
+
+	while bb :
+		# Initiate a new segment
+		s = [bb.pop()]
+
+		# Build segment while no indicators change
+		while bb and all((bb[-1][k] == s[-1][k]) for k in indicators) :
+
+			b = bb.pop()
+
+			# None of the indicators have changed: continue the segment record
+
+			# TODO: Segment if delta(GPSTime) is large?
+
+			# However, if the timestamp is the same,
+			if (b[KEYS['time']] == s[-1][KEYS['time']]):
+				# ... then the rest of the record should be the same
+				assert (b == s[-1])
+				# Skip this redundant record
+				continue
+
+			s.append(b)
+
+		# Sanity check: only one bus tracked in the segment
+		assert(1 == len(set(map(BUSID_OF, s))))
+
+		# Collapse into one record
+		yield next(iter(commons.index_dicts_by_key(s, BUSID_OF).values()))
+
+	return
+
 
 
 ## ===================== WORK :
@@ -54,83 +125,17 @@ def extract_busses() :
 	response_files = sorted(glob.glob(IFILE['response'].format(d="20181102", t="1*")))
 	time.sleep(1)
 
-	keys = {
-		'busid'   : 'PlateNumb',
-
-		'routeid' : 'SubRouteUID',
-		'dir'     : 'Direction',
-
-		'time'    : 'GPSTime',
-		'pos'     : 'BusPosition',
-	}
-
-	busid_of = (lambda b : b[keys['busid']])
-
 	# Load all bus records, group by Bus ID
 	B = commons.index_dicts_by_key(
 		chain.from_iterable(commons.zipjson_load(fn) for fn in response_files),
-		busid_of
+		BUSID_OF
 	)
 
-	i = 'KOffice_test'
-	B = { i : B[i] }
+	i = 'KOffice_test'; B = { i : B[i] }
 
 	print("Found {} physical busses".format(len(B)))
 
-	for b in B:
-		print(b)
-
-	# Undo index_dicts_by_key on an element
-	def follow(b) :
-
-		# In case of a non-list, make an iterable returning this element
-		def listify(V):
-			if type(V) is list:
-				return V
-			else:
-				while True: yield V
-
-		# TODO: the following does not hold
-		#assert(commons.is_distinct(b[key_time]))
-
-		for x in zip(*[ listify(b[k]) for k in keys.values() ]) :
-			yield(dict(zip(keys.values(), x)))
-
-	def segments(bb) :
-
-		# Put segment boundary when any of these keys change
-		indicators = [keys['routeid'], keys['dir']]
-
-		# Current segment
-		L = []
-
-		for b in bb :
-			# if (busid_of(b) == 'KOffice_test') :
-			# 	print(b)
-			if not L :
-				# First record of the new segment
-				L.append(b)
-			elif all((b[k] == L[-1][k]) for k in indicators) :
-				# None of the indicators have changed, so
-				# continue the segment record
-				# TODO: Segment if delta(GPSTime) is large?
-
-				# (unless there is no change at all, then do nothing)
-				if (b == L[-1]) :
-					continue
-
-				L.append(b)
-			else :
-				# Sanity check: only one bus tracked in the segment
-				assert(1 == len(set(busid_of(b) for b in L)))
-
-				# Collapse into one record
-				b = next(iter(commons.index_dicts_by_key(L, busid_of).values()))
-
-				# Initiate new segment
-				L = []
-
-				yield b
+	#print(set(B[i][keys['routeid']])); exit(39)
 
 	# Overview:
 	# For each physical bus (identified by plate number)
@@ -139,11 +144,9 @@ def extract_busses() :
 		for s in segments(follow(b)) :
 			# Here, the segment s looks like
 			# {'PlateNumb': '756-V2', 'SubRouteUID': 'KHH912', 'Direction': 1, 'GPSTime': [List of time stamps], 'BusPosition': [List of positions]}
-			print(s)
 			pass
 
-	exit(39)
-
+	# The subkeys of keys['pos']
 	keys_pos = {
 		'Lat' : 'PositionLat',
 		'Lon' : 'PositionLon',
@@ -151,18 +154,21 @@ def extract_busses() :
 
 	# Function to compress the list of positions for a segment
 	def unwrap_pos(s) :
-		if not (type(s[keys['pos']]) is list) :
-			s[keys['pos']] = list(s[keys['pos']])
+
+		def listify(V) :
+			return (V if (type(V) is list) else [V])
+
+		s[KEYS['pos']] = listify(s[KEYS['pos']])
 
 		(s[keys_pos['Lat']], s[keys_pos['Lon']]) = (
 			list(coo) for coo in
-			zip(*[ tuple(bp[k] for k in keys_pos.values()) for bp in s[keys['pos']] ])
+			zip(*[tuple(bp[k] for k in keys_pos.values()) for bp in s[KEYS['pos']]])
 		)
-		del s[keys['pos']]
+		del s[KEYS['pos']]
 
 		# The position is a list; accord the time stamps, for convenience
 		if PARAM['listify-timestamp'] :
-			s[keys['time']] = listify(s[keys['time']])
+			s[KEYS['time']] = listify(s[KEYS['time']])
 
 		return s
 
