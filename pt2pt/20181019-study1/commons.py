@@ -68,7 +68,7 @@ def parse_options(OPTIONS) :
 		(opt, args) = (sys.argv[1], sys.argv[2:])
 
 		if opt in OPTIONS :
-			OPTIONS(opt)(*args)
+			OPTIONS[opt](*args)
 			return True
 
 	elif (1 == len(OPTIONS)) and (1 == len(sys.argv)) :
