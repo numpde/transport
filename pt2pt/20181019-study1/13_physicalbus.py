@@ -38,6 +38,7 @@ commons.makedirs(OFILE)
 ## ==================== PARAM :
 
 PARAM = {
+	'listify-timestamp' : True,
 }
 
 ## ====================== AUX :
@@ -137,7 +138,8 @@ def extract_busses() :
 		del s[keys['pos']]
 
 		# The position is a list; accord the time stamps, for convenience
-		s[keys['time']] = listify(s[keys['time']])
+		if PARAM['listify-timestamp'] :
+			s[keys['time']] = listify(s[keys['time']])
 
 		return s
 
