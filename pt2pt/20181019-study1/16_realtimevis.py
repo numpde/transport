@@ -10,6 +10,7 @@ import time
 import json
 import glob
 import inspect
+from itertools import chain
 
 
 ## ==================== NOTES :
@@ -45,9 +46,13 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 ## ===================== WORK :
 
-def extract_runs() :
+pass
 
-	response_files = sorted(glob.glob(IFILE['response'].format(d="20181101", t="15*")))
+## ===================== PLAY :
+
+def test_extract_runs() :
+
+	response_files = sorted(glob.glob(IFILE['response'].format(d="20181101", t="1*")))
 	time.sleep(1)
 
 	# Extracted bus runs
@@ -55,12 +60,6 @@ def extract_runs() :
 	cur_runs = { }
 
 	k = 0
-
-	# TODO:
-	# First, group all records by plate number
-	# Then, segment by changes in route, direction or status
-	#
-	# Goal: construct effective time-tables
 
 	for fn in response_files :
 
@@ -242,7 +241,7 @@ def vis1() :
 
 OPTIONS = {
 	'VIS1' : vis1,
-	'TEST_EXTRACT' : extract_runs,
+	'TEST_EXTRACT' : test_extract_runs,
 }
 
 ## ==================== ENTRY :

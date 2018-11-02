@@ -3,6 +3,15 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import os
+
+# Create output directories
+def makedirs(OFILE) :
+	for f in OFILE.values() :
+		os.makedirs(os.path.dirname(f), exist_ok=True)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 # Print which files are opened
 def logged_open(filename, mode='r', *argv, **kwargs) :
 	print("({}):\t{}".format(mode, filename))
@@ -13,17 +22,18 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 from collections import defaultdict
 
 # Index an iterable _I_ of dict's by the return value of key_func
-def index_dicts_by_key(I, key_func) :
+def index_dicts_by_key(I, key_func, collapse_repetitive=True) :
 	J = defaultdict(lambda: defaultdict(list))
 
 	for i in I :
 		for (k, v) in i.items() :
 			J[key_func(i)][k].append(v)
 
-	for (j, i) in J.items() :
-		for (k, V) in i.items() :
-			if (1 == len(set(json.dumps(v) for v in V))) :
-				J[j][k] = next(iter(V))
+	if collapse_repetitive :
+		for (j, i) in J.items() :
+			for (k, V) in i.items() :
+				if (1 == len(set(json.dumps(v) for v in V))) :
+					J[j][k] = next(iter(V))
 
 	# Convert all defaultdict to dict
 	J = json.loads(json.dumps(J))
@@ -42,16 +52,24 @@ import sys
 
 def parse_options(OPTIONS) :
 
+	if not OPTIONS :
+		raise RuntimeError("No options to choose from")
+
 	if (len(sys.argv) > 1) :
-		(OPT, ARG) = (sys.argv[1], sys.argv[2:])
-		for (opt, fun) in OPTIONS.items() :
-			if (opt == OPT) :
-				fun(*ARG)
-				return True
 
-		raise RuntimeError("Unrecognized command line option")
+		(opt, args) = (sys.argv[1], sys.argv[2:])
 
-	return False
+		if opt in OPTIONS :
+			OPTIONS(opt)(*args)
+			return True
+
+	elif (1 == len(OPTIONS)) and (1 == len(sys.argv)) :
+
+		(opt, fun) = OPTIONS.popitem()
+		fun()
+		return True
+
+	raise RuntimeError("Unrecognized command line option")
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
