@@ -10,6 +10,7 @@ import time
 import json
 import glob
 import inspect
+import datetime as dt
 from itertools import chain
 
 
@@ -22,8 +23,6 @@ pass
 
 IFILE = {
 	'response' : "OUTPUT/12/Kaohsiung/UV/{d}/{t}.json",
-
-	#'route-stops' : "ORIGINALS/MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
 }
 
 
@@ -118,8 +117,8 @@ def segments(bb):
 					# Timestamp is the same but the complete record is not
 					pos = (lambda r : (r[KEYS['pos']][KEYS_POS['Lat']], r[KEYS['pos']][KEYS_POS['Lon']]))
 					d = commons.geodesic(pos(b), pos(s[-1]))
-					# Grace of 100 meters: displacement + GPS inaccuracy
-					assert(d <= 100)
+					# Grace of a few meters: displacement + GPS inaccuracy
+					assert(d <= 200)
 				# Skip this redundant record
 				continue
 
@@ -148,6 +147,13 @@ def extract_busses() :
 	)
 
 	print("Found {} physical busses".format(len(B)))
+
+	# Sanity check: forward-only GPSTime
+	for b in B.values() :
+		T = b[KEYS['time']]
+		if not (T is list) : continue
+		T = [dt.datetime.fromisoformat(t) for t in T]
+		assert(all((s <= t) for (s, t) in zip(T[:-1], T[1:])))
 
 	# Overview:
 	# For each physical bus (identified by plate number)
