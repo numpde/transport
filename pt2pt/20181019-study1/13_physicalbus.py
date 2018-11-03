@@ -36,10 +36,6 @@ commons.makedirs(OFILE)
 
 ## ==================== PARAM :
 
-PARAM = {
-	'listify-timestamp' : True,
-}
-
 KEYS = {
 	'busid': 'PlateNumb',
 
@@ -63,6 +59,10 @@ KEYS_POS = {
 }
 
 BUSID_OF = (lambda b: b[KEYS['busid']])
+
+PARAM = {
+	'listify-keys' : ['speed', 'azimuth', 'time', 'pos'],
+}
 
 ## ====================== AUX :
 
@@ -137,7 +137,7 @@ def segments(bb):
 
 def extract_busses() :
 
-	response_files = sorted(glob.glob(IFILE['response'].format(d="20181102", t="1*")))
+	response_files = sorted(glob.glob(IFILE['response'].format(d="20181101", t="1*")))
 	time.sleep(1)
 
 	# Load all bus records, group by Bus ID
@@ -178,9 +178,8 @@ def extract_busses() :
 
 		del s[KEYS['pos']]
 
-		# The position is a list, possibly a singleton; accord the timestamp, if single
-		if PARAM['listify-timestamp'] :
-			s[KEYS['time']] = listify(s[KEYS['time']])
+		for k in PARAM['listify-keys'] :
+			s[KEYS[k]] = listify(s[KEYS[k]])
 
 		return s
 
