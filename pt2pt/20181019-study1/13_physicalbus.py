@@ -34,8 +34,9 @@ OFILE = {
 
 commons.makedirs(OFILE)
 
-## ==================== PARAM :
+## ================= METADATA :
 
+# Keys in a response file JSON record
 KEYS = {
 	'busid': 'PlateNumb',
 
@@ -58,11 +59,16 @@ KEYS_POS = {
 	'Lon': 'PositionLon',
 }
 
+# Helper to extract the Physical-Bus ID
 BUSID_OF = (lambda b: b[KEYS['busid']])
 
+
+## ==================== PARAM :
+
 PARAM = {
-	'listify-keys' : ['speed', 'azimuth', 'time', 'pos'],
+	'listify-keys' : ['speed', 'azimuth', 'time'],
 }
+
 
 ## ====================== AUX :
 
