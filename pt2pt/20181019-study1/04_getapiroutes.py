@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
-# AUTHOR, DATE
+# RA, 2018-10-22
 
 ## ================== IMPORTS :
 
+import commons
 import os
 import time
 import json
@@ -30,8 +31,7 @@ OFILE = {
 	'BusStop-info-js' : "OUTPUT/04/kaohsiung_bus_routes/route_{route_id}.json",
 }
 
-# Create output directories
-for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+commons.makedirs(OFILE)
 
 
 ## ==================== PARAM :

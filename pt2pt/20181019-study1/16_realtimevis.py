@@ -6,11 +6,9 @@
 
 import commons
 
-import time
-import json
+import pickle
 import glob
 import inspect
-from itertools import chain
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
@@ -26,6 +24,8 @@ IFILE = {
 	'busses' : "OUTPUT/13/Kaohsiung/UV/{busid}.json",
 
 	'route-stops' : "ORIGINALS/MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
+
+	'OSM': "OUTPUT/02/UV/kaohsiung.pkl",
 }
 
 
@@ -56,6 +56,18 @@ pass
 # Follow one bus
 def vis1() :
 
+	# OSM = pickle.load(open(IFILE['OSM'], 'rb'))
+	# for (route_id, route) in OSM['rels']['route'].items():
+	# 	# Skip non-bus routes
+	# 	if not (route['t'].get('route') == 'bus'): continue
+	#
+	# 	route_name = route['t'].get('name')
+	#
+	# 	route_ref = route['t']['ref']
+	# 	#if (route_ref == '88') :
+	# 	print(route_name, route_id, route['t'])
+	# exit(39)
+
 	route_stops = commons.index_dicts_by_key(commons.zipjson_load(IFILE['route-stops']), (lambda r: r['SubRouteUID']))
 
 	runs_by_route = defaultdict(list)
@@ -67,35 +79,34 @@ def vis1() :
 		for run in runs :
 			runs_by_route[run['SubRouteUID']].append(run)
 
-	runs = runs_by_route['122']
+	route_uid = 'KHH122'
+
+	runs = runs_by_route[route_uid]
+	route = route_stops[route_uid]
 
 	for run in runs :
 
-		print(run)
-
-		route_uid = run['SubRouteUID']
-
-		route = route_stops[route_uid]
-		stops = dict(zip(route['Direction'], route['Stops']))[run['Direction']]
-
-		print(stops)
+		run_dir = run['Direction']
+		stops = dict(zip(route['Direction'], route['Stops']))[run_dir]
 
 		# Clear figure
-		plt.clf()
+		plt.ion()
 
 		# Draw stops
 		for stop in stops :
 			p = stop['StopPosition']
 			(y, x) = (p['PositionLat'], p['PositionLon'])
-			plt.scatter(x, y, c='b', marker='o')
+			plt.scatter(x, y, c=('b' if (run_dir == 0) else 'g'), marker='o')
 
 		# Trace bus
 		(y, x) = (run['PositionLat'], run['PositionLon'])
-		plt.plot(x, y, '--+', c='r', linewidth=1)
+		h = plt.plot(x, y, '--+', c='r', linewidth=1)
 
-		plt.draw(); plt.pause(0.1)
+		plt.draw(); plt.pause(1)
 
-		plt.ioff()
+		h[0].remove()
+
+		#plt.ioff()
 		plt.show()
 
 	return

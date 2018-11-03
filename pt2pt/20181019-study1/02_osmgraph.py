@@ -3,6 +3,7 @@
 
 ## ================== IMPORTS :
 
+import commons
 import networkx as nx
 import osmium
 import pickle
@@ -40,8 +41,7 @@ OFILE = {
 	'OSM-pickled' : "OUTPUT/02/UV/{region}.pkl",
 }
 
-# Create output directories
-for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+commons.makedirs(OFILE)
 
 
 ## ==================== PARAM :

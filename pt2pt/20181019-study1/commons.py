@@ -3,6 +3,64 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import numpy as np
+
+# Find a way through matrix M bottom-to-top with right-to-left drift
+# that minimizes the sum of entries (using dynamic programming)
+#
+# Recursion template:
+#
+# def sum(i, j) :
+# 	if (i < 0) or (j < 0) : return 0
+# 	return min(sum(i, j - 1), M[i, j] + sum(i - 1, j))
+#
+def align(M) :
+	# Sum matrix
+	S = 0 * M
+
+	# These will record the trajectory
+	import numpy as np
+	I = np.zeros(M.shape, dtype=int)
+	J = np.zeros(M.shape, dtype=int)
+
+	def s(i, j) :
+		if (i < 0) or (j < 0) : return 0
+		return S[i, j]
+
+	# Dynamic programing loops
+	for i in range(0, M.shape[0]) :
+		for j in range(0, M.shape[1]) :
+			(S[i, j], I[i, j], J[i, j]) = \
+				(
+					# In the first column, can only go up
+					(j == 0) and (s(i - 1, j) + M[i, j], i - 1, j)
+				) or (
+					# Otherwise have a choice:
+					min(
+						# go left
+						(s(i, j - 1), i, j - 1),
+						# go up
+						(s(i - 1, j) + M[i, j], i - 1, j)
+					)
+				)
+
+	# Retrace the optimal way
+	match = [None] * M.shape[0]
+	while (i >= 0) :
+		M[i, j] = max(M.flatten()) # For visualization below
+		match[i] = j
+		(i, j) = (I[i, j], J[i, j])
+
+	# # For visualization:
+	# import matplotlib.pyplot as plt
+	# plt.imshow(M)
+	# plt.show()
+
+	# Now: row i is matched with column match[i]
+	return match
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import geopy.distance
 
 # Metric for (lat, lon) coordinates
