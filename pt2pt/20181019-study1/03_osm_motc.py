@@ -14,7 +14,7 @@ import time
 import inspect
 from itertools import chain
 from collections import defaultdict
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 
 ## ==================== NOTES :
@@ -48,6 +48,54 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 
 ## ===================== WORK :
+
+def check_osm_stops() :
+
+	print("Loading OSM...")
+
+	OSM = pickle.load(open(IFILE['OSM'], 'rb'))
+
+	print("Extracting stops...")
+
+	stops = {
+		n : (OSM['node_tags'].get(n), route)
+		for (route_id, route) in OSM['rels']['route'].items()
+		if (route['t'].get('route') == 'bus')
+		for n in route['n']
+	}
+
+	del OSM
+
+	print("Launching check")
+	time.sleep(1)
+
+	for (n, (stop, route)) in stops.items() :
+
+		print("")
+		print(" === Checking node #{}".format(n))
+		print("")
+
+		if not stop :
+			print("NOT FOUND")
+			continue
+
+		print(n, stop['name'])
+
+		if not (stop.get('public_transport') == 'platform') :
+			print("Stop:", stop)
+			print("Route:", route)
+			print("Stop missing proper tag public_transport=platform")
+			input("Press ENTER")
+
+
+		if not (stop.get('bus') == 'yes') :
+			print("Stop:", stop)
+			print("Route:", route)
+			print("Stop should have a bus=yes tag")
+			input("Press ENTER")
+
+
+	return
 
 # Check compliance with the guidelines
 # https://wiki.openstreetmap.org/wiki/Tag:route%3Dbus
@@ -209,7 +257,8 @@ def match_routes() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'CHECK' : check_osm_routes,
+	'CHECK_STOPS' : check_osm_stops,
+	# 'CHECK_ROUTES' : check_osm_routes,
 	# 'MATCH' : match_routes,
 }
 
