@@ -27,8 +27,8 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'request-routes' : "request_cache/routes_{lang}.json",
-	'request-stops'  : "request_cache/stops_{ID}-{Dir}_{lang}.json",
+	'request-routes' : "request_cache/explicit/routes_{lang}.json",
+	'request-stops'  : "request_cache/explicit/UV/stops_{ID}-{Dir}_{lang}.json",
 
 	'bus-network'    : "compute_cache/UV/bus-network.json",
 
@@ -46,7 +46,7 @@ OFILE = {
 
 	'compute-knn'    : IFILE['compute-knn'],
 
-	'wget-generic-cache' : "request_cache/wget/{ID}.dat",
+	'wget-generic-cache' : "request_cache/wget/UV/{ID}.dat",
 }
 
 # Create output directories
