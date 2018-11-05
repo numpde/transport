@@ -86,6 +86,7 @@ def download() :
 			print("# Retrieval time:", file=f)
 			print("UTC={}".format(datetime.datetime.utcnow().isoformat()), file=f)
 
+	print("Please use JOSM to 'Download incomplete members' for 'route' relations.")
 
 ## ==================== ENTRY :
 
