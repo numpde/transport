@@ -76,24 +76,32 @@ def check_osm_stops() :
 		print("")
 
 		if not stop :
-			print("NOT FOUND")
-			continue
-
-		print(n, stop['name'])
-
-		if not (stop.get('public_transport') == 'platform') :
+			print("ISSUE: Stop not found")
 			print("Stop:", stop)
 			print("Route:", route)
-			print("Stop missing proper tag public_transport=platform")
+			input("Press ENTER")
+			continue
+
+		#print(n)
+
+		if not (stop.get('public_transport') == 'platform') :
+			print("ISSUE: Stop missing proper tag public_transport=platform")
+			print("Stop:", stop)
+			print("Route:", route)
 			input("Press ENTER")
 
 
 		if not (stop.get('bus') == 'yes') :
+			print("ISSUE: Stop should have a bus=yes tag")
 			print("Stop:", stop)
 			print("Route:", route)
-			print("Stop should have a bus=yes tag")
 			input("Press ENTER")
 
+		if not stop.get("name") :
+			print("ISSUE: Stop has no name")
+			print("Stop:", stop)
+			print("Route:", route)
+			input("Press ENTER")
 
 	return
 
@@ -119,15 +127,16 @@ def check_osm_routes() :
 		assert(route_tags.get('type')), "(mandatory)"
 		assert(route_tags['type'] in ['route', 'route_master'])
 
-
+		print("")
 		print("Checking route #{} '{}':".format(route_id, route_name), route)
+		print("")
 
 		assert(route_tags.get('type') == 'route'), "(mandatory)"
 		assert(route_tags.get('route') == 'bus'), "(mandatory)"
 
 		assert(route_tags.get('ref')), "Very important"
 
-		assert(route_tags.get('roundtrip') in ['yes', 'no']), "Important"
+		# assert(route_tags.get('roundtrip') in ['yes', 'no']), "Important"
 	
 		assert(route_tags.get('public_transport:version') == '2'), "Important"
 
@@ -257,8 +266,8 @@ def match_routes() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'CHECK_STOPS' : check_osm_stops,
-	# 'CHECK_ROUTES' : check_osm_routes,
+	# 'CHECK_STOPS' : check_osm_stops,
+	'CHECK_ROUTES' : check_osm_routes,
 	# 'MATCH' : match_routes,
 }
 

@@ -9,6 +9,7 @@ import osmium
 import pickle
 import inspect
 import os
+import time
 import geopy.distance
 from collections import defaultdict
 
@@ -111,7 +112,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		rel['t'] = { t.k : t.v for t in r.tags }
 
 		# All relations are grouped by type
-		self.rels[r.tags['type']][r.id] = rel
+		self.rels[r_type][r.id] = rel
 
 	def apply_file(self, *args, **kwargs) :
 		raise RuntimeError("Use the wrapper member 'get_graph' instead")
@@ -126,15 +127,23 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		self.way_tags = {}
 		self.rels = defaultdict(dict)
 
+		print("Reading OSM file...")
+
 		osmium.SimpleHandler.apply_file(self, filename)
 
+		print("Done. Now making the graph...")
+
 		# Step 1: insert all nodes as vertices of the graph
+
+		print(" - 1. Collecting nodes")
 
 		self.G = nx.DiGraph()
 
 		self.G.add_nodes_from(self.locs.keys())
 
 		# Step 2: construct edges of the road graph
+
+		print(" - 2. Collecting edges")
 
 		def add_path(wnodes, wid, is_forward) :
 			self.G.add_path(wnodes, wid=wid)
@@ -153,7 +162,11 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 			self.G.add_path(wnodes_bothways[True], wid=wid)
 			self.G.add_path(wnodes_bothways[False], wid=wid)
 
+			time.sleep(0.001)
+
 		# Step 3: compute lengths of graph edges (in meters)
+
+		print(" - 3. Computing edge lengths")
 
 		# Compute edge length representing distance, in meters
 		# Location expected as a (lat, lon) pair
