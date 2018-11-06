@@ -16,6 +16,9 @@ from collections import defaultdict
 
 ## ==================== NOTES :
 
+# Get logged files with
+# scp -r w:~/repos/numpde/transport/pt2pt/20181019-study1/OUTPUT/12/Kaohsiung/UV/* ~/*/*/*/*/*study1/OUTPUT/12/Kaohsiung/UV/
+
 pass
 
 
@@ -66,6 +69,7 @@ def compress() :
 
 	print("COMPRESSION 0")
 
+	# Brutal compression step
 	for fn in response_files :
 		continue
 		#commons.zipjson_dump(commons.zipjson_load(fn), fn)
@@ -74,7 +78,7 @@ def compress() :
 	# Compression I:
 	# Remove records from file if present in the subsequent file
 
-	print("COMPRESSION I")
+	print("COMPRESSION I: Remove duplicates in back-to-back records")
 
 	for (fn1, fn2) in zip(response_files[:-1], response_files[1:]) :
 		def hashable(J) :
@@ -85,10 +89,14 @@ def compress() :
 			assert(type(J) is list)
 			return list(map(json.loads, J))
 
-		J1 = set(hashable(commons.zipjson_load(fn1)))
-		J2 = set(hashable(commons.zipjson_load(fn2)))
+		try :
+			J1 = set(hashable(commons.zipjson_load(fn1)))
+			J2 = set(hashable(commons.zipjson_load(fn2)))
+		except EOFError :
+			# Raised by zipjson_load if a file is empty
+			continue
 
-		if (len(J1.intersection(J2)) == 0) :
+		if not J1.intersection(J2) :
 			continue
 
 		J1 = J1.difference(J2)
@@ -103,7 +111,7 @@ def compress() :
 	# Compression II:
 	# Remove route names if available elsewhere
 
-	print("COMPRESSION II")
+	print("COMPRESSION II: Remove redundancies from individual records")
 
 	# Route meta
 	R = commons.zipjson_load(IFILE['routes'])
@@ -191,7 +199,11 @@ def compress() :
 		return J
 
 	for fn in response_files :
-		J = commons.zipjson_load(fn)
+		try :
+			J = commons.zipjson_load(fn)
+		except EOFError :
+			print("Warning: {} appears empty".format(fn))
+			continue
 		b = len(json.dumps(J))
 		J = list(map(remove_single_route_redundancies, J))
 		# J = remove_global_route_redundancies(J)
@@ -210,7 +222,7 @@ def compress() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'DOWNLOAD' : download,
+	# 'DOWNLOAD' : download,
 	'COMPRESS' : compress,
 }
 
@@ -219,7 +231,4 @@ OPTIONS = {
 
 if (__name__ == "__main__") :
 
-	if not commons.parse_options(OPTIONS) :
-
-		print("Please specify option via command line:", *OPTIONS.keys())
-
+	assert(commons.parse_options(OPTIONS))

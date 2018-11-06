@@ -143,7 +143,7 @@ def parse_options(OPTIONS) :
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-import json, zlib, base64
+import os, json, zlib, base64
 
 class ZIPJSON :
 
@@ -197,9 +197,28 @@ class ZIPJSON :
 		return J
 
 def zipjson_load(fn) :
-	assert(type(fn) is str)
-	J = json.load(open(fn, 'r'))
-	J = ZIPJSON(J).try_dec()
+
+	assert(type(fn) is str), "This expects a file name"
+
+	if not os.path.isfile(fn) :
+		raise FileNotFoundError("File not found: {}".format(fn))
+
+	if not os.stat(fn).st_size :
+		# The file is empty. Choose not to return an empty JSON.
+		raise EOFError("File {} is empty".format(fn))
+
+	try :
+		J = json.load(open(fn, 'r'))
+	except :
+		print("Exception while loading {}".format(fn))
+		raise
+
+	try :
+		J = ZIPJSON(J).try_dec()
+	except :
+		print("Exception while decoding {}".format(fn))
+		raise
+
 	return J
 
 def zipjson_dump(J, fn) :
