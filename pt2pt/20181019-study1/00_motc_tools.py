@@ -11,6 +11,7 @@ import re
 import json
 import inspect
 import difflib
+import subprocess
 
 
 ## ==================== NOTES :
@@ -21,16 +22,16 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'MOTC_routes': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
-	'MOTC_shapes': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Shape/data.json",
-	'MOTC_stops': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Stop/data.json",
+	'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
+	'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Shape/data.json",
+	'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Stop/data.json",
 }
 
 
 ## =================== OUTPUT :
 
 OFILE = {
-	'Route_GPX' : "OUTPUT/00/GPX/Kaohsiung/UV/route_{route_id}_{dir}.gpx",
+	'Route_GPX' : "OUTPUT/00/GPX/Kaohsiung/UV/route_{route_id}-{dir}.gpx",
 }
 
 commons.makedirs(OFILE)
@@ -64,6 +65,10 @@ def write_route_gpx() :
 	# ...this file only provides a RouteUID for each record
 	motc_shapes = commons.zipjson_load(IFILE['MOTC_shapes'])
 
+	open = commons.logged_open
+
+	issues = []
+
 	for shape in motc_shapes :
 
 		(route_id, dir) = (shape['RouteUID'], shape['Direction'])
@@ -86,7 +91,7 @@ def write_route_gpx() :
 				wp = gpxpy.gpx.GPXWaypoint(latitude=p, longitude=q, name=stop_name, description=stop_desc, )
 				gpx.waypoints.append(wp)
 		else :
-			print("Route {}, direction {} not found in MOTC_routes".format(route_id, dir))
+			issues += ["Route {}, direction {} not found in MOTC_routes".format(route_id, dir)]
 
 		# Create first track in our GPX
 		gpx_track = gpxpy.gpx.GPXTrack()
@@ -100,10 +105,11 @@ def write_route_gpx() :
 		for (p, q) in zip(lat, lon) :
 			gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
 
-		fn = OFILE['Route_GPX'].format(route_id=route_id, dir=dir)
-		print("Writing", fn)
-		with open(fn, 'w') as f :
+		with open(OFILE['Route_GPX'].format(route_id=route_id, dir=dir), 'w') as f :
 			f.write(gpx.to_xml())
+
+	print("Issues:")
+	for issue in (issues or ["None"]) : print(issue)
 
 
 # Look for bus stops or bus routes based on user input
@@ -169,6 +175,8 @@ def interactive_search() :
 
 		(command, query) = (q[0], " ".join(q[1:]))
 
+		result = []
+
 		# Search for bus stops
 		if (command.lower() == "s") :
 
@@ -180,14 +188,14 @@ def interactive_search() :
 
 			if (command == 's') :
 
-				print("Suggestions:")
+				result.append("Suggestions:")
 
-				for (_, stop) in top_match_motc : print(slim(stop))
+				for (_, stop) in top_match_motc : result.append(slim(stop))
 
 			else :
 
 				(_, stop) = top_match_motc[0]
-				print(pretty(stop))
+				result.append(pretty(stop))
 
 		# Search for bus routes
 		if (command.lower() == "r"):
@@ -200,25 +208,31 @@ def interactive_search() :
 
 			if (command == 'r') :
 
-				print("Suggestions:")
+				result.append("Suggestions:")
 
-				for (_, route) in top_match_motc : print(slim(route))
+				for (_, route) in top_match_motc : result.append(slim(route))
 
 			else :
 
-				(_, route) = top_match_motc[0]
+				(route_id, route) = top_match_motc[0]
 
 				stops = route['Stops']
 				route['Stops'] = '[see below]'
 
-				print(pretty(route))
+				result.append(pretty(route))
 
 				for (dir, stops) in zip(route['Direction'], stops) :
-					print("Direction", dir)
-					print(pretty(stops))
+					result.append("Route-Direction {}-{}:".format(route_id, dir))
+					result.append(pretty(stops))
 
-		print("")
+		try :
+			subprocess.run(["less"], input='\n'.join(result).encode('utf-8'))
+		except :
+			print(*result, sep='\n')
+			print("(Could not open 'less' as subprocess)")
+
 		continue
+
 
 ## ===================== PLAY :
 
@@ -235,4 +249,4 @@ OPTIONS = {
 ## ==================== ENTRY :
 
 if (__name__ == "__main__"):
-	assert(commons.parse_options(OPTIONS))
+	commons.parse_options(OPTIONS)
