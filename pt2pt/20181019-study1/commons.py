@@ -128,11 +128,10 @@ def parse_options(OPTIONS) :
 	if (1 == len(sys.argv)) :
 
 		if (1 == len(OPTIONS)) :
-			(opt, fun) = OPTIONS.popitem()
-			fun()
+
+			# No option provided, but there is only one to choose from
+			(next(iter(OPTIONS.values())))()
 			return True
-		else :
-			raise RuntimeError("No option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
 
 	else :
 
@@ -142,8 +141,7 @@ def parse_options(OPTIONS) :
 			OPTIONS[opt](*args)
 			return True
 
-
-	raise RuntimeError("Unrecognized command line option")
+	print("Invalid or no option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
