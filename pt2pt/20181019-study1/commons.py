@@ -88,7 +88,7 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 from collections import defaultdict
 
 # Index an iterable _I_ of dict's by the return value of key_func
-def index_dicts_by_key(I, key_func, collapse_repetitive=True) :
+def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singletons=[]) :
 	J = defaultdict(lambda: defaultdict(list))
 
 	for i in I :
@@ -98,8 +98,12 @@ def index_dicts_by_key(I, key_func, collapse_repetitive=True) :
 	if collapse_repetitive :
 		for (j, i) in J.items() :
 			for (k, V) in i.items() :
-				if (1 == len(set(json.dumps(v) for v in V))) :
-					J[j][k] = next(iter(V))
+				V = [json.loads(v) for v in set(json.dumps(v) for v in V)]
+				if (1 == len(V)) :
+					if k in preserve_singletons :
+						J[j][k] = V
+					else :
+						J[j][k] = V.pop()
 
 	# Convert all defaultdict to dict
 	J = json.loads(json.dumps(J))
