@@ -10,6 +10,7 @@ import gpxpy, gpxpy.gpx
 import re
 import json
 import inspect
+import difflib
 
 
 ## ==================== NOTES :
@@ -20,9 +21,9 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'MOTC_routes': "ORIGINALS/MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
-	'MOTC_shapes': "ORIGINALS/MOTC/Kaohsiung/CityBusApi_Shape/data.json",
-	#'MOTC_stops': "ORIGINALS/MOTC/Kaohsiung/CityBusApi_Stop/data.json",
+	'MOTC_routes': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
+	'MOTC_shapes': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Shape/data.json",
+	'MOTC_stops': "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Stop/data.json",
 }
 
 
@@ -46,12 +47,15 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-# Print a JSON nicely
-def pretty_print(J):
-	print(json.dumps(J, indent=2, ensure_ascii=False))
+# For printing a JSON nicely
+def pretty(J):
+	return json.dumps(J, indent=2, ensure_ascii=False)
 
 
 ## ===================== WORK :
+
+def motc_download() :
+	print("Use the bash script for downloading MOTC data")
 
 def write_route_gpx() :
 
@@ -102,14 +106,129 @@ def write_route_gpx() :
 			f.write(gpx.to_xml())
 
 
+# Look for bus stops or bus routes based on user input
+def interactive_search() :
+
+	motc_stops = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_stops']), (lambda r: r['StopUID']))
+	motc_routes = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_routes']), (lambda r: r['SubRouteUID']), preserve_singletons=['Direction', 'Stops'])
+
+	# Only keep essential info about a stop or a route
+	def slim(D):
+		return {
+			k : D[k]
+			for k in ['StopUID', 'StopName'] + ['SubRouteUID', 'SubRouteName']
+			if k in D
+		}
+
+	def strip_brackets(s):
+		return re.match(r'(?P<name>[^\(]+)[ ]*(?P<extra>\(\w+\))*', s).group('name').strip()
+
+	def matchratio_names(name1, name2):
+		return difflib.SequenceMatcher(None, name1, name2).ratio()
+
+	def matchratio(query, keywords) :
+		return max([matchratio_names(query.lower(), keyword.lower()) for keyword in keywords])
+
+	# Search keywords for bus stops
+	motc_s_kw = {
+		j : [
+				stop[k]
+				for k in ['StopUID', 'StopID', 'StationID']
+			] + [
+				str(coo)
+				for coo in stop['StopPosition'].values()
+			] + [
+				strip_brackets(name)
+				for name in stop['StopName'].values()
+			]
+		for (j, stop) in motc_stops.items()
+	}
+
+	# Search keywords for bus routes
+	motc_r_kw = {
+		j : [
+				route[k]
+				for k in ['RouteUID', 'RouteID', 'SubRouteUID', 'SubRouteID']
+			] + [
+				strip_brackets(name)
+				for name in route['SubRouteName'].values()
+			]
+		for (j, route) in motc_routes.items()
+	}
+
+	# Interaction
+	while True :
+
+		q = input("Enter command (s, S, r, R):\n").strip().split(' ')
+
+		# No input
+		if not q[0] : break
+
+		# No arguments
+		if (len(q) < 2) : continue
+
+		(command, query) = (q[0], " ".join(q[1:]))
+
+		# Search for bus stops
+		if (command.lower() == "s") :
+
+			top_match_motc = sorted(
+				motc_stops.items(),
+				key=(lambda item : matchratio(query, motc_s_kw[item[0]])),
+				reverse=True
+			)[0:25]
+
+			if (command == 's') :
+
+				print("Suggestions:")
+
+				for (_, stop) in top_match_motc : print(slim(stop))
+
+			else :
+
+				(_, stop) = top_match_motc[0]
+				print(pretty(stop))
+
+		# Search for bus routes
+		if (command.lower() == "r"):
+
+			top_match_motc = sorted(
+				motc_routes.items(),
+				key=(lambda item : matchratio(query, motc_r_kw[item[0]])),
+				reverse=True
+			)[0:10]
+
+			if (command == 'r') :
+
+				print("Suggestions:")
+
+				for (_, route) in top_match_motc : print(slim(route))
+
+			else :
+
+				(_, route) = top_match_motc[0]
+
+				stops = route['Stops']
+				route['Stops'] = '[see below]'
+
+				print(pretty(route))
+
+				for (dir, stops) in zip(route['Direction'], stops) :
+					print("Direction", dir)
+					print(pretty(stops))
+
+		print("")
+		continue
+
 ## ===================== PLAY :
 
 
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'ROUTE_GPX': write_route_gpx,
-	# 'STOPS': write_route_stops,
+	'DOWNLOAD'  : motc_download,
+	'ROUTE_GPX' : write_route_gpx,
+	'SEARCH'    : interactive_search,
 }
 
 

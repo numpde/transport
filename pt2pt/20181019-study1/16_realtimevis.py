@@ -23,7 +23,7 @@ pass
 IFILE = {
 	'busses' : "OUTPUT/13/Kaohsiung/UV/{busid}.json",
 
-	'route-stops' : "ORIGINALS/MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
+	'route-stops' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
 
 	'OSM': "OUTPUT/02/UV/kaohsiung.pkl",
 }

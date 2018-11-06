@@ -27,7 +27,7 @@ pass
 IFILE = {
 	'response' : "OUTPUT/12/Kaohsiung/UV/{d}/{t}.json",
 
-	'routes' : "ORIGINALS/MOTC/Kaohsiung/CityBusApi_Route/data.json",
+	'routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Route/data.json",
 }
 
 
@@ -204,10 +204,10 @@ def compress() :
 		except EOFError :
 			print("Warning: {} appears empty".format(fn))
 			continue
-		b = len(json.dumps(J))
+		b = len(json.dumps(J)) # Before compression
 		J = list(map(remove_single_route_redundancies, J))
 		# J = remove_global_route_redundancies(J)
-		a = len(json.dumps(J))
+		a = len(json.dumps(J)) # After compression
 
 		assert(a <= b)
 		if (a == b) : continue
