@@ -5,11 +5,13 @@
 ## ================== IMPORTS :
 
 from helpers import commons
+from helpers import maps
 
 import glob
 import inspect
 from collections import defaultdict
 import matplotlib.pyplot as plt
+
 
 
 ## ==================== NOTES :
@@ -83,30 +85,39 @@ def vis1() :
 	runs = runs_by_route[route_uid]
 	route = route_stops[route_uid]
 
+	# Kaohsiung (left, bottom, right, top)
+	bbox = (120.2593, 22.5828, 120.3935, 22.6886)
+	(left, bottom, right, top) = bbox
+	#
+	plt.ion()
+	plt.gca().axis([left, right, bottom, top])
+	#
+	i = maps.get_map_by_bbox(bbox)
+	#
+	plt.gca().imshow(i, extent=(left, right, bottom, top), interpolation='quadric')
+	plt.show()
+
 	for run in runs :
 
 		run_dir = run['Direction']
 		stops = dict(zip(route['Direction'], route['Stops']))[run_dir]
 
-		# Clear figure
-		plt.ion()
-
 		# Draw stops
+		#(y, x) = commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}(stop
 		for stop in stops :
 			p = stop['StopPosition']
 			(y, x) = (p['PositionLat'], p['PositionLon'])
-			plt.scatter(x, y, c=('b' if (run_dir == 0) else 'g'), marker='o')
+			plt.scatter(x, y, c=('b' if (run_dir == 0) else 'g'), marker='o', s=4)
 
 		# Trace bus
 		(y, x) = (run['PositionLat'], run['PositionLon'])
 		h = plt.plot(x, y, '--+', c='r', linewidth=1)
 
-		plt.draw(); plt.pause(1)
+		plt.draw()
+		plt.savefig("{}.png".format(route_uid), dpi=180)
+		plt.pause(1)
 
 		h[0].remove()
-
-		#plt.ioff()
-		plt.show()
 
 	return
 
