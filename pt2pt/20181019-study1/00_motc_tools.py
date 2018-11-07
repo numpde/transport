@@ -4,7 +4,7 @@
 
 ## ================== IMPORTS :
 
-import commons
+from helpers import commons
 
 import gpxpy, gpxpy.gpx
 import re
@@ -85,13 +85,13 @@ def write_route_gpx() :
 
 		if dir in route['Direction'] :
 			for stop in dict(zip(route['Direction'], route['Stops']))[dir] :
-				(p, q) = (stop['StopPosition']['PositionLat'], stop['StopPosition']['PositionLon'])
+				(p, q) = commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop)
 				stop_name = "{}-#{}: {} / {}".format(dir, stop['StopSequence'], stop['StopName']['Zh_tw'], stop['StopName']['En'])
 				stop_desc = "{} ({})".format(stop['StopUID'], stop['StationID'])
-				wp = gpxpy.gpx.GPXWaypoint(latitude=p, longitude=q, name=stop_name, description=stop_desc, )
+				wp = gpxpy.gpx.GPXWaypoint(latitude=p, longitude=q, name=stop_name, description=stop_desc)
 				gpx.waypoints.append(wp)
 		else :
-			issues += ["Route {}, direction {} not found in MOTC_routes".format(route_id, dir)]
+			issues.append("Route {}, direction {} not found in MOTC_routes".format(route_id, dir))
 
 		# Create first track in our GPX
 		gpx_track = gpxpy.gpx.GPXTrack()
@@ -107,6 +107,8 @@ def write_route_gpx() :
 
 		with open(OFILE['Route_GPX'].format(route_id=route_id, dir=dir), 'w') as f :
 			f.write(gpx.to_xml())
+
+		continue
 
 	print("Issues:")
 	for issue in (issues or ["None"]) : print(issue)
@@ -189,7 +191,6 @@ def interactive_search() :
 			if (command == 's') :
 
 				result.append("Suggestions:")
-
 				for (_, stop) in top_match_motc : result.append(slim(stop))
 
 			else :
@@ -209,7 +210,6 @@ def interactive_search() :
 			if (command == 'r') :
 
 				result.append("Suggestions:")
-
 				for (_, route) in top_match_motc : result.append(slim(route))
 
 			else :

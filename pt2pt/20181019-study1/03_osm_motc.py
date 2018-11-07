@@ -4,16 +4,16 @@
 
 ## ================== IMPORTS :
 
-import commons
+from helpers import commons
 
 import re
 import pickle
 import json
-import glob
 import time
 import inspect
+import difflib
 from itertools import chain
-from collections import defaultdict
+
 #import matplotlib.pyplot as plt
 
 
@@ -227,7 +227,7 @@ def match_routes() :
 				# motc_name = motc_route['RouteName']['Zh_tw']
 				for (dir, stops) in zip_listify(motc_route['Direction'], motc_route['Stops']) :
 
-					(motc_a, motc_b) = (stops[0]['StopName']['Zh_tw'], stops[-1]['StopName']['Zh_tw'])
+					(motc_a, motc_b) = map(commons.inspect({'StopName' : 'Zh_tw'}), [stops[0], stops[-1]])
 
 					ab_ratio = (matchratio_stop_names(route_a, motc_a) + matchratio_stop_names(route_b, motc_b)) / 2
 					assert((0 <= ab_ratio) and (ab_ratio <= 1))
@@ -288,14 +288,12 @@ def match_routes() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	# 'CHECK_STOPS' : check_osm_stops,
-	# 'CHECK_ROUTES' : check_osm_routes,
+	'CHECK_OSM_STOPS' : check_osm_stops,
+	'CHECK_OSM_ROUTES' : check_osm_routes,
 	# 'MATCH' : match_routes,
-	'INTERACTIVE' : interactive_match,
 }
 
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-
-	assert(commons.parse_options(OPTIONS))
+	commons.parse_options(OPTIONS)

@@ -49,7 +49,9 @@ def logged_open(filename, mode='r', *argv, **kwargs):
 	print("({}):\t{}".format(mode, filename))
 	return open(filename, mode, *argv, **kwargs)
 
-import commons
+
+from helpers import commons
+
 align = commons.align
 
 
