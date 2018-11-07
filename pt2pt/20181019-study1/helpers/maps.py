@@ -43,16 +43,27 @@ def get_map_by_bbox(bbox) :
 	for zoom in range(16, 0, -1) :
 		(x0, y0) = g2p(lat, lon, zoom)
 		((TOP, LEFT), (BOTTOM, RIGHT)) = (p2g(x0 - w / 2, y0 - h / 2, zoom), p2g(x0 + w / 2, y0 + h / 2, zoom))
+		ZOOM = zoom - 1 # DO NOT KNOW WHY (zoom - 1) IS NECESSARY IN THE API CALL
 		if ((LEFT <= left < right <= RIGHT) and (BOTTOM <= bottom < top <= TOP)) :
+			del zoom
 			break
 
 	token = open("../.credentials/UV/mapbox-token.txt", 'r').read()
-	url = "https://api.mapbox.com/styles/v1/mapbox/streets-v10/static/{lon},{lat},{zoom}/{w}x{h}?access_token={token}".format(lat=lat, lon=lon, token=token, zoom=zoom, w=w, h=h)
+
+
+	url = "https://api.mapbox.com/styles/v1/mapbox/streets-v10/static/{lon},{lat},{zoom}/{w}x{h}?access_token={token}&attribution=true&logo=false".format(lat=lat, lon=lon, token=token, zoom=ZOOM, w=w, h=h)
 
 	with urllib.request.urlopen(url) as response:
 		b = response.read()
 
 	i = Image.open(io.BytesIO(b))
+
+	# print(LEFT, BOTTOM, RIGHT, TOP)
+	# import matplotlib.pyplot as plt
+	# plt.clf()
+	# plt.imshow(i, extent=(LEFT, RIGHT, BOTTOM, TOP))
+	# plt.show()
+	# exit(39)
 
 	assert((w, h) == i.size)
 
