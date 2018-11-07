@@ -3,6 +3,29 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# Use as follows:
+# inspect( {'Data': ('Science', 'Rules')} )( {'Data': {'Science': True, 'Rules': False}} )
+class inspect :
+
+	def __init__(self, template) :
+		self.keys = template
+
+	def __extract(self, x, keys):
+		if type(keys) is dict :
+			assert(1 == len(keys)), "Only one parent key allowed"
+			(k, subkeys) = next(iter(keys.items()))
+			return self.__extract(x[k], subkeys)
+		if type(keys) is tuple :
+			return tuple(self.__extract(x, k) for k in keys)
+		if type(keys) is list :
+			return list(self.__extract(x, k) for k in keys)
+		return x[keys]
+
+	def __call__(self, x) :
+		return self.__extract(x, self.keys)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import numpy as np
 
 # Find a way through matrix M bottom-to-top with right-to-left drift
@@ -19,7 +42,6 @@ def align(M) :
 	S = 0 * M
 
 	# These will record the trajectory
-	import numpy as np
 	I = np.zeros(M.shape, dtype=int)
 	J = np.zeros(M.shape, dtype=int)
 
