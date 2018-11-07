@@ -3,6 +3,58 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import time
+import hashlib
+import urllib.parse, urllib.request
+
+# Class to fetch files from WWW
+class wget :
+
+	number_of_calls = 0
+	THROTTLE_MAX_CALLS = 1000 # Max number of wget requests per session
+	THROTTLE_INBETWEEN = 1 # Throttle time in seconds
+
+	def __init__(self, url, cachedir=None) :
+
+		assert(url), "Illegal URL parameter"
+
+		# Encode potential Chinese characters
+		url = urllib.parse.quote(url, safe=':/?&=,@')
+
+		if cachedir :
+			os.makedirs(cachedir, exist_ok=True)
+			# https://stackoverflow.com/a/295150
+			filename = cachedir + "/" + hashlib.sha256(url.encode('utf-8')).hexdigest()
+		else :
+			filename = None
+
+		if filename :
+			if os.path.isfile(filename) :
+				with open(filename, 'rb') as f :
+					self.bytes = f.read()
+				return
+
+		wget.number_of_calls = wget.number_of_calls + 1
+
+		if (wget.number_of_calls > self.THROTTLE_MAX_CALLS) :
+			raise RuntimeError("Call limit exceeded for wget")
+
+		time.sleep(self.THROTTLE_INBETWEEN)
+
+		with urllib.request.urlopen(url) as response :
+
+			self.bytes = response.read()
+
+			if filename :
+				try :
+					with open(filename, 'wb') as f :
+						f.write(self.bytes)
+				except IOError as e :
+					print(e)
+					pass
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 # Use as follows:
 # inspect( {'Data': ('Science', 'Rules')} )( {'Data': {'Science': True, 'Rules': False}} )
 class inspect :
