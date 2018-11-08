@@ -111,9 +111,9 @@ def align(M) :
 				) or (
 					# Otherwise have a choice:
 					min(
-						# go left
+						# go left, for free
 						(s(i, j - 1), i, j - 1),
-						# go up
+						# go up, at a cost of picking up M[i, j]
 						(s(i - 1, j) + M[i, j], i - 1, j)
 					)
 				)
