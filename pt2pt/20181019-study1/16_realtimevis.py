@@ -7,8 +7,12 @@
 from helpers import commons
 from helpers import maps
 
+import numpy as np
+import dateutil
+import datetime as dt
 import glob
 import inspect
+import geopy.distance
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
@@ -55,18 +59,81 @@ pass
 
 ## ===================== PLAY :
 
+
+# Metric for (lat, lon) coordinates
+def geodist(p, q) :
+	return geopy.distance.geodesic(p, q).m
+
+
+# th is accuracy tolerance in meters
+# TH is care-not radius for far-away segments
+# Returns a pair (distance, lambda) where
+# 0 <= lambda <= 1 is the relative location of the closest point
+def dist_to_segment(x, ab, th=5, TH=1000) :
+	# Endpoints of the segment
+	(a, b) = ab
+
+	# Relative location on the original segment
+	(s, t) = (0, 1)
+
+	# Distances to the endpoints
+	(da, db) = (geodist(x, a), geodist(x, b))
+
+	while (th < abs(da - db)) and (min(da, db) < TH) :
+
+		# Note: potentially problematic at lon~180
+		# Approximation of the midpoint (m is not necessarily on a geodesic?)
+		m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+
+		# Distance to the midpoint
+		dm = geodist(x, m)
+
+		if (da < db) :
+			# Keep bisecting the (a, m) segment
+			(b, db, t) = (m, dm, (s + t) / 2)
+		else :
+			# Keep bisecting the (m, b) segment
+			(a, da, s) = (m, dm, (s + t) / 2)
+
+	return min((da, s), (db, t))
+
 # At what time does a given bus visit the bus stops?
 def bus_at_stops(run, stops) :
+
 	# These are sparse samples of a bus trajectory
 	candidate_gps = list(zip(run['PositionLat'], run['PositionLon']))
+	# Timestamps of GPS records as datetime objects
+	candidate_tdt = list(map(dateutil.parser.parse, run['GPSTime']))
 
-	# These are fixed
+	# These are fixed platform locations
 	reference_gps = list(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop) for stop in stops)
 
+	# Goal: obtain an estimate ref_guess_tdt of when the bus is nearest to the platforms
+
 	print(candidate_gps)
+	print(run['GPSTime'])
+	print(candidate_tdt)
 	print(reference_gps)
 
-	exit(39)
+	segments = list(zip(candidate_gps[:-1], candidate_gps[1:]))
+	segm_tdt = list(zip(candidate_tdt[:-1], candidate_tdt[1:]))
+
+	M = np.vstack([dist_to_segment(r, s)[0] for s in segments] for r in reference_gps)
+	match = commons.align(M)
+	print(match)
+
+	matched = [(segments[j], segm_tdt[j]) for j in match]
+
+	ref_guess_tdt = [
+		t0 + dist_to_segment(r, s)[1] * (t1 - t0)
+		for (r, (s, (t0, t1))) in zip(reference_gps, matched)
+	]
+
+	print(*ref_guess_tdt)
+
+	#print("Dist:", dist_to_segment(reference_gps[0], candidate_gps[0:2]))
+
+	input("Press ENTER")
 	pass
 
 # Small visualization of the bus record
