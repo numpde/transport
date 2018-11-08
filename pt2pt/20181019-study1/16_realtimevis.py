@@ -121,6 +121,22 @@ def bus_at_stops(run, stops) :
 	segm_tdt = list(zip(candidate_tdt[:-1], candidate_tdt[1:]))
 
 	M = np.vstack([dist_to_segment(r, s)[0] for s in segments] for r in reference_gps)
+
+	# TODO: Check if M has degenerate size
+
+	# M contains distances in meters
+	# We expect the bus to travel about 17km/h on average, say 5m/s
+	# So, a penalty of p = 0.1m/s should not make much of a difference,
+	# unless the bus is idling
+
+	# Penalty rate
+	p = 0.1 # m/s
+	# Penalty matrix
+	P = np.vstack(len(reference_gps) * [np.cumsum([p * (t1 - t0).seconds for (t0, t1) in segm_tdt])])
+
+	# Add idling penalty
+	M += P
+
 	match = commons.align(M)
 	print(match)
 
@@ -134,14 +150,23 @@ def bus_at_stops(run, stops) :
 	]
 
 	# TODO: Check for monotonicity
-	# TODO: Penalty for long time gaps?
 
 	for t in ref_guess_tdt :
 		print(t)
 
 	#print("Dist:", dist_to_segment(reference_gps[0], candidate_gps[0:2]))
 
-	input("Press ENTER")
+	(fig, ax) = plt.subplots()
+	ax.imshow(M)
+
+	while plt.fignum_exists(fig.number) :
+		try :
+			plt.pause(0.1)
+		except :
+			break
+
+	plt.close(fig)
+
 	pass
 
 # Small visualization of the bus record
@@ -198,10 +223,14 @@ def vis1() :
 	i = maps.get_map_by_bbox(bbox, token=PARAM['mapbox_api_token'])
 
 	# Show the background map
+	(fig, ax) = plt.subplots()
 	plt.ion()
-	plt.gca().axis([left, right, bottom, top])
-	plt.gca().imshow(i, extent=(left, right, bottom, top), interpolation='quadric')
-	plt.show()
+	ax.axis([left, right, bottom, top])
+	ax.imshow(i, extent=(left, right, bottom, top), interpolation='quadric')
+
+	#fig.canvas.draw_idle()
+
+	plt.pause(0.1)
 
 
 	stops_by_direction = dict(zip(route['Direction'], route['Stops']))
@@ -216,7 +245,7 @@ def vis1() :
 		])
 
 		# Plot as dots
-		plt.scatter(x, y, c=('b' if dir else 'g'), marker='o', s=4)
+		ax.scatter(x, y, c=('b' if dir else 'g'), marker='o', s=4)
 
 
 	# Show bus location
@@ -225,15 +254,15 @@ def vis1() :
 
 		# Trace bus
 		(y, x) = (run['PositionLat'], run['PositionLon'])
-		h = plt.plot(x, y, '--+', c='r', linewidth=1)
+		h = ax.plot(x, y, '--+', c='r', linewidth=1)
 
-		plt.draw()
-		plt.savefig("{}.png".format(route_uid), dpi=180)
-		plt.pause(1)
-
-		h[0].remove()
+		#plt.savefig("{}.png".format(route_uid), dpi=180)
+		plt.pause(0.1)
 
 		bus_at_stops(run, stops_by_direction[run['Direction']])
+
+		plt.pause(0.1)
+		h[0].remove()
 
 	return
 
