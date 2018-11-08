@@ -2,7 +2,7 @@
 # RA, 2018-11-07
 
 import io
-import time
+from enum import Enum
 from helpers import commons
 
 from PIL import Image
@@ -16,66 +16,89 @@ from math import pi, log, tan, exp, atan
 # The world map is obtained with lat=lon=0, w=h=256, zoom=0
 # Note on mapbox API:
 # The world map is obtained with lat=lon=0, w=h=512, zoom=0
-
+#
 # Therefore:
-ZOOM0_SIZE = 512 # Not 256
+MAPBOX_ZOOM0_SIZE = 512 # Not 256
 
 # Keep copies of downloaded maps
 CACHEDIR = "../helpers/wget_cache/maps/"
 
 # https://www.mapbox.com/api-documentation/#styles
-mapbox_styles = {
-	'streets-v10', 'outdoors-v10', 'light-v9', 'dark-v9', 'satellite-v9', 'satellite-streets-v10'
-}
+class MapBoxStyle(Enum) :
+	streets = 'streets-v10'
+	outdoors = 'outdoors-v10'
+	light = 'light-v9'
+	dark = 'dark-v9'
+	satellite = 'satellite-v9'
+	satellite_streets = 'satellite-streets-v10'
 
+# Geo-coordinate in degrees => Pixel coordinate
 def g2p(lat, lon, zoom):
 	return (
 		# x
-		ZOOM0_SIZE * (2 ** zoom) * (1 + lon / 180) / 2,
+		MAPBOX_ZOOM0_SIZE * (2 ** zoom) * (1 + lon / 180) / 2,
 		# y
-		ZOOM0_SIZE / (2 * pi) * (2 ** zoom) * (pi - log(tan(pi / 4 * (1 + lat / 90))))
+		MAPBOX_ZOOM0_SIZE / (2 * pi) * (2 ** zoom) * (pi - log(tan(pi / 4 * (1 + lat / 90))))
 	)
 
-# Pixel to geo-coordinate
+# Pixel coordinate => geo-coordinate in degrees
 def p2g(x, y, zoom):
 	return (
 		# lat
-		(atan(exp(pi - y / ZOOM0_SIZE * (2 * pi) / (2 ** zoom))) / pi * 4 - 1) * 90,
+		(atan(exp(pi - y / MAPBOX_ZOOM0_SIZE * (2 * pi) / (2 ** zoom))) / pi * 4 - 1) * 90,
 		# lon
-		(x / ZOOM0_SIZE * 2 / (2 ** zoom) - 1) * 180,
+		(x / MAPBOX_ZOOM0_SIZE * 2 / (2 ** zoom) - 1) * 180,
 	)
 
-# bbox = (left, bottom, right, top)
-def get_map_by_bbox(bbox, style='light-v9') :
+# bbox = (left, bottom, right, top) in degrees
+def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light) :
 
+	if not token :
+		raise RuntimeError("An API token is required")
+
+	# Get the actual value from the enum class
+	style = style.value
+
+	# The region of interest in geo-coordinates in degrees
 	(left, bottom, right, top) = bbox
-
+	# Sanity check
 	assert(-180 <= left < right <= 180)
 	assert(-90 <= bottom < top <= 90)
 
-	(w, h) = (1024, 1024)
+	# The center point of the region of interest
 	(lat, lon) = ((top + bottom) / 2, (left + right) / 2)
 
+	# Rendered image map size in pixels as it should come from MapBox (no retina)
+	(w, h) = (1024, 1024)
+
+	# Look for appropriate zoom level to cover the region of interest by that map
 	for zoom in range(16, 0, -1) :
+		# Center point in pixel coordinates at this zoom level
 		(x0, y0) = g2p(lat, lon, zoom)
+		# The geo-region that the downloaded map would cover
 		((TOP, LEFT), (BOTTOM, RIGHT)) = (p2g(x0 - w / 2, y0 - h / 2, zoom), p2g(x0 + w / 2, y0 + h / 2, zoom))
-		if ((LEFT <= left < right <= RIGHT) and (BOTTOM <= bottom < top <= TOP)) :
+		# Would the map cover the region of interest?
+		if (LEFT <= left < right <= RIGHT) and (BOTTOM <= bottom < top <= TOP) :
 			break
 
-	token = open(".credentials/UV/mapbox-token.txt", 'r').read()
-
+	# Choose "retina" quality of the map
 	retina = { True : "@2x", False : "" }[False]
-	url = "https://api.mapbox.com/styles/v1/mapbox/{style}/static/{lon},{lat},{zoom}/{w}x{h}{retina}?access_token={token}&attribution=true&logo=false"
+
+	# Assemble the query URL
+	url = "https://api.mapbox.com/styles/v1/mapbox/{style}/static/{lon},{lat},{zoom}/{w}x{h}{retina}?access_token={token}&attribution=false&logo=false"
 	url = url.format(style=style, lat=lat, lon=lon, token=token, zoom=zoom, w=w, h=h, retina=retina)
 
+	# Download the rendered image
 	b = commons.wget(url, cachedir=CACHEDIR).bytes
 
+	# Convert bytes to image object
 	I = Image.open(io.BytesIO(b))
 
 	# If the "retina" @2x parameter is used, the image is twice the size of the requested dimensions
 	(W, H) = I.size
 	assert((W, H) in [(w, h), (2*w, 2*h)])
 
+	# Extract the map of the region of interest from the covering map
 	i = I.crop((
 		round(W * (left - LEFT) / (RIGHT - LEFT)),
 		round(H * (bottom - BOTTOM) / (TOP - BOTTOM)),
@@ -84,46 +107,3 @@ def get_map_by_bbox(bbox, style='light-v9') :
 	))
 
 	return i
-
-def mess() :
-	# (lat, lon, zoom, w, h) = (22.6316, 120.358, 14, 500, 300)
-	# Corners: (120.33654232788086, 22.64348272090081) (120.37945767211914, 22.61971625158942)
-
-
-	# Kaohsiung (left, bottom, right, top)
-	bbox = (120.2593, 22.5828, 120.3935, 22.6886)
-	(left, bottom, right, top) = bbox
-
-	import matplotlib.pyplot as plt
-	plt.ion()
-	plt.gca().axis([left, right, bottom, top])
-
-	i = get_map_by_bbox(bbox)
-
-	plt.gca().imshow(i, extent=(left, right, bottom, top), interpolation='quadric')
-	plt.show()
-
-	# i = Image.open("500x300.png")
-	# plt.gca().axis([left, right, bottom, top])
-	# f = plt.gcf()
-	# ax = f.add_axes([0, 0.1, 0.7, 0.5])
-	# #ax.plot([1, 2], [3, 4])
-	# ax.imshow(i, interpolation='quadric')
-	# ax.axis('off')
-	# plt.show()
-
-
-	fn = "../OUTPUT/13/Kaohsiung/UV/001-V3.json"
-	import json
-	J = json.load(open(fn, 'r'))
-	for b in J :
-		(Y, X) = (b['PositionLat'], b['PositionLon'])
-		for (x, y) in zip(X, Y) :
-			h = plt.plot(x, y, 'ro')
-			plt.pause(0.1)
-			time.sleep(0.1)
-			h[0].remove()
-
-
-if (__name__ == "__main__") :
-	mess()
