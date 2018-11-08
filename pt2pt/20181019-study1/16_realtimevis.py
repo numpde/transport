@@ -39,6 +39,8 @@ OFILE = {
 ## ==================== PARAM :
 
 PARAM = {
+
+	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 }
 
 ## ====================== AUX :
@@ -52,6 +54,20 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 pass
 
 ## ===================== PLAY :
+
+# At what time does a given bus visit the bus stops?
+def bus_at_stops(run, stops) :
+	# These are sparse samples of a bus trajectory
+	candidate_gps = list(zip(run['PositionLat'], run['PositionLon']))
+
+	# These are fixed
+	reference_gps = list(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop) for stop in stops)
+
+	print(candidate_gps)
+	print(reference_gps)
+
+	exit(39)
+	pass
 
 # Small visualization of the bus record
 # Follow one bus
@@ -69,16 +85,30 @@ def vis1() :
 	# 	print(route_name, route_id, route['t'])
 	# exit(39)
 
-	route_stops = commons.index_dicts_by_key(commons.zipjson_load(IFILE['route-stops']), (lambda r: r['SubRouteUID']))
+	routeid_of = (lambda r: r['SubRouteUID'])
 
-	runs_by_route = defaultdict(list)
-
+	# List of filenames, one file per physical bus, identified by plate number
 	bus_files = sorted(glob.glob(IFILE['busses'].format(busid="*")))
 
+	# Refile bus runs by their route ID
+	runs_by_route = defaultdict(list)
 	for fn in bus_files :
 		runs = commons.zipjson_load(fn)
 		for run in runs :
-			runs_by_route[run['SubRouteUID']].append(run)
+			runs_by_route[routeid_of(run)].append(run)
+
+	#
+	route_stops = commons.index_dicts_by_key(commons.zipjson_load(IFILE['route-stops']), routeid_of)
+
+	# Are those valid route ID that can be found among the routes?
+	unknown_route_ids = sorted(set(runs_by_route.keys()) - set(route_stops.keys()))
+
+	if unknown_route_ids :
+		print("The following route IDs from bus records are unknown:")
+		print(", ".join(unknown_route_ids))
+		raise KeyError("Unkown route IDs in bus records")
+
+	#
 
 	route_uid = 'KHH122'
 
@@ -88,26 +118,35 @@ def vis1() :
 	# Kaohsiung (left, bottom, right, top)
 	bbox = (120.2593, 22.5828, 120.3935, 22.6886)
 	(left, bottom, right, top) = bbox
-	#
+
+	# Download the background map
+	i = maps.get_map_by_bbox(bbox, token=PARAM['mapbox_api_token'])
+
+	# Show the background map
 	plt.ion()
 	plt.gca().axis([left, right, bottom, top])
-	#
-	i = maps.get_map_by_bbox(bbox)
-	#
 	plt.gca().imshow(i, extent=(left, right, bottom, top), interpolation='quadric')
 	plt.show()
 
+
+	stops_by_direction = dict(zip(route['Direction'], route['Stops']))
+
+	# Draw stops for both route directions
+	for (dir, stops) in stops_by_direction.items() :
+
+		# Stop locations
+		(y, x) = zip(*[
+			commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop)
+			for stop in stops
+		])
+
+		# Plot as dots
+		plt.scatter(x, y, c=('b' if dir else 'g'), marker='o', s=4)
+
+
+	# Show bus location
+
 	for run in runs :
-
-		run_dir = run['Direction']
-		stops = dict(zip(route['Direction'], route['Stops']))[run_dir]
-
-		# Draw stops
-		#(y, x) = commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}(stop
-		for stop in stops :
-			p = stop['StopPosition']
-			(y, x) = (p['PositionLat'], p['PositionLon'])
-			plt.scatter(x, y, c=('b' if (run_dir == 0) else 'g'), marker='o', s=4)
 
 		# Trace bus
 		(y, x) = (run['PositionLat'], run['PositionLon'])
@@ -118,6 +157,8 @@ def vis1() :
 		plt.pause(1)
 
 		h[0].remove()
+
+		bus_at_stops(run, stops_by_direction[run['Direction']])
 
 	return
 
@@ -130,5 +171,4 @@ OPTIONS = {
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-
-	assert(commons.parse_options(OPTIONS))
+	commons.parse_options(OPTIONS)
