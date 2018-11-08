@@ -100,6 +100,8 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 # At what time does a given bus visit the bus stops?
 def bus_at_stops(run, stops) :
 
+	# TODO: some candidate_tdt have large time-gaps
+
 	# These are sparse samples of a bus trajectory
 	candidate_gps = list(zip(run['PositionLat'], run['PositionLon']))
 	# Timestamps of GPS records as datetime objects
@@ -122,14 +124,20 @@ def bus_at_stops(run, stops) :
 	match = commons.align(M)
 	print(match)
 
-	matched = [(segments[j], segm_tdt[j]) for j in match]
+	segments = [segments[j] for j in match]
+	segm_tdt = [segm_tdt[j] for j in match]
+	seg_dist = [dist_to_segment(r, s) for (r, s) in zip(reference_gps, segments)]
 
 	ref_guess_tdt = [
-		t0 + dist_to_segment(r, s)[1] * (t1 - t0)
-		for (r, (s, (t0, t1))) in zip(reference_gps, matched)
+		t0 + q * (t1 - t0)
+		for ((d, q), (t0, t1)) in zip(seg_dist, segm_tdt)
 	]
 
-	print(*ref_guess_tdt)
+	# TODO: Check for monotonicity
+	# TODO: Penalty for long time gaps?
+
+	for t in ref_guess_tdt :
+		print(t)
 
 	#print("Dist:", dist_to_segment(reference_gps[0], candidate_gps[0:2]))
 
