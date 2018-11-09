@@ -127,7 +127,7 @@ def compress() :
 	S = dict(S)
 
 	# Reindex by RouteUID
-	assert(commons.is_distinct([g['RouteUID'] for g in R]))
+	assert(commons.all_distinct([g['RouteUID'] for g in R]))
 	R = { g['RouteUID'] : g for g in R }
 
 	def remove_single_route_redundancies(j) :
