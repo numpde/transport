@@ -5,13 +5,21 @@
 ## ================== IMPORTS :
 
 from helpers import commons
+from helpers import maps
 
 import gpxpy, gpxpy.gpx
 import re
 import json
+import math
+import time
 import inspect
 import difflib
 import subprocess
+
+# https://stackoverflow.com/questions/29125228/python-matplotlib-save-graph-without-showing
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 ## ==================== NOTES :
@@ -32,6 +40,7 @@ IFILE = {
 
 OFILE = {
 	'Route_GPX' : "OUTPUT/00/GPX/Kaohsiung/UV/route_{route_id}-{dir}.gpx",
+	'Route_Img' : "OUTPUT/00/img/Kaohsiung/UV/route_{route_id}.png",
 }
 
 commons.makedirs(OFILE)
@@ -40,6 +49,7 @@ commons.makedirs(OFILE)
 ## ==================== PARAM :
 
 PARAM = {
+	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 }
 
 
@@ -52,13 +62,176 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 def pretty(J):
 	return json.dumps(J, indent=2, ensure_ascii=False)
 
+# Parse a string like
+# LINESTRING(lon1 lat1, lon2 lat2, ...)
+# into ([lon1, ..], [lat1, ..])
+def parse_linestring(linestring) :
+	return dict(zip(
+		['Lon', 'Lat'],
+		[list(map(float, coo)) for coo in zip(*re.findall(r'(?P<lon>[0-9.]+)[ ](?P<lat>[0-9.]+)', linestring))]
+	))
+
+
+## ============== ASSUMPTIONS :
+
+# Returns a dictionary of routes, indexed by route ID
+# with stops and shapes attached
+def get_routes() :
+
+	routeid_of = (lambda r: r['RouteUID'])
+
+	# I. Get the list of route descriptions, including the stops
+	motc_routes = commons.zipjson_load(IFILE['MOTC_routes'])
+
+	# As of 2018-11-09, the following pass for Kaohsiung.
+	# However, we work with 'SubRouteUID' whenever possible.
+	for route in motc_routes :
+		assert(route['RouteUID'] == route['SubRouteUID'])
+		assert(route['RouteUID'] == "KHH" + route['RouteID'])
+
+	try:
+		# Are route IDs distinct? No ...
+		assert(commons.all_distinct(map(routeid_of, motc_routes)))
+	except AssertionError :
+		# ... because direction = 0 and 1 appear separately
+		pass
+
+	# Reindex routes by route ID
+	motc_routes = commons.index_dicts_by_key(
+		motc_routes,
+		routeid_of,
+		preserve_singletons=['Direction', 'Stops']
+	)
+
+	# But we expect at most two routes to have the same ID,
+	# as can be checked through the Direction field.
+	# A few routes indeed have only the Direction = 1
+	assert(all((route['Direction'] in [[0], [1], [0, 1]]) for route in motc_routes.values()))
+
+	# II. Now attach "shapes" to routes
+
+	# List of route "shapes"
+	motc_shapes = commons.zipjson_load(IFILE['MOTC_shapes'])
+
+	# The shapes do not contain certain ID fields
+	assert(all(set(shape.keys()).isdisjoint({'SubRouteUID', 'SubRouteID'}) for shape in motc_shapes))
+
+	# Parse the Geometry Linestring of shapes
+	for (n, _) in enumerate(motc_shapes) :
+		motc_shapes[n]['Geometry'] = parse_linestring(motc_shapes[n]['Geometry'])
+
+	# This will be the ID field
+	assert(all(routeid_of(shape) for shape in motc_shapes))
+
+	# Index shapes by route ID
+	motc_shapes = commons.index_dicts_by_key(
+		motc_shapes,
+		routeid_of,
+		preserve_singletons=['Direction', 'Geometry']
+	)
+
+	for (i, r) in motc_routes.items() :
+
+		# Directions of this route
+		route_dirs = r['Direction']
+
+		# There should be as many shapes as directions for each route
+		motc_routes[i]['Shape'] = [None] * len(route_dirs)
+
+		# No shape for this route?
+		if not (i in motc_shapes.keys()) :
+			#print("No shape for route {}.".format(i))
+			continue
+
+		# Index the available shapes for this route by the Direction
+		shapes = dict(zip(motc_shapes[i]['Direction'], motc_shapes[i]['Geometry']))
+
+		# Attach the available shapes if possible
+		for (dir, shape) in shapes.items() :
+			if dir in route_dirs :
+				motc_routes[i]['Shape'][route_dirs.index(dir)] = shape
+
+	# Show all info of a route
+	# print(next(iter(motc_routes.values())))
+
+	return motc_routes
 
 ## ===================== WORK :
 
 def motc_download() :
 	print("Use the bash script for downloading MOTC data")
 
+def write_route_img() :
+
+	for (route_id, route) in get_routes().items() :
+
+		print("Route {}: {}".format(route_id, route['RouteName']['Zh_tw']))
+
+		route_dirs = route['Direction']
+
+		(fig, ax) = plt.subplots()
+
+		# Colors from the default pyplot palette
+		c = { dir : ("C{}".format(dir)) for dir in route_dirs }
+
+		for (dir, shape) in zip(route_dirs, route['Shape']) :
+			(y, x) = (shape['Lat'], shape['Lon'])
+			ax.plot(x, y, '--', c=c[dir])
+
+		for (dir, stops) in zip(route_dirs, route['Stops']) :
+			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
+			ax.scatter(x, y, c=c[dir])
+
+		# Get the dimensions of the plot
+		(left, right, bottom, top) = ax.axis()
+
+		# Compute a nice aspect ratio
+		(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
+		if (w < h / phi) :
+			(left, right) = (((left + right) / 2 + (s * h / phi) / 2) for s in (-1, +1))
+		if (h < w / phi) :
+			(bottom, top) = (((bottom + top) / 2 + (s * w / phi) / 2) for s in (-1, +1))
+
+		# Set new dimensions
+		ax.axis([left, right, bottom, top])
+
+		# Get the dimensions of the plot (again)
+		(left, right, bottom, top) = ax.axis()
+		# Bounding box for the map
+		bbox = (left, bottom, right, top)
+
+		# Remove labels
+		ax.axis('off')
+		ax.get_xaxis().set_visible(False)
+		ax.get_yaxis().set_visible(False)
+
+		# Download the background map
+		i = maps.get_map_by_bbox(bbox, token=PARAM['mapbox_api_token'])
+
+		# Apply the background map
+		img = ax.imshow(i, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
+
+		# TODO: Route name
+
+		# Save image to disk
+		fig.savefig(
+			OFILE['Route_Img'].format(route_id=route_id),
+			bbox_inches='tight', pad_inches=0,
+			dpi=180
+		)
+
+		plt.pause(0.1)
+		#plt.show()
+		plt.close(fig)
+
+		time.sleep(0.2)
+
+
+
 def write_route_gpx() :
+
+	# TODO: replace by
+	# motc_routes = get_routes()
 
 	# Note: index by RouteUID (not SubRouteUID) because...
 	motc_routes = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_routes']), (lambda r: r['RouteUID']), preserve_singletons=['Direction', 'Stops'])
@@ -75,11 +248,8 @@ def write_route_gpx() :
 
 		route = motc_routes[route_id]
 
-		# Parse LINESTRING
-		(lon, lat) = tuple(
-			list(map(float, coo))
-			for coo in zip(*re.findall(r'(?P<lon>[0-9.]+)[ ](?P<lat>[0-9.]+)', shape['Geometry']))
-		)
+		# Parse the route "shape"
+		(lon, lat) = commons.inspect(('Lon', 'Lat'))(parse_linestring(shape['Geometry']))
 
 		gpx = gpxpy.gpx.GPX()
 
@@ -240,9 +410,10 @@ def interactive_search() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'DOWNLOAD'  : motc_download,
-	'ROUTE_GPX' : write_route_gpx,
-	'SEARCH'    : interactive_search,
+	'DOWNLOAD'    : motc_download,
+	'ROUTE_GPX'   : write_route_gpx,
+	'ROUTE_IMG'   : write_route_img,
+	'SEARCH'      : interactive_search,
 }
 
 
