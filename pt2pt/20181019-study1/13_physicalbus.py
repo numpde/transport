@@ -86,7 +86,7 @@ def follow(b):
 			return [V] * len(b[KEYS['time']])
 
 	# Note: the following does not work
-	# assert(commons.is_distinct(b[key['time']]))
+	# assert(commons.all_distinct(b[key['time']]))
 	# but duplicates will be eliminated later
 
 	for x in zip(*[listify(b[k]) for k in KEYS.values()]):
@@ -143,7 +143,7 @@ def segments(bb):
 
 def extract_busses() :
 
-	response_files = sorted(glob.glob(IFILE['response'].format(d="20181101", t="1*")))
+	response_files = sorted(glob.glob(IFILE['response'].format(d="20181103", t="0*")))
 	time.sleep(1)
 
 	# Load all bus records, group by Bus ID
