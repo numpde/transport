@@ -82,7 +82,7 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light) :
 			break
 
 	# Choose "retina" quality of the map
-	retina = { True : "@2x", False : "" }[False]
+	retina = { True : "@2x", False : "" }[True]
 
 	# Assemble the query URL
 	url = "https://api.mapbox.com/styles/v1/mapbox/{style}/static/{lon},{lat},{zoom}/{w}x{h}{retina}?access_token={token}&attribution=false&logo=false"
