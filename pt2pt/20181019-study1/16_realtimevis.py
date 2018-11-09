@@ -43,7 +43,6 @@ OFILE = {
 ## ==================== PARAM :
 
 PARAM = {
-
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 }
 
@@ -122,7 +121,7 @@ def bus_at_stops(run, stops) :
 
 	M = np.vstack([dist_to_segment(r, s)[0] for s in segments] for r in reference_gps)
 
-	# TODO: Check if M has degenerate size
+	if not M.size : return
 
 	# M contains distances in meters
 	# We expect the bus to travel about 17km/h on average, say 5m/s
@@ -149,12 +148,10 @@ def bus_at_stops(run, stops) :
 		for ((d, q), (t0, t1)) in zip(seg_dist, segm_tdt)
 	]
 
-	# TODO: Check for monotonicity
+	for t in ref_guess_tdt : print(t)
 
-	for t in ref_guess_tdt :
-		print(t)
-
-	#print("Dist:", dist_to_segment(reference_gps[0], candidate_gps[0:2]))
+	is_monotone = all((s <= t) for (s, t) in zip(ref_guess_tdt[:-1], ref_guess_tdt[1:]))
+	print("Monotonicity:", is_monotone)
 
 	(fig, ax) = plt.subplots()
 	ax.imshow(M)
@@ -210,7 +207,7 @@ def vis1() :
 
 	#
 
-	route_uid = 'KHH122'
+	route_uid = 'KHH24'
 
 	runs = runs_by_route[route_uid]
 	route = route_stops[route_uid]
@@ -254,7 +251,11 @@ def vis1() :
 
 		# Trace bus
 		(y, x) = (run['PositionLat'], run['PositionLon'])
-		h = ax.plot(x, y, '--+', c='r', linewidth=1)
+		h1 = ax.plot(x, y, '--+', c='r', linewidth=1)
+		h2 = ax.plot(x[0], y[0], 'o', c='r')
+		h3 = ax.plot(x[-1], y[-1], 's', c='r')
+
+		plt.title(run['PlateNumb'])
 
 		#plt.savefig("{}.png".format(route_uid), dpi=180)
 		plt.pause(0.1)
@@ -262,7 +263,7 @@ def vis1() :
 		bus_at_stops(run, stops_by_direction[run['Direction']])
 
 		plt.pause(0.1)
-		h[0].remove()
+		[h[0].remove() for h in [h1, h2, h3]]
 
 	return
 
