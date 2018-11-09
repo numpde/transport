@@ -8,6 +8,8 @@ from helpers import commons
 from helpers import maps
 
 import gpxpy, gpxpy.gpx
+
+import os
 import re
 import json
 import math
@@ -20,7 +22,7 @@ import subprocess
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+import matplotlib.font_manager as mfm
 
 ## ==================== NOTES :
 
@@ -50,6 +52,8 @@ commons.makedirs(OFILE)
 
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+
+	'font' : "ORIGINALS/fonts/UV/NotoSerifTC/NotoSerifTC-Light.otf",
 }
 
 
@@ -163,9 +167,23 @@ def motc_download() :
 
 def write_route_img() :
 
+	if not os.path.isfile(PARAM['font']) :
+		print("Warning: Font not found, text may be unreadable")
+		time.sleep(2)
+
 	for (route_id, route) in get_routes().items() :
 
-		print("Route {}: {}".format(route_id, route['RouteName']['Zh_tw']))
+		# Get the Chinese and English route name (unless they are the same)
+		names = list(map(str.strip, commons.inspect({'RouteName': ['Zh_tw', 'En']})(route)))
+		if not commons.all_distinct(names) : names = set(names)
+		route_name = " / ".join(names)
+
+		print("Route {}: {}".format(route_id, route_name))
+
+		outfile = OFILE['Route_Img'].format(route_id=route_id)
+
+		# Skip if the image already exists
+		#if os.path.isfile(outfile) : continue
 
 		route_dirs = route['Direction']
 
@@ -175,12 +193,13 @@ def write_route_img() :
 		c = { dir : ("C{}".format(dir)) for dir in route_dirs }
 
 		for (dir, shape) in zip(route_dirs, route['Shape']) :
+			if not shape : continue
 			(y, x) = (shape['Lat'], shape['Lon'])
-			ax.plot(x, y, '--', c=c[dir])
+			ax.plot(x, y, '--', c=c[dir], zorder=0)
 
 		for (dir, stops) in zip(route_dirs, route['Stops']) :
 			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
-			ax.scatter(x, y, c=c[dir])
+			ax.scatter(x, y, c=c[dir], zorder=100)
 
 		# Get the dimensions of the plot
 		(left, right, bottom, top) = ax.axis()
@@ -194,6 +213,21 @@ def write_route_img() :
 
 		# Set new dimensions
 		ax.axis([left, right, bottom, top])
+
+		# Label plot with the route name
+		ax.text(
+			0.5, 0.95,
+			route_name,
+			wrap=True,
+			transform=ax.transAxes,
+			zorder=1000,
+			color='black',
+			#fontname="Noto Sans CJK",
+			fontproperties=mfm.FontProperties(fname=PARAM['font']),
+			fontsize='x-small',
+			ha='center', va='top',
+	        bbox=dict(boxstyle="square", ec=(1., 0.5, 0.5), fc=(1., 0.8, 0.8), alpha=0.7),
+        )
 
 		# Get the dimensions of the plot (again)
 		(left, right, bottom, top) = ax.axis()
@@ -211,11 +245,9 @@ def write_route_img() :
 		# Apply the background map
 		img = ax.imshow(i, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
 
-		# TODO: Route name
-
 		# Save image to disk
 		fig.savefig(
-			OFILE['Route_Img'].format(route_id=route_id),
+			outfile,
 			bbox_inches='tight', pad_inches=0,
 			dpi=180
 		)
