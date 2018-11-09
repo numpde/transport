@@ -63,6 +63,8 @@ class inspect :
 		self.keys = template
 
 	def __extract(self, x, keys):
+		if type(keys) is set :
+			raise RuntimeError("A set is not allowed here")
 		if type(keys) is dict :
 			assert(1 == len(keys)), "Only one parent key allowed"
 			(k, subkeys) = next(iter(keys.items()))
@@ -187,7 +189,7 @@ def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singleton
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # Does the collection L contain mutually distinct elements?
-def is_distinct(L) :
+def all_distinct(L) :
 	return (len(set(L)) == len(list(L)))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
