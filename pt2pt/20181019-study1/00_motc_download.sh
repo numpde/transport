@@ -3,23 +3,37 @@
 # Download bus route info from https://ptx.transportdata.tw
 # RA, 2018-11-07
 
-which curl 1> /dev/null || (echo curl not found; exit)
+# Where to put the files
+BASE_PATH="OUTPUT/00/ORIGINAL_MOTC"
 
-CITY=Kaohsiung
+# Cities of interest
+declare -a CITIES=("Kaohsiung" "Taipei")
 
-# Root output directory
-OUT="OUTPUT/00/ORIGINAL_MOTC/${CITY}"
+
+which curl    1> /dev/null || (echo curl not found; exit)
+which base64  1> /dev/null || (echo base64 not found; exit)
+which openssl 1> /dev/null || (echo openssl not found; exit)
 
 download() {
-    X=$1
 
-    # Output directory for the response
-	D="${OUT}/CityBusApi_${X}"
+	# INPUT:
+
+	# City
+	C=$1
+
+	# Type of information (Route, Shape, etc...)   
+	X=$2
+
+	# WORK:
+
+	# Output directory for the response
+	D="${BASE_PATH}/${C}"
 
 	# Create output directory, if needed
 	mkdir -p ${D}
 
-	f="${D}/data.json"
+	# Filename for output
+	f="${D}/CityBusApi_${X}.json"
 	echo "Downloading $X to file $f"
 
 	# Authorization mechanism
@@ -39,11 +53,15 @@ download() {
 		--compressed 'https://ptx.transportdata.tw/MOTC/v2/Bus/'"${X}"'/City/'"${CITY}"'?$format=JSON' \
 		> $f
 
-    echo
+	echo
 }
 
-for X in Route Shape Station Stop StopOfRoute; do
-    download $X
-	sleep 1
+# Loop through items to download
+for CITY in "${CITIES[@]}" ; do
+	for X in Route Shape Station Stop StopOfRoute DisplayStopOfRoute Schedule Vehicle RouteFare Operator ; do
+		download $CITY $X
+		sleep 1
+	done
 done
+
 
