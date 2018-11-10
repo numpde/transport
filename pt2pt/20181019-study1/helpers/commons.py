@@ -60,10 +60,6 @@ class wget :
 class inspect :
 
 	def __init__(self, template) :
-
-		if type(template) is set :
-			raise RuntimeError("A set is not allowed here")
-
 		self.keys = template
 
 	def __extract(self, x, keys):
