@@ -60,11 +60,13 @@ class wget :
 class inspect :
 
 	def __init__(self, template) :
+
+		if type(template) is set :
+			raise RuntimeError("A set is not allowed here")
+
 		self.keys = template
 
 	def __extract(self, x, keys):
-		if type(keys) is set :
-			raise RuntimeError("A set is not allowed here")
 		if type(keys) is dict :
 			assert(1 == len(keys)), "Only one parent key allowed"
 			(k, subkeys) = next(iter(keys.items()))
@@ -149,8 +151,10 @@ import os
 
 # Create output directories
 def makedirs(OFILE) :
-	for f in OFILE.values() :
-		os.makedirs(os.path.dirname(f), exist_ok=True)
+	if type(OFILE) is dict :
+		return makedirs(OFILE.values())
+	for f in OFILE :
+		os.makedirs(os.path.dirname(f).format(), exist_ok=True)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -190,7 +194,8 @@ def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singleton
 
 # Does the collection L contain mutually distinct elements?
 def all_distinct(L) :
-	return (len(set(L)) == len(list(L)))
+	L = list(L)
+	return (len(L) == len(set(L)))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

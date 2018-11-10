@@ -29,33 +29,37 @@ import matplotlib.font_manager as mfm
 pass
 
 
-## ==================== INPUT :
-
-IFILE = {
-	'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute/data.json",
-	'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Shape/data.json",
-	'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Stop/data.json",
-}
-
-
-## =================== OUTPUT :
-
-OFILE = {
-	'Route_GPX' : "OUTPUT/00/GPX/Kaohsiung/UV/route_{route_id}-{dir}.gpx",
-	'Route_Img' : "OUTPUT/00/img/Kaohsiung/UV/route_{route_id}.png",
-}
-
-commons.makedirs(OFILE)
-
-
 ## ==================== PARAM :
 
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
+	'City' : "Taipei",
+
 	'font' : "ORIGINALS/fonts/UV/NotoSerifTC/NotoSerifTC-Light.otf",
 }
 
+
+## ==================== INPUT :
+
+IFILE = {
+	'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/{City}/CityBusApi_StopOfRoute.json",
+	'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/{City}/CityBusApi_Shape.json",
+	'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/{City}/CityBusApi_Stop.json",
+}
+
+for (k, s) in IFILE.items() : IFILE[k] = s.format(City=PARAM['City'])
+
+## =================== OUTPUT :
+
+OFILE = {
+	'Route_GPX' : "OUTPUT/00/GPX/{City}/UV/route_{{route_id}}-{{dir}}.gpx",
+	'Route_Img' : "OUTPUT/00/img/{City}/UV/route_{{route_id}}.png",
+}
+
+for (k, s) in OFILE.items() : OFILE[k] = s.format(City=PARAM['City'])
+
+commons.makedirs(OFILE)
 
 ## ====================== AUX :
 
@@ -87,11 +91,11 @@ def get_routes() :
 	# I. Get the list of route descriptions, including the stops
 	motc_routes = commons.zipjson_load(IFILE['MOTC_routes'])
 
-	# As of 2018-11-09, the following pass for Kaohsiung.
-	# However, we work with 'SubRouteUID' whenever possible.
-	for route in motc_routes :
-		assert(route['RouteUID'] == route['SubRouteUID'])
-		assert(route['RouteUID'] == "KHH" + route['RouteID'])
+	try :
+		# As of 2018-11-09, the following passes for Kaohsiung but not Taipei
+		assert(all((route['RouteUID'] == route['SubRouteUID']) for route in motc_routes))
+	except:
+		pass
 
 	try:
 		# Are route IDs distinct? No ...
@@ -104,13 +108,14 @@ def get_routes() :
 	motc_routes = commons.index_dicts_by_key(
 		motc_routes,
 		routeid_of,
-		preserve_singletons=['Direction', 'Stops']
+		preserve_singletons=['SubRouteUID', 'Direction', 'Stops']
 	)
 
-	# But we expect at most two routes to have the same ID,
-	# as can be checked through the Direction field.
-	# A few routes indeed have only the Direction = 1
-	assert(all((route['Direction'] in [[0], [1], [0, 1]]) for route in motc_routes.values()))
+	try :
+		# As of 2018-11-11, there may be up to 12 subroutes in a route in Taipei
+		assert(12 >= max(len(route['SubRouteUID']) for route in motc_routes.values()))
+	except :
+		pass
 
 	# II. Now attach "shapes" to routes
 
@@ -127,6 +132,9 @@ def get_routes() :
 	# This will be the ID field
 	assert(all(routeid_of(shape) for shape in motc_shapes))
 
+	# This passes for TPE (and KHH?)
+	assert(commons.all_distinct(routeid_of(shape) for shape in motc_shapes))
+
 	# Index shapes by route ID
 	motc_shapes = commons.index_dicts_by_key(
 		motc_shapes,
@@ -134,26 +142,44 @@ def get_routes() :
 		preserve_singletons=['Direction', 'Geometry']
 	)
 
+	try :
+		# As of 2018-11-11:
+		# In Kaohsiung, the shapes mostly correspond to Directions
+		# In Taipei, there is one shape per RouteID
+
+		# This does not hold for TPE
+		assert(all(('Direction' in shape) for shape in motc_shapes))
+	except :
+		# Append a dummy Direction field to shapes
+		for (j, shape) in motc_shapes.items() :
+			if not ('Direction' in shape) :
+				motc_shapes[j]['Direction'] = [None] * len(shape['Geometry'])
+				# Actually, for TPE, we have:
+				assert(1 == len(shape['Geometry']))
+
 	for (i, r) in motc_routes.items() :
 
 		# Directions of this route
 		route_dirs = r['Direction']
-
-		# There should be as many shapes as directions for each route
-		motc_routes[i]['Shape'] = [None] * len(route_dirs)
 
 		# No shape for this route?
 		if not (i in motc_shapes.keys()) :
 			#print("No shape for route {}.".format(i))
 			continue
 
-		# Index the available shapes for this route by the Direction
-		shapes = dict(zip(motc_shapes[i]['Direction'], motc_shapes[i]['Geometry']))
+		# True for KHH an TPE
+		assert(commons.all_distinct(motc_shapes[i]['Direction']))
+		assert(len(motc_shapes[i]['Direction']) <= 2)
 
-		# Attach the available shapes if possible
-		for (dir, shape) in shapes.items() :
-			if dir in route_dirs :
-				motc_routes[i]['Shape'][route_dirs.index(dir)] = shape
+		# Attach a list of shapes with Direction tag (possibly None)
+		# Note: 'None' is preserved in JSON here (https://stackoverflow.com/a/3548740/3609568)
+		motc_routes[i]['Shape'] = [
+			{
+				'Direction' : dir,
+				'Geometry'  : geo,
+			}
+			for (dir, geo) in zip(motc_shapes[i]['Direction'], motc_shapes[i]['Geometry'])
+		]
 
 	# Show all info of a route
 	# print(next(iter(motc_routes.values())))
@@ -190,15 +216,18 @@ def write_route_img() :
 		(fig, ax) = plt.subplots()
 
 		# Colors from the default pyplot palette
-		c = { dir : ("C{}".format(dir)) for dir in route_dirs }
+		c = { dir : ("C{}".format(n)) for (n, dir) in enumerate(sorted(route_dirs)) }
 
-		for (dir, shape) in zip(route_dirs, route['Shape']) :
-			if not shape : continue
-			(y, x) = (shape['Lat'], shape['Lon'])
-			ax.plot(x, y, '--', c=c[dir], zorder=0)
+		for shape in route['Shape'] :
+			dir = shape['Direction']
+			geo = shape['Geometry']
+			assert(geo)
+			(y, x) = (geo['Lat'], geo['Lon'])
+			ax.plot(x, y, '--', c=c[dir or 0], zorder=0)
 
 		for (dir, stops) in zip(route_dirs, route['Stops']) :
 			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
+			print(dir, c[dir], route_dirs)
 			ax.scatter(x, y, c=c[dir], zorder=100)
 
 		# Get the dimensions of the plot
@@ -226,7 +255,7 @@ def write_route_img() :
 			fontproperties=mfm.FontProperties(fname=PARAM['font']),
 			fontsize='x-small',
 			ha='center', va='top',
-	        bbox=dict(boxstyle="square", ec=(1., 0.5, 0.5), fc=(1., 0.8, 0.8), alpha=0.7),
+	        bbox=dict(boxstyle="square", ec=(0.5, 0.5, 1), fc=(0.8, 0.8, 1), alpha=0.7),
         )
 
 		# Get the dimensions of the plot (again)
