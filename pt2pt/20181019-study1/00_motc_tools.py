@@ -216,19 +216,16 @@ def write_route_img() :
 		(fig, ax) = plt.subplots()
 
 		# Colors from the default pyplot palette
-		c = { dir : ("C{}".format(n)) for (n, dir) in enumerate(sorted(route_dirs)) }
+		C = [ ("C{}".format(n % 10)) for n in range(len(route_dirs)) ]
 
-		for shape in route['Shape'] :
+		for (shape, c) in zip(route['Shape'], C) :
 			dir = shape['Direction']
-			geo = shape['Geometry']
-			assert(geo)
-			(y, x) = (geo['Lat'], geo['Lon'])
-			ax.plot(x, y, '--', c=c[dir or 0], zorder=0)
+			(y, x) = commons.inspect({'Geometry': ('Lat', 'Lon')})(shape)
+			ax.plot(x, y, '--', c=c, zorder=0)
 
-		for (dir, stops) in zip(route_dirs, route['Stops']) :
+		for (stops, c) in zip(route['Stops'], C) :
 			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
-			print(dir, c[dir], route_dirs)
-			ax.scatter(x, y, c=c[dir], zorder=100)
+			ax.scatter(x, y, c=c, zorder=100)
 
 		# Get the dimensions of the plot
 		(left, right, bottom, top) = ax.axis()
