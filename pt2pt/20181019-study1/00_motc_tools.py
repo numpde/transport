@@ -34,7 +34,7 @@ pass
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
-	'City' : "Taipei",
+	'City' : "Kaohsiung",
 
 	'font' : "ORIGINALS/fonts/UV/NotoSerifTC/NotoSerifTC-Light.otf",
 }
@@ -132,8 +132,11 @@ def get_routes() :
 	# This will be the ID field
 	assert(all(routeid_of(shape) for shape in motc_shapes))
 
-	# This passes for TPE (and KHH?)
-	assert(commons.all_distinct(routeid_of(shape) for shape in motc_shapes))
+	try :
+		# This passes for TPE but not for KHH
+		assert(commons.all_distinct(routeid_of(shape) for shape in motc_shapes))
+	except :
+		pass
 
 	# Index shapes by route ID
 	motc_shapes = commons.index_dicts_by_key(
@@ -159,12 +162,9 @@ def get_routes() :
 
 	for (i, r) in motc_routes.items() :
 
-		# Directions of this route
-		route_dirs = r['Direction']
-
 		# No shape for this route?
 		if not (i in motc_shapes.keys()) :
-			#print("No shape for route {}.".format(i))
+			motc_routes[i]['Shape'] = []
 			continue
 
 		# True for KHH an TPE
@@ -218,24 +218,22 @@ def write_route_img() :
 		# Colors from the default pyplot palette
 		C = [ ("C{}".format(n % 10)) for n in range(len(route_dirs)) ]
 
+		# Note: For KHH, some routes have no shapes
 		for (shape, c) in zip(route['Shape'], C) :
-			dir = shape['Direction']
 			(y, x) = commons.inspect({'Geometry': ('Lat', 'Lon')})(shape)
-			ax.plot(x, y, '--', c=c, zorder=0)
+			ax.plot(x, y, '--', c=c, linewidth=2, zorder=0)
 
 		for (stops, c) in zip(route['Stops'], C) :
 			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
-			ax.scatter(x, y, c=c, zorder=100)
+			ax.scatter(x, y, c=c, s=10, zorder=100)
 
 		# Get the dimensions of the plot
 		(left, right, bottom, top) = ax.axis()
 
-		# Compute a nice aspect ratio
+		# Compute a nicer aspect ratio if it is too narrow
 		(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
-		if (w < h / phi) :
-			(left, right) = (((left + right) / 2 + (s * h / phi) / 2) for s in (-1, +1))
-		if (h < w / phi) :
-			(bottom, top) = (((bottom + top) / 2 + (s * w / phi) / 2) for s in (-1, +1))
+		if (w < h / phi) : (left, right) = (((left + right) / 2 + (s * h / phi) / 2) for s in (-1, +1))
+		if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + (s * w / phi) / 2) for s in (-1, +1))
 
 		# Set new dimensions
 		ax.axis([left, right, bottom, top])
