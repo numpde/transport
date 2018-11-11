@@ -36,6 +36,7 @@ PARAM = {
 
 	'City' : "Kaohsiung",
 
+	# Need a font for traditional Chinese
 	'font' : "ORIGINALS/fonts/UV/NotoSerifTC/NotoSerifTC-Light.otf",
 }
 
@@ -53,7 +54,7 @@ for (k, s) in IFILE.items() : IFILE[k] = s.format(City=PARAM['City'])
 ## =================== OUTPUT :
 
 OFILE = {
-	'Route_GPX' : "OUTPUT/00/GPX/{City}/UV/route_{{route_id}}-{{dir}}.gpx",
+	'Route_GPX' : "OUTPUT/00/GPX/{City}/UV/route_{{route_id}}.gpx",
 	'Route_Img' : "OUTPUT/00/img/{City}/UV/route_{{route_id}}.png",
 }
 
@@ -92,7 +93,7 @@ def get_routes() :
 	motc_routes = commons.zipjson_load(IFILE['MOTC_routes'])
 
 	try :
-		# As of 2018-11-09, the following passes for Kaohsiung but not Taipei
+		# As of 2018-11-09, the following passes for KHH but not TPE
 		assert(all((route['RouteUID'] == route['SubRouteUID']) for route in motc_routes))
 	except:
 		pass
@@ -108,12 +109,12 @@ def get_routes() :
 	motc_routes = commons.index_dicts_by_key(
 		motc_routes,
 		routeid_of,
-		preserve_singletons=['SubRouteUID', 'Direction', 'Stops']
+		preserve_singletons=['Direction', 'Stops']
 	)
 
 	try :
 		# As of 2018-11-11, there may be up to 12 subroutes in a route in Taipei
-		assert(12 >= max(len(route['SubRouteUID']) for route in motc_routes.values()))
+		assert(12 >= max(len(route['Stops']) for route in motc_routes.values()))
 	except :
 		pass
 
@@ -147,8 +148,8 @@ def get_routes() :
 
 	try :
 		# As of 2018-11-11:
-		# In Kaohsiung, the shapes mostly correspond to Directions
-		# In Taipei, there is one shape per RouteID
+		# For KHH, generally have a shape for each SubRouteUID
+		# For TPE, there is only one shape per RouteUID
 
 		# This does not hold for TPE
 		assert(all(('Direction' in shape) for shape in motc_shapes))
@@ -172,7 +173,7 @@ def get_routes() :
 		assert(len(motc_shapes[i]['Direction']) <= 2)
 
 		# Attach a list of shapes with Direction tag (possibly None)
-		# Note: 'None' is preserved in JSON here (https://stackoverflow.com/a/3548740/3609568)
+		# Note: 'None' is preserved by JSON (https://stackoverflow.com/a/3548740/3609568)
 		motc_routes[i]['Shape'] = [
 			{
 				'Direction' : dir,
@@ -218,10 +219,9 @@ def write_route_img() :
 		# Colors from the default pyplot palette
 		C = [ ("C{}".format(n % 10)) for n in range(len(route_dirs)) ]
 
-		# Note: For KHH, some routes have no shapes
 		for (shape, c) in zip(route['Shape'], C) :
 			(y, x) = commons.inspect({'Geometry': ('Lat', 'Lon')})(shape)
-			ax.plot(x, y, '--', c=c, linewidth=2, zorder=0)
+			ax.plot(x, y, '--', c=(c if shape['Direction'] else 'k'), linewidth=1, zorder=0)
 
 		for (stops, c) in zip(route['Stops'], C) :
 			(y, x) = zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), stops))
@@ -232,8 +232,8 @@ def write_route_img() :
 
 		# Compute a nicer aspect ratio if it is too narrow
 		(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
-		if (w < h / phi) : (left, right) = (((left + right) / 2 + (s * h / phi) / 2) for s in (-1, +1))
-		if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + (s * w / phi) / 2) for s in (-1, +1))
+		if (w < h / phi) : (left, right) = (((left + right) / 2 + s * h / phi / 2) for s in (-1, +1))
+		if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + s * w / phi / 2) for s in (-1, +1))
 
 		# Set new dimensions
 		ax.axis([left, right, bottom, top])
@@ -242,6 +242,7 @@ def write_route_img() :
 		ax.text(
 			0.5, 0.95,
 			route_name,
+			ha='center', va='top',
 			wrap=True,
 			transform=ax.transAxes,
 			zorder=1000,
@@ -249,7 +250,6 @@ def write_route_img() :
 			#fontname="Noto Sans CJK",
 			fontproperties=mfm.FontProperties(fname=PARAM['font']),
 			fontsize='x-small',
-			ha='center', va='top',
 	        bbox=dict(boxstyle="square", ec=(0.5, 0.5, 1), fc=(0.8, 0.8, 1), alpha=0.7),
         )
 
@@ -277,7 +277,6 @@ def write_route_img() :
 		)
 
 		plt.pause(0.1)
-		#plt.show()
 		plt.close(fig)
 
 		time.sleep(0.2)
@@ -286,59 +285,47 @@ def write_route_img() :
 
 def write_route_gpx() :
 
-	# TODO: replace by
-	# motc_routes = get_routes()
+	for (route_id, route) in get_routes().items() :
 
-	# Note: index by RouteUID (not SubRouteUID) because...
-	motc_routes = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_routes']), (lambda r: r['RouteUID']), preserve_singletons=['Direction', 'Stops'])
-	# ...this file only provides a RouteUID for each record
-	motc_shapes = commons.zipjson_load(IFILE['MOTC_shapes'])
-
-	open = commons.logged_open
-
-	issues = []
-
-	for shape in motc_shapes :
-
-		(route_id, dir) = (shape['RouteUID'], shape['Direction'])
-
-		route = motc_routes[route_id]
-
-		# Parse the route "shape"
-		(lon, lat) = commons.inspect(('Lon', 'Lat'))(parse_linestring(shape['Geometry']))
-
+		# Object to organize the GPS tracks and Waypoints
 		gpx = gpxpy.gpx.GPX()
+		gpx.name = "Route: {} / {}".format(*commons.inspect({'RouteName': ['Zh_tw', 'En']})(route))
+		gpx.description  = "Route ID: {}".format(route_id)
 
-		if dir in route['Direction'] :
-			for stop in dict(zip(route['Direction'], route['Stops']))[dir] :
-				(p, q) = commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop)
-				stop_name = "{}-#{}: {} / {}".format(dir, stop['StopSequence'], stop['StopName']['Zh_tw'], stop['StopName']['En'])
-				stop_desc = "{} ({})".format(stop['StopUID'], stop['StationID'])
-				wp = gpxpy.gpx.GPXWaypoint(latitude=p, longitude=q, name=stop_name, description=stop_desc)
-				gpx.waypoints.append(wp)
-		else :
-			issues.append("Route {}, direction {} not found in MOTC_routes".format(route_id, dir))
+		outfile = OFILE['Route_GPX'].format(route_id=route_id)
 
-		# Create first track in our GPX
+		open = commons.logged_open
+
+		# Create a track in our GPX
 		gpx_track = gpxpy.gpx.GPXTrack()
 		gpx.tracks.append(gpx_track)
 
-		# Create first segment in our GPX track
-		gpx_segment = gpxpy.gpx.GPXTrackSegment()
-		gpx_track.segments.append(gpx_segment)
+		for shape in route['Shape'] :
+			# Create a segment in our GPX track
+			gpx_segment = gpxpy.gpx.GPXTrackSegment()
 
-		# Create points
-		for (p, q) in zip(lat, lon) :
-			gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
+			# Insert GPS points
+			for (p, q) in zip(*commons.inspect({'Geometry': ['Lat', 'Lon']})(shape)):
+				gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
 
-		with open(OFILE['Route_GPX'].format(route_id=route_id, dir=dir), 'w') as f :
+			gpx_track.segments.append(gpx_segment)
+
+		# If there are no distinct subroutes, make a dummy list
+		subroute_id = route['SubRouteUID']
+		if type(subroute_id) is str :
+			assert(subroute_id == route_id)
+			route['SubRouteUID'] = [None] * len(route['Stops'])
+
+		for (subroute_id, dir, stops) in zip(*commons.inspect(['SubRouteUID', 'Direction', 'Stops'])(route)) :
+			for stop in stops :
+				(p, q) = commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')})(stop)
+				stop_name = "{}/{} #{}: {} / {}".format(subroute_id or "", dir, stop['StopSequence'], stop['StopName'].get('Zh_tw', "--"), stop['StopName'].get('En', "--"))
+				stop_desc = "{} ({})".format(stop['StopUID'], stop['StationID'])
+				wp = gpxpy.gpx.GPXWaypoint(latitude=p, longitude=q, name=stop_name, description=stop_desc)
+				gpx.waypoints.append(wp)
+
+		with open(outfile, 'w') as f :
 			f.write(gpx.to_xml())
-
-		continue
-
-	print("Issues:")
-	for issue in (issues or ["None"]) : print(issue)
-
 
 # Look for bus stops or bus routes based on user input
 def interactive_search() :
