@@ -2,11 +2,14 @@
 # RA, 2018-11-11
 
 from helpers import commons
+from helpers import maps
 
 import networkx as nx
 import numpy as np
+import math
 import pickle
 import random
+import sklearn.neighbors
 import geopy.distance
 import gpxpy, gpxpy.gpx
 from itertools import chain
@@ -54,6 +57,18 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 	return min((da, s), (db, t))
 
 
+def compute_knn(G : nx.DiGraph, locs, leaf_size=150):
+
+	# Only care about the OSM nodes that are in the road network graph
+	locs = { i: locs[i] for i in G.nodes() }
+
+	(I, X) = (list(locs.keys()), list(locs.values()))
+
+	return {
+		'ID-vec': I,
+		'tree': sklearn.neighbors.BallTree(X, leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
+	}
+
 def foo() :
 
 	osm_graph_file = "../OUTPUT/02/UV/kaohsiung.pkl"
@@ -64,9 +79,13 @@ def foo() :
 	# Road network
 	G = OSM['G']
 
+	# Restrict to the largest weakly/strongly connected component
+	G = nx.subgraph(G, max(nx.weakly_connected_components(G), key=len))
+
 	# Locations of the graph nodes
 	node_pos = OSM['locs']
 
+	del OSM
 
 	# Get some waypoints
 	routes_file = "../OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute.json"
@@ -83,27 +102,32 @@ def foo() :
 	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
 
 	# DEBUG
-	#WP = WP[0:10]
+	# WP = WP[0:20]
+	# WP = WP[-15:-11]
 
 
 	#
 
 	print("Locating nearest edges to waypoints...")
-	#print(WP)
+
+	# Nearest-nodes locator
+	KNN = compute_knn(G, node_pos, leaf_size=30)
+
+	print("(Got KNN)")
 
 	def nearest_nodes(q, k=10) :
 
 		knn: BallTree
-		(I, knn) = commons.inspect({'knn': ('ID-vec', 'tree')})(OSM)
+		(I, knn) = commons.inspect(('ID-vec', 'tree'))(KNN)
 
 		(dist, ind) = knn.query(np.asarray(q).reshape(1, -1), k=k)
 
 		# Return a list of pairs (graph-node-id, distance-to-q) sorted by distance
 		return list(zip([I[i] for i in ind.reshape(-1)], dist.reshape(-1)))
 
-	def nearest_edges(q, k=6) :
+	def nearest_edges(q, k=8) :
 		# Get a number of closest nodes
-		nn = [n for (n, d) in nearest_nodes(q, k=2*k+20)]
+		nn = [n for (n, d) in nearest_nodes(q, k=2*k+10)]
 		# Get their incident edges
 		ee = list(G.edges(nbunch=nn))
 		# Append reverse edges
@@ -140,12 +164,11 @@ def foo() :
 	(miss_dist, total_len) = (None, None)
 
 	# Intermediate edges -- initial condition
-	ee = [random.choices(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
+	ee = None
 
 	# Partial shortest paths
 	sps_way = dict()
 	sps_len = dict()
-
 
 	# Remaining clouds to optimize
 	rcto = list(range(len(prob_clouds)))
@@ -166,6 +189,15 @@ def foo() :
 
 	# Get the dimensions of the plot (again)
 	(left, right, bottom, top) = ax.axis()
+
+	# Compute a nicer aspect ratio if it is too narrow
+	(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
+	if (w < h / phi) : (left, right) = (((left + right) / 2 + s * h / phi / 2) for s in (-1, +1))
+	if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + s * w / phi / 2) for s in (-1, +1))
+
+	# Set new dimensions
+	ax.axis([left, right, bottom, top])
+
 	# Bounding box for the map
 	bbox = (left, bottom, right, top)
 
@@ -174,10 +206,7 @@ def foo() :
 	token = open("../.credentials/UV/mapbox-token.txt", 'r').read()
 
 	# Download the background map
-	i = maps.get_map_by_bbox(bbox, token=token)
-	# Apply the background map
-	img = ax.imshow(i, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
-
+	mapi = maps.get_map_by_bbox(bbox, token=token)
 
 	plt.ion()
 	plt.show()
@@ -185,109 +214,134 @@ def foo() :
 
 	# Optimization loop
 	while rcto :
-		try :
 
-			# Choose a random edge cloud
-			# nc = number of the edge cloud
-			nc = random.choice(rcto)
+		if ee is None :
+			ee = [random.choices(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
 
-			for _ in range(10) :
+		for _ in range(23) :
+			if not rcto : break
 
-				# pc = edge weights in this cloud (modified below)
-				pc = prob_clouds[nc]
+			try :
 
-				# Cloud edges with weights
-				(ec, cw) = map(list, (pc.keys(), pc.values()))
-				# exclude the currently selected edge
-				(ec, cw) = zip(*[(e, p) for (e, p) in zip(ec, cw) if (e != ee[nc])])
+				# Choose a random edge cloud
+				# nc = number of the edge cloud
+				nc = random.choice(rcto)
 
-				# Choose a candidate edge from the cloud (w/o the currently selected edge)
-				ee[nc] = random.choices(ec, weights=cw, k=1).pop()
-				# Current candidate edge
-				ce = ee[nc]
+				for _ in range(10) :
 
-				(old_miss_dist, old_total_len) = (miss_dist, total_len)
+					# pc = edge weights in this cloud (modified below)
+					pc = prob_clouds[nc]
 
-				# Criterion 1: Sum of distances of the selected edges to waypoints
-				miss_dist = sum(dc[e] for (e, dc) in zip(ee, dist_clouds))
+					# Cloud edges with weights
+					(ec, cw) = map(list, (pc.keys(), pc.values()))
+					# exclude the currently selected edge
+					(ec, cw) = zip(*[(e, p) for (e, p) in zip(ec, cw) if (e != ee[nc])])
 
-				# Criterion 2: The total length of the path
-				total_len = sum(edge_length[e] for e in ee)
-				path = [ee[0][0]] # First node of the first edge starts the complete path
-				for (e, f) in zip(ee, ee[1:]) :
-					(a, b) = (e[1], f[0])
-					if (a, b) not in sps_way :
-						sp = nx.shortest_path(G, source=a, target=b, weight='len')
-						sps_way[(a, b)] = sp
-						sps_len[(a, b)] = sum(edge_length[e] for e in zip(sp, sp[1:]))
-					path += sps_way[(a, b)]
-					total_len += sps_len[(a, b)]
+					# Choose a candidate edge from the cloud (w/o the currently selected edge)
+					ee[nc] = random.choices(ec, weights=cw, k=1).pop()
+					# Current candidate edge
+					ce = ee[nc]
 
-				print("miss dist: {}, total len: {}".format(miss_dist, total_len))
+					(old_miss_dist, old_total_len) = (miss_dist, total_len)
 
-				# If this edge has accumulated large weight
-				# then consider this cloud "solved"
+					# Criterion 1: Sum of distances of the selected edges to waypoints
+					miss_dist = sum(dc[e] for (e, dc) in zip(ee, dist_clouds))
 
-				if (prob_clouds[nc][ce] >= 0.95 * sum(prob_clouds[nc].values())) :
-					# Remove this cloud number from the list of
-					# remaining clouds to optimize
-					rcto.remove(nc)
-					break
+					# Criterion 2: The total length of the path
+					total_len = sum(edge_length[e] for e in ee)
+					path = [ee[0][0]] # First node of the first edge starts the complete path
+					for (e, f) in zip(ee, ee[1:]) :
+						(a, b) = (e[1], f[0])
+						if (a, b) not in sps_way :
+							sp = nx.shortest_path(G, source=a, target=b, weight='len')
+							sps_way[(a, b)] = sp
+							sps_len[(a, b)] = sum(edge_length[e] for e in zip(sp, sp[1:]))
+						path += sps_way[(a, b)]
+						total_len += sps_len[(a, b)]
 
-				# Did we get any improvement in the criteria?
+					print("miss dist: {}, total len: {}".format(miss_dist, total_len))
 
-				def crit(md, tl) : return (md * 10) + tl
+					# If this edge has accumulated large weight
+					# then consider this cloud "solved"
 
-				# Relative improvement new/old
-				rel = crit(miss_dist, total_len) / crit(old_miss_dist, old_total_len)
+					if (prob_clouds[nc][ce] >= 0.95 * sum(prob_clouds[nc].values())) :
+						# Remove this cloud number from the list of
+						# remaining clouds to optimize
+						rcto.remove(nc)
+						break
 
-				# Re-weight the current edge in its cloud
-				prob_clouds[nc][ce] *= (1.2 if (rel < 1) else 0.8)
+					# Did we get any improvement in the criteria?
 
-			# PLOT
+					def crit(md, tl) : return (md * 10) + tl
 
-			ax.cla()
+					# Relative improvement new/old
+					rel = crit(miss_dist, total_len) / crit(old_miss_dist, old_total_len)
 
-			for (n, (y, x)) in enumerate(WP) :
-				c = ('g' if (n == nc) else 'r')
-				ax.plot(x, y, 'o', c=c)
+					# Re-weight the current edge in its cloud
+					prob_clouds[nc][ce] *= (1.2 if (rel < 1) else 0.8)
 
+
+				# # GPX
+				#
+				# # for cloud in clouds :
+				# # 	for i in cloud.keys() :
+				# # 		(y, x) = node_pos[i]
+				# # 		gpx.waypoints.append(gpxpy.gpx.GPXWaypoint(latitude=y, longitude=x))
+				# # 		ax.plot(x, y, 'bx')
+				#
+				# gpx = gpxpy.gpx.GPX()
+				#
+				# gpx_track = gpxpy.gpx.GPXTrack()
+				# gpx.tracks.append(gpx_track)
+				#
+				# gpx_segment = gpxpy.gpx.GPXTrackSegment()
+				# gpx_track.segments.append(gpx_segment)
+				#
+				# for i in path :
+				# 	(p, q) = node_pos[i]
+				# 	gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
+				#
+				# with open("tmp.gpx", 'w') as f:
+				# 	f.write(gpx.to_xml())
+
+			except nx.NetworkXNoPath as e :
+				prob_clouds[nc][ce] *= 0.9
+				print("No path error", prob_clouds[nc])
+				#ee = None
+			except Exception as e :
+				print(e)
+
+		# PLOT
+
+		# Clear the axes
+		ax.cla()
+
+		# Apply the background map
+		ax.axis((left, right, bottom, top))
+		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
+
+		if path :
 			(y, x) = zip(*[node_pos[i] for i in path])
-			ax.plot(x, y, 'b--')
+			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-			plt.draw()
+		for (n, (y, x)) in enumerate(WP) :
+			c = 'm' #('g' if (n == nc) else 'r')
+			ax.plot(x, y, 'o', c=c, markersize=4)
 
-			plt.show()
-			plt.pause(0.1)
+		for (nc, pc) in enumerate(prob_clouds) :
+			m = max(pc.values())
+			for (e, p) in pc.items() :
+				(y, x) = zip(*[node_pos[i] for i in e])
+				c = ('g' if (ee[nc] == e) else 'r')
+				ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
 
+		plt.draw()
 
-			# GPX
+		plt.show()
+		plt.pause(0.1)
 
-			# for cloud in clouds :
-			# 	for i in cloud.keys() :
-			# 		(y, x) = node_pos[i]
-			# 		gpx.waypoints.append(gpxpy.gpx.GPXWaypoint(latitude=y, longitude=x))
-			# 		ax.plot(x, y, 'bx')
-
-			gpx = gpxpy.gpx.GPX()
-
-			gpx_track = gpxpy.gpx.GPXTrack()
-			gpx.tracks.append(gpx_track)
-
-			gpx_segment = gpxpy.gpx.GPXTrackSegment()
-			gpx_track.segments.append(gpx_segment)
-
-			for i in path :
-				(p, q) = node_pos[i]
-				gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
-
-			with open("tmp.gpx", 'w') as f:
-				f.write(gpx.to_xml())
-
-
-		except Exception as e :
-			print(e)
-
+	plt.ioff()
+	plt.show()
 
 if (__name__ == "__main__") :
 	foo()
