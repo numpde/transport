@@ -6,6 +6,7 @@
 
 from helpers import commons
 from helpers import maps
+from helpers.graph import dist_to_segment
 
 import numpy as np
 import dateutil
@@ -58,43 +59,6 @@ pass
 
 ## ===================== PLAY :
 
-
-# Metric for (lat, lon) coordinates
-def geodist(p, q) :
-	return geopy.distance.geodesic(p, q).m
-
-
-# th is accuracy tolerance in meters
-# TH is care-not radius for far-away segments
-# Returns a pair (distance, lambda) where
-# 0 <= lambda <= 1 is the relative location of the closest point
-def dist_to_segment(x, ab, th=5, TH=1000) :
-	# Endpoints of the segment
-	(a, b) = ab
-
-	# Relative location on the original segment
-	(s, t) = (0, 1)
-
-	# Distances to the endpoints
-	(da, db) = (geodist(x, a), geodist(x, b))
-
-	while (th < abs(da - db)) and (min(da, db) < TH) :
-
-		# Note: potentially problematic at lon~180
-		# Approximation of the midpoint (m is not necessarily on a geodesic?)
-		m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-
-		# Distance to the midpoint
-		dm = geodist(x, m)
-
-		if (da < db) :
-			# Keep bisecting the (a, m) segment
-			(b, db, t) = (m, dm, (s + t) / 2)
-		else :
-			# Keep bisecting the (m, b) segment
-			(a, da, s) = (m, dm, (s + t) / 2)
-
-	return min((da, s), (db, t))
 
 # At what time does a given bus visit the bus stops?
 def bus_at_stops(run, stops) :
