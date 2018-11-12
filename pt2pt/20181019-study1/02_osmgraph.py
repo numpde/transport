@@ -4,13 +4,13 @@
 ## ================== IMPORTS :
 
 from helpers import commons
+from helpers import graph
 
 import networkx as nx
 import osmium
 import pickle
 import inspect
 import time
-import sklearn.neighbors
 from collections import defaultdict
 
 
@@ -221,20 +221,6 @@ def illustration() :
 
 	input()
 
-
-def compute_knn(G, locs) :
-
-	# Only care about the OSM nodes that are in the road network graph
-	locs = { i : locs[i] for i in G.nodes() }
-
-	(I, X) = (list(locs.keys()), list(locs.values()))
-
-	return {
-		'ID-vec' : I,
-		'tree' : sklearn.neighbors.BallTree(X, leaf_size=500, metric='pyfunc', func=commons.geodesic)
-	}
-
-
 # Extract roads and routes, write to file
 def extract(region) :
 
@@ -250,7 +236,7 @@ def extract(region) :
 			knn = None
 		else :
 			print("II. Making the nearest-neighbor tree")
-			knn = compute_knn(G, locs)
+			knn = graph.compute_knn(G, locs)
 
 		pickle.dump(
 			{
