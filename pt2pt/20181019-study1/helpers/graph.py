@@ -57,6 +57,13 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 
 	return min((da, s), (db, t))
 
+# signed angle (p, q) /_ (q, r) in degrees,
+# where p, q, r are (lat, lon) coordinates
+def angle(p, q, r) :
+	# Note: the 'plus' is a concatenation of tuples here
+	pq = angles.bear(*map(angles.d2r, p + q))
+	qr = angles.bear(*map(angles.d2r, q + r))
+	return (((angles.r2d(pq - qr) + 540) % 360) - 180)
 
 def compute_knn(G : nx.DiGraph, locs, leaf_size=150):
 
@@ -78,6 +85,7 @@ def foo() :
 	OSM = pickle.load(open(osm_graph_file, 'rb'))
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
+	G : nx.DiGraph
 	knn_tree : NearestNeighbors
 	(G, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
 
@@ -98,13 +106,13 @@ def foo() :
 
 	# Waypoints
 	route_id = 'KHH1221'
-	direction = 1
+	direction = 0
 	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
 
 	# DEBUG
-	WP = WP[0:3]
+	# WP = WP[0:3]
 	# WP = WP[0:20]
 	# WP = WP[-15:-11]
 
@@ -159,7 +167,8 @@ def foo() :
 
 	prob_clouds = [normalize_cloud(cloud) for cloud in prob_clouds]
 
-	(miss_dist, total_len) = (None, None)
+	# Quality markers
+	(miss_dist, total_len, total_cur) = (None, None, None)
 
 	# Intermediate edges -- initial condition
 	ee = None
@@ -171,8 +180,8 @@ def foo() :
 	# Remaining clouds to optimize
 	rcto = list(range(len(prob_clouds)))
 
-	# Edge-to-length dictionary
-	edge_length = nx.get_edge_attributes(G, 'len')
+	# Edge-to-length dictionary (make sure it is a copy as we might have new edges)
+	edge_length = dict(nx.get_edge_attributes(G, 'len'))
 
 	# Plotting business
 
@@ -209,6 +218,9 @@ def foo() :
 	plt.ion()
 	plt.show()
 
+	# "Detailed decision node clusters"
+	# Dictionary of original node id -> cluster of new nodes
+	ddncs = dict()
 
 	# Optimization loop
 	while rcto :
@@ -218,6 +230,8 @@ def foo() :
 
 		for _ in range(23) :
 			if not rcto : break
+
+			make_ddnc = set()
 
 			try :
 
@@ -240,7 +254,7 @@ def foo() :
 					# Current candidate edge
 					ce = ee[nc]
 
-					(old_miss_dist, old_total_len) = (miss_dist, total_len)
+					(old_miss_dist, old_total_len, old_total_cur) = (miss_dist, total_len, total_cur)
 
 					# Criterion 1: Sum of distances of the selected edges to waypoints
 					miss_dist = sum(dc[e] for (e, dc) in zip(ee, dist_clouds))
@@ -256,22 +270,36 @@ def foo() :
 							sps_len[(a, b)] = sum(edge_length[e] for e in zip(sp, sp[1:]))
 						path += sps_way[(a, b)]
 						total_len += sps_len[(a, b)]
+					path += [ee[-1][-1]]
+
+					# Convert node IDs to coordinates
+					geo_path = [node_pos[i] for i in path]
 
 					# Criterion 3: Accumulated turn angle
 					# https://rosettacode.org/wiki/Angle_difference_between_two_bearings#Python
 					# https://stackoverflow.com/a/16180796/3609568
 					# http://gmc.yoyogames.com/index.php?showtopic=532420
-					for (a, b, c) in zip(path, path[1:], path[2:]) :
-						ba = angles.bear(*list(map(angles.d2r, [*b, *a])))
-						bc = angles.bear(*list(map(angles.d2r, [*b, *c])))
-						print(ba, bc)
+					total_cur = 0
+					for (a, b, c, bi) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
+						# Skip nodes in "detailed decision node cluster"s
+						if type(bi) is tuple : continue
 
-					print("miss dist: {}, total len: {}".format(miss_dist, total_len))
+						turn = abs(angle(a, b, c))
+						total_cur += turn
+
+						# If there is a significant turn, insert a "detailed decision node cluster"
+						if (turn >= 30) : make_ddnc.add(bi)
+
+					if make_ddnc :
+						print("DDNC!")
+						break
+
+					print("miss dist: {}, total len: {}, total cur: {}".format(miss_dist, total_len, total_cur))
 
 					# If this edge has accumulated large weight
 					# then consider this cloud "solved"
 
-					if (prob_clouds[nc][ce] >= 0.99 * sum(prob_clouds[nc].values())) :
+					if (prob_clouds[nc][ce] >= 0.98 * sum(prob_clouds[nc].values())) :
 						# Remove this cloud number from the list of
 						# remaining clouds to optimize
 						rcto.remove(nc)
@@ -279,76 +307,114 @@ def foo() :
 
 					# Did we get any improvement in the criteria?
 
-					def crit(md, tl) : return (md * 10) + tl
+					def crit(md, tl, tc) : return ((md * 20) + tl) + (tc * 3)
 
 					# Relative improvement new/old
-					rel = crit(miss_dist, total_len) / crit(old_miss_dist, old_total_len)
+					rel = crit(miss_dist, total_len, total_cur) / crit(old_miss_dist, old_total_len, old_total_cur)
 
 					# Re-weight the current edge in its cloud
 					prob_clouds[nc][ce] *= (1.2 if (rel < 1) else 0.8)
 
 
-				# # GPX
-				#
-				# # for cloud in clouds :
-				# # 	for i in cloud.keys() :
-				# # 		(y, x) = node_pos[i]
-				# # 		gpx.waypoints.append(gpxpy.gpx.GPXWaypoint(latitude=y, longitude=x))
-				# # 		ax.plot(x, y, 'bx')
-				#
-				# gpx = gpxpy.gpx.GPX()
-				#
-				# gpx_track = gpxpy.gpx.GPXTrack()
-				# gpx.tracks.append(gpx_track)
-				#
-				# gpx_segment = gpxpy.gpx.GPXTrackSegment()
-				# gpx_track.segments.append(gpx_segment)
-				#
-				# for i in path :
-				# 	(p, q) = node_pos[i]
-				# 	gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
-				#
-				# with open("tmp.gpx", 'w') as f:
-				# 	f.write(gpx.to_xml())
+				# Old nodes
+				for nb in make_ddnc :
+					# Node cluster. Its nodes are G's edges
+					H = nx.DiGraph()
+					# Incoming edges
+					for ie in G.in_edges(nbunch=nb) :
+						# Outgoing edges
+						for oe in G.out_edges(nbunch=nb):
+							# Node IDs of those edges
+							(na, nb1, nb2, nc) = (ie + oe)
+							assert((nb1 == nb) and (nb2 == nb))
+							# Geolocations
+							(a, b, c) = (node_pos[na], node_pos[nb], node_pos[nc])
+							# TODO appropriate scaling of 'len' here
+							# New hyperedge between hypernodes
+							H.add_edge((na, nb), (nb, nc), len=abs(angle(a, b, c)))
+							# Geolocation of cluster hypernodes
+							node_pos[(na, nb)] = b
+							node_pos[(nb, nc)] = b
+
+					G = nx.compose(G, H)
+
+					for e in H.nodes() :
+						E = (e[0], e)
+						G.add_edge(*E, len=edge_length[e])
+						edge_length[E] = edge_length[e]
+
+					G.remove_edges_from(H.nodes())
+
+					for e in H.nodes() :
+						E = (e[0], e)
+						for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
+							if not (e in pc.keys()) : continue
+							prob_clouds[nc][E] = prob_clouds[nc][e]
+							dist_clouds[nc][E] = dist_clouds[nc][e]
+							del prob_clouds[nc][e]
+							del dist_clouds[nc][e]
 
 			except nx.NetworkXNoPath as e :
-				prob_clouds[nc][ce] *= 0.9
+				#prob_clouds[nc][ce] *= 0.9
 				print("No path error", prob_clouds[nc])
-				#ee = None
 			except Exception as e :
 				print(e)
 
-			# PLOT
+		# PLOT
 
-			# Clear the axes
-			ax.cla()
+		# Clear the axes
+		ax.cla()
 
-			# Apply the background map
-			ax.axis((left, right, bottom, top))
-			img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
+		# Apply the background map
+		ax.axis((left, right, bottom, top))
+		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
 
-			if path :
-				(y, x) = zip(*[node_pos[i] for i in path])
-				ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
+		if geo_path :
+			(y, x) = zip(*geo_path)
+			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-			for (n, (y, x)) in enumerate(WP) :
-				c = 'm' #('g' if (n == nc) else 'r')
-				ax.plot(x, y, 'o', c=c, markersize=4)
+		for (n, (y, x)) in enumerate(WP) :
+			c = 'm'
+			ax.plot(x, y, 'o', c=c, markersize=4)
 
-			for (nc, pc) in enumerate(prob_clouds) :
-				m = max(pc.values())
-				for (e, p) in pc.items() :
-					(y, x) = zip(*[node_pos[i] for i in e])
-					c = ('g' if (ee[nc] == e) else 'r')
-					ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
+		for (nc, pc) in enumerate(prob_clouds) :
+			m = max(pc.values())
+			for (e, p) in pc.items() :
+				(y, x) = zip(*[node_pos[i] for i in e])
+				c = ('g' if (ee[nc] == e) else 'r')
+				ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
 
-			plt.draw()
+		plt.draw()
 
-			plt.show()
-			plt.pause(0.5)
+		plt.show()
+		plt.pause(0.5)
 
 	plt.ioff()
 	plt.show()
+
+
+	# GPX
+
+	try :
+		gpx = gpxpy.gpx.GPX()
+
+		for (lat, lon) in WP :
+			gpx.waypoints.append(gpxpy.gpx.GPXWaypoint(latitude=lat, longitude=lon))
+
+		gpx_track = gpxpy.gpx.GPXTrack()
+		gpx.tracks.append(gpx_track)
+
+		gpx_segment = gpxpy.gpx.GPXTrackSegment()
+		gpx_track.segments.append(gpx_segment)
+
+		for (p, q) in geo_path :
+			gpx_segment.points.append(gpxpy.gpx.GPXTrackPoint(latitude=p, longitude=q))
+
+		with open("tmp.gpx", 'w') as f:
+			f.write(gpx.to_xml())
+	except Exception as e :
+		print("Writing GPX failed ({})".format(e))
+
 
 if (__name__ == "__main__") :
 	foo()
