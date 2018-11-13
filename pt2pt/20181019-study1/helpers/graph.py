@@ -13,7 +13,7 @@ import random
 import sklearn.neighbors
 import geopy.distance
 import gpxpy, gpxpy.gpx
-from itertools import chain
+from itertools import chain, groupby
 from sklearn.neighbors import NearestNeighbors
 
 # Metric for (lat, lon) coordinates
@@ -106,7 +106,10 @@ def foo() :
 	)
 
 	# Waypoints
-	(route_id, direction) = ('KHH1221', 0)
+	#(route_id, direction) = ('KHH1221', 0)
+	#(route_id, direction) = ('KHH29', 0)
+	# (route_id, direction) = ('KHH38', 0)
+	(route_id, direction) = ('KHH87', 1)
 	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
@@ -177,7 +180,7 @@ def foo() :
 	sps_way = dict()
 	sps_len = dict()
 
-	# Remaining clouds to optimize
+	# Remaining clouds to optimize (index into prob_clouds)
 	rcto = list(range(len(prob_clouds)))
 
 	# Edge-to-length dictionary (make sure it is a copy as we might have new edges)
@@ -218,9 +221,26 @@ def foo() :
 	plt.ion()
 	plt.show()
 
-	# "Detailed decision node clusters"
-	# Dictionary of original node id -> cluster of new nodes
-	ddncs = dict()
+
+	# A turn of 90 degrees takes on average 25 seconds (wild guess)
+	# Assume an average bus speed of 6 m/s to compute equivalent distance in meters
+	# Penalize U-turns equivalently to a 200m run
+	# Note: could distinguish left and right turns here
+	meter_from_angle = (lambda a : (((25 * abs(a) / 90) * 6) if (abs(a) < 150) else 200))
+	# Assume an average bus speed of 6 m/s
+	crittime_from_meter_bus = (lambda d : (d / 6))
+	# Convert the distance busstop-road to bus-time equivalent
+	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
+
+	# Threshold turn for introducing "Detailed decision node clusters"
+	ddnc_threshold = 60
+
+	# Acceptance threshold for an edge in an edge cloud
+	# (where certainty_level = 1 means complete certainty)
+	certainty_level = 0.98
+
+	# List of "Detailed decision node cluster" hypernodes
+	unmake_ddnc = []
 
 	# Optimization loop
 	while rcto :
@@ -231,7 +251,7 @@ def foo() :
 		for _ in range(23) :
 			if not rcto : break
 
-
+			# Nodes to be replaced by "detailed decision node clusters"
 			make_ddnc = set()
 
 			try :
@@ -240,6 +260,7 @@ def foo() :
 				# nc = number of the edge cloud
 				nc = random.choice(rcto)
 
+				# Spend a few rounds on the same edge cloud
 				for _ in range(10) :
 
 					# pc = edge weights in this cloud (modified below)
@@ -264,6 +285,7 @@ def foo() :
 					total_len = sum(edge_length[e] for e in ee)
 					path = [ee[0][0]] # First node of the first edge starts the complete path
 					for (e, f) in zip(ee, ee[1:]) :
+						# Connect the cloud edges e and f
 						(a, b) = (e[1], f[0])
 						if (a, b) not in sps_way :
 							sp = nx.shortest_path(G, source=a, target=b, weight='len')
@@ -271,7 +293,7 @@ def foo() :
 							sps_len[(a, b)] = sum(edge_length[e] for e in zip(sp, sp[1:]))
 						path += sps_way[(a, b)]
 						total_len += sps_len[(a, b)]
-					path += [ee[-1][-1]]
+					path += [ee[-1][-1]] # Last node of the last edge ends the path
 
 					# Convert node IDs to coordinates
 					geo_path = [node_pos[i] for i in path]
@@ -280,28 +302,30 @@ def foo() :
 					for (a, b, c, bi) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
 						# Skip nodes in "detailed decision node cluster"s
 						if type(bi) is tuple : continue
-						# If there is a significant turn, insert a "detailed decision node cluster"
-						if (abs(angle(a, b, c)) >= 60) : make_ddnc.add(bi)
+						# Skip if currently selected edge is not the winning candidate
+						if (prob_clouds[nc][ce] < max(prob_clouds[nc].values())) : continue
+						# If there is a significant turn, schedule a "detailed decision node cluster"
+						if (abs(angle(a, b, c)) >= ddnc_threshold) : make_ddnc.add(bi)
 
 					if make_ddnc :
-						print("DDNC!")
+						#print("DDNC:", make_ddnc)
 						break
 
-					print("miss dist: {}, total len: {}, total cur: {}".format(miss_dist, total_len, total_cur))
+					#print("miss dist: {}, total len: {}".format(miss_dist, total_len))
 
 					# If this edge has accumulated large weight
 					# then consider this cloud "solved"
 
-					if (prob_clouds[nc][ce] >= 0.98 * sum(prob_clouds[nc].values())) :
+					if (prob_clouds[nc][ce] >= certainty_level * sum(prob_clouds[nc].values())) :
 						# Remove this cloud number from the list of
 						# remaining clouds to optimize
 						rcto.remove(nc)
 						break
 
-
 					# Did we get any improvement in the criteria?
 
-					def crit(md, tl) : return ((md * 20) + tl)
+					def crit(md, tl) :
+						return crittime_from_meter_stop(md) + crittime_from_meter_bus(tl)
 
 					# Relative improvement new/old
 					if not (old_miss_dist and old_total_len) : continue
@@ -310,19 +334,16 @@ def foo() :
 					# Re-weight the current edge in its cloud
 					prob_clouds[nc][ce] *= (1.2 if (rel < 1) else 0.8)
 
-			except nx.NetworkXNoPath as e:
-				# prob_clouds[nc][ce] *= 0.9
-				print("No path error", prob_clouds[nc])
+			except nx.NetworkXNoPath :
+				print("No-path error")
 
 
+			# Replace selected nodes by "Detail decision node clusters"
 			for nb in make_ddnc :
-				print("DDNC node", nb)
-
-				# The following procedure may invalidate hashed shortest paths
-				sps_way = dict()
 
 				# Node cluster. Its nodes are G's edges
 				H = nx.DiGraph()
+
 				# Incoming edges
 				for ie in G.in_edges(nbunch=nb) :
 					# Outgoing edges
@@ -332,9 +353,8 @@ def foo() :
 						assert((nb1 == nb) and (nb2 == nb))
 						# Geolocations
 						(a, b, c) = (node_pos[na], node_pos[nb], node_pos[nc])
-						# TODO appropriate scaling of 'len' here
-						# New hyperedge between hypernodes
-						H.add_edge((na, nb), (nb, nc), len=abs(angle(a, b, c)))
+						# New hyperedge between (new) hypernodes
+						H.add_edge((na, nb), (nb, nc), len=meter_from_angle(angle(a, b, c)))
 						# Geolocation of cluster hypernodes
 						node_pos[(na, nb)] = b
 						node_pos[(nb, nc)] = b
@@ -353,22 +373,39 @@ def foo() :
 				G.add_nodes_from(H.nodes)
 				G.add_weighted_edges_from(H.edges.data('len'), weight='len')
 
-				for (a, b, d) in H.edges.data('len') :
-					edge_length[(a, b)] = d
+				# To undo this process
+				unmake_ddnc += list(H.nodes)
 
-				# Interface
+				# Interface edges
 				for (e, E) in e2E.items() :
-					edge_length[E] = edge_length[e]
 					G.add_edge(*E, len=edge_length[e])
 
-				for (e, E) in e2E.items() :
-					if e in ee : ee[ee.index(e)] = E
-					for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
-						if not (e in pc.keys()) : continue
-						prob_clouds[nc][E] = prob_clouds[nc][e]
-						dist_clouds[nc][E] = dist_clouds[nc][e]
-						del prob_clouds[nc][e]
-						del dist_clouds[nc][e]
+				# Now fix different caches
+
+				for (a, b, d) in H.edges.data('len'):
+					# Length of cluster edges
+					edge_length[(a, b)] = d
+
+				for (e, E) in e2E.items():
+
+					# Invalidated shortest paths
+					sps_way = { ab : way for (ab, way) in sps_way.items() if not (nb in way) }
+					sps_len = { ab : lem for (ab, lem) in sps_len.items() if ab in sps_way.keys() }
+
+					# Length of interface edges
+					edge_length[E] = edge_length[e]
+
+					# Currently selected edges
+					if e in ee :
+						ee[ee.index(e)] = E
+
+					# Edge clouds
+					for (nc, _) in enumerate(zip(prob_clouds, dist_clouds)) :
+						try :
+							dist_clouds[nc][E] = dist_clouds[nc].pop(e)
+							prob_clouds[nc][E] = prob_clouds[nc].pop(e)
+						except KeyError :
+							pass
 
 
 		# PLOT
@@ -397,16 +434,26 @@ def foo() :
 
 		plt.draw()
 
-		plt.show()
+		#plt.show()
 		plt.pause(0.5)
 
 	plt.ioff()
 	plt.show()
 
+	# # TODO: this invalidates certain caches
+	# while unmake_ddnc :
+	# 	n = unmake_ddnc.pop()
+	# 	G.remove_node(n)
+	# 	G.add_edge(n)
 
 	# GPX
 
 	try :
+
+		# Omit consecutive duplicates
+		# https://stackoverflow.com/a/5738933
+		geo_path = [next(iter(a)) for a in groupby(geo_path)]
+
 		gpx = gpxpy.gpx.GPX()
 
 		for (lat, lon) in WP :
