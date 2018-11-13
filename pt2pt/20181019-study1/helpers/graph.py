@@ -4,6 +4,7 @@
 from helpers import commons
 from helpers import maps
 
+import angles
 import networkx as nx
 import numpy as np
 import math
@@ -96,11 +97,14 @@ def foo() :
 	)
 
 	# Waypoints
-	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes['KHH122']['Stops'][0]))
+	route_id = 'KHH1221'
+	direction = 1
+	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
 
 	# DEBUG
+	WP = WP[0:3]
 	# WP = WP[0:20]
 	# WP = WP[-15:-11]
 
@@ -119,9 +123,9 @@ def foo() :
 		# Return a list of pairs (graph-node-id, distance-to-q) sorted by distance
 		return list(zip(ind, dist))
 
-	def nearest_edges(q, k=8) :
+	def nearest_edges(q, k=10) :
 		# Get a number of closest nodes
-		nn = [n for (n, d) in nearest_nodes(q, k=2*k+10)]
+		nn = [n for (n, d) in nearest_nodes(q, k=2*k+20)]
 		# Get their incident edges
 		ee = list(G.edges(nbunch=nn))
 		# Append reverse edges
@@ -253,12 +257,21 @@ def foo() :
 						path += sps_way[(a, b)]
 						total_len += sps_len[(a, b)]
 
+					# Criterion 3: Accumulated turn angle
+					# https://rosettacode.org/wiki/Angle_difference_between_two_bearings#Python
+					# https://stackoverflow.com/a/16180796/3609568
+					# http://gmc.yoyogames.com/index.php?showtopic=532420
+					for (a, b, c) in zip(path, path[1:], path[2:]) :
+						ba = angles.bear(*list(map(angles.d2r, [*b, *a])))
+						bc = angles.bear(*list(map(angles.d2r, [*b, *c])))
+						print(ba, bc)
+
 					print("miss dist: {}, total len: {}".format(miss_dist, total_len))
 
 					# If this edge has accumulated large weight
 					# then consider this cloud "solved"
 
-					if (prob_clouds[nc][ce] >= 0.95 * sum(prob_clouds[nc].values())) :
+					if (prob_clouds[nc][ce] >= 0.99 * sum(prob_clouds[nc].values())) :
 						# Remove this cloud number from the list of
 						# remaining clouds to optimize
 						rcto.remove(nc)
@@ -305,34 +318,34 @@ def foo() :
 			except Exception as e :
 				print(e)
 
-		# PLOT
+			# PLOT
 
-		# Clear the axes
-		ax.cla()
+			# Clear the axes
+			ax.cla()
 
-		# Apply the background map
-		ax.axis((left, right, bottom, top))
-		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
+			# Apply the background map
+			ax.axis((left, right, bottom, top))
+			img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
 
-		if path :
-			(y, x) = zip(*[node_pos[i] for i in path])
-			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
+			if path :
+				(y, x) = zip(*[node_pos[i] for i in path])
+				ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-		for (n, (y, x)) in enumerate(WP) :
-			c = 'm' #('g' if (n == nc) else 'r')
-			ax.plot(x, y, 'o', c=c, markersize=4)
+			for (n, (y, x)) in enumerate(WP) :
+				c = 'm' #('g' if (n == nc) else 'r')
+				ax.plot(x, y, 'o', c=c, markersize=4)
 
-		for (nc, pc) in enumerate(prob_clouds) :
-			m = max(pc.values())
-			for (e, p) in pc.items() :
-				(y, x) = zip(*[node_pos[i] for i in e])
-				c = ('g' if (ee[nc] == e) else 'r')
-				ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
+			for (nc, pc) in enumerate(prob_clouds) :
+				m = max(pc.values())
+				for (e, p) in pc.items() :
+					(y, x) = zip(*[node_pos[i] for i in e])
+					c = ('g' if (ee[nc] == e) else 'r')
+					ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
 
-		plt.draw()
+			plt.draw()
 
-		plt.show()
-		plt.pause(0.1)
+			plt.show()
+			plt.pause(0.5)
 
 	plt.ioff()
 	plt.show()
