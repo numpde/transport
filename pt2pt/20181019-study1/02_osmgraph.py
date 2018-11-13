@@ -233,10 +233,23 @@ def extract(region) :
 	for mode in ['WithoutNN', 'WithNN'] :
 
 		if (mode == 'WithoutNN') :
-			knn = None
+			main_component_knn = None
 		else :
-			print("II. Making the nearest-neighbor tree")
-			knn = graph.compute_knn(G, locs)
+			print("II. Making the nearest-neighbor tree for the main component...")
+
+			# Restrict to the largest weakly/strongly connected component
+			g = nx.subgraph(G, max(nx.weakly_connected_components(G), key=len)).copy()
+
+			# Note: Graph.copy() does not deep-copy container attributes
+			# https://networkx.github.io/documentation/latest/reference/classes/generated/networkx.Graph.copy.html
+
+			knn = graph.compute_knn(g, locs)
+
+			main_component_knn = {
+				'g' : g,
+				'node_ids' : knn['node_ids'],
+				'knn_tree' : knn['knn_tree'],
+			}
 
 		pickle.dump(
 			{
@@ -260,7 +273,7 @@ def extract(region) :
 				'rels' : rels,
 
 				# Nearest-neighbor tree
-				'knn' : knn,
+				'main_component_knn' : main_component_knn,
 
 				# The contents of this script
 				'script' : THIS,
