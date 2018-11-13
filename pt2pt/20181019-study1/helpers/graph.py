@@ -13,7 +13,7 @@ import sklearn.neighbors
 import geopy.distance
 import gpxpy, gpxpy.gpx
 from itertools import chain
-from sklearn.neighbors import BallTree
+from sklearn.neighbors import NearestNeighbors
 
 # Metric for (lat, lon) coordinates
 def geodist(a, b) :
@@ -65,8 +65,8 @@ def compute_knn(G : nx.DiGraph, locs, leaf_size=150):
 	(I, X) = (list(locs.keys()), list(locs.values()))
 
 	return {
-		'ID-vec': I,
-		'tree': sklearn.neighbors.BallTree(X, leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
+		'node_ids': I,
+		'knn_tree': sklearn.neighbors.BallTree(X, leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
 	}
 
 def foo() :
@@ -76,15 +76,14 @@ def foo() :
 	print("Loading OSM...")
 	OSM = pickle.load(open(osm_graph_file, 'rb'))
 
-	# Road network
-	G = OSM['G']
-
-	# Restrict to the largest weakly/strongly connected component
-	G = nx.subgraph(G, max(nx.weakly_connected_components(G), key=len))
+	# Road network (main graph component) with nearest-neighbor tree for the nodes
+	knn_tree : NearestNeighbors
+	(G, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
 
 	# Locations of the graph nodes
 	node_pos = OSM['locs']
 
+	# Free up some memory
 	del OSM
 
 	# Get some waypoints
@@ -105,25 +104,20 @@ def foo() :
 	# WP = WP[0:20]
 	# WP = WP[-15:-11]
 
-
 	#
 
 	print("Locating nearest edges to waypoints...")
 
-	# Nearest-nodes locator
-	KNN = compute_knn(G, node_pos, leaf_size=30)
-
-	print("(Got KNN)")
-
 	def nearest_nodes(q, k=10) :
 
-		knn: BallTree
-		(I, knn) = commons.inspect(('ID-vec', 'tree'))(KNN)
+		# Find nearest nodes
+		(dist, ind) = knn_tree.query(np.asarray(q).reshape(1, -1), k=k)
 
-		(dist, ind) = knn.query(np.asarray(q).reshape(1, -1), k=k)
+		# Get the in-graph node indices and flatten the arrays
+		(dist, ind) = (dist.reshape(-1), [knn_ids[i] for i in ind.reshape(-1)])
 
 		# Return a list of pairs (graph-node-id, distance-to-q) sorted by distance
-		return list(zip([I[i] for i in ind.reshape(-1)], dist.reshape(-1)))
+		return list(zip(ind, dist))
 
 	def nearest_edges(q, k=8) :
 		# Get a number of closest nodes
