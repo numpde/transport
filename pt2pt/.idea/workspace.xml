@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" afterDir="false" />
+    <list default="true" id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -14,18 +15,23 @@
     <session id="691266365">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="7" />
+          <entry key="project.closed" value="13" />
           <entry key="project.open.time.15" value="1" />
-          <entry key="project.open.time.19" value="1" />
+          <entry key="project.open.time.18" value="1" />
+          <entry key="project.open.time.19" value="2" />
           <entry key="project.open.time.20" value="2" />
-          <entry key="project.open.time.21" value="2" />
+          <entry key="project.open.time.21" value="3" />
           <entry key="project.open.time.22" value="1" />
+          <entry key="project.open.time.24" value="1" />
           <entry key="project.open.time.25" value="1" />
           <entry key="project.open.time.27" value="1" />
+          <entry key="project.open.time.30" value="2" />
+          <entry key="project.open.time.31" value="1" />
           <entry key="project.open.time.32" value="1" />
           <entry key="project.open.time.36" value="2" />
+          <entry key="project.open.time.37" value="1" />
           <entry key="project.open.time.4" value="1" />
-          <entry key="project.opened" value="13" />
+          <entry key="project.opened" value="21" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
@@ -33,8 +39,9 @@
           <entry key="htm" value="4" />
           <entry key="js" value="8" />
           <entry key="json" value="2" />
-          <entry key="py" value="61" />
-          <entry key="sh" value="3" />
+          <entry key="py" value="99" />
+          <entry key="sh" value="5" />
+          <entry key="txt" value="4" />
           <entry key="unversioned" value="2" />
         </counts>
       </usages-collector>
@@ -43,27 +50,28 @@
           <entry key="HTML" value="4" />
           <entry key="JSON" value="2" />
           <entry key="JavaScript" value="8" />
-          <entry key="PLAIN_TEXT" value="5" />
-          <entry key="Python" value="61" />
+          <entry key="PLAIN_TEXT" value="11" />
+          <entry key="Python" value="99" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="Python Console" value="1042" />
-          <entry key="dummy" value="28" />
+          <entry key="Python Console" value="3350" />
+          <entry key="dummy" value="35" />
           <entry key="htm" value="149" />
           <entry key="js" value="284" />
-          <entry key="py" value="70869" />
-          <entry key="sh" value="207" />
-          <entry key="txt" value="1842" />
+          <entry key="py" value="120320" />
+          <entry key="sh" value="756" />
+          <entry key="txt" value="3703" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
           <entry key="HTML" value="149" />
           <entry key="JavaScript" value="284" />
-          <entry key="PLAIN_TEXT" value="2077" />
-          <entry key="Python" value="71911" />
+          <entry key="PLAIN_TEXT" value="4494" />
+          <entry key="Python" value="123669" />
+          <entry key="RegExp" value="1" />
         </counts>
       </usages-collector>
     </session>
@@ -74,60 +82,66 @@
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="3696">
-              <caret line="175" column="62" selection-start-line="175" selection-start-column="8" selection-end-line="175" selection-end-column="62" />
+            <state relative-caret-position="22">
+              <caret line="233" column="8" selection-start-line="233" selection-start-column="8" selection-end-line="233" selection-end-column="8" />
               <folding>
-                <element signature="e#71#85#0" expanded="true" />
-                <marker date="1541246653568" expanded="true" signature="4035:4067" ph="..." />
+                <element signature="e#71#98#0" expanded="true" />
+                <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/03_osm_motc.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="432">
-              <caret line="93" column="17" selection-start-line="93" selection-start-column="17" selection-end-line="93" selection-end-column="17" />
-              <folding>
-                <element signature="e#71#85#0" expanded="true" />
-                <marker date="1541348940696" expanded="true" signature="1676:1686" ph="..." />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-4145">
-              <caret line="27" column="49" selection-start-line="27" selection-start-column="49" selection-end-line="27" selection-end-column="49" />
+            <state relative-caret-position="246">
+              <caret line="85" column="31" selection-start-line="85" selection-start-column="31" selection-end-line="85" selection-end-column="31" />
               <folding>
-                <element signature="e#52#66#0" expanded="true" />
+                <element signature="e#52#79#0" expanded="true" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/16_realtimevis.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="660">
-              <caret line="36" selection-start-line="36" selection-end-line="36" />
+            <state relative-caret-position="1298">
+              <caret line="61" column="34" selection-start-line="61" selection-start-column="34" selection-end-line="61" selection-end-column="34" />
               <folding>
-                <element signature="e#71#85#0" expanded="true" />
+                <element signature="e#100#111#0" expanded="true" />
+                <marker date="1542014859290" expanded="true" signature="1911:1914" ph="..." />
+                <marker date="1542014859290" expanded="true" signature="1975:1977" ph="..." />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/07_faketimetable.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2508">
-              <caret line="120" column="31" selection-start-line="120" selection-start-column="31" selection-end-line="120" selection-end-column="31" />
+            <state relative-caret-position="308">
+              <caret line="122" lean-forward="true" selection-start-line="122" selection-end-line="122" />
+              <folding>
+                <element signature="e#19#46#0" expanded="true" />
+                <marker date="1542127766637" expanded="true" signature="1572:1574" ph="..." />
+                <marker date="1542127766637" expanded="true" signature="1764:1766" ph="..." />
+                <marker date="1542127766637" expanded="true" signature="2131:2132" ph="..." />
+                <marker date="1542127766637" expanded="true" signature="4197:4200" ph="..." />
+                <marker date="1542127766637" expanded="true" signature="4358:4438" ph="..." />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="9680">
+              <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
               <folding>
                 <element signature="e#71#80#0" expanded="true" />
               </folding>
@@ -146,36 +160,36 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>routes_</find>
-      <find>logge</find>
-      <find>routesmeta</find>
-      <find>group_by_name</find>
-      <find>CACHE</find>
-      <find>force_fetch</find>
-      <find>distance-nice</find>
-      <find>wget</find>
+      <find>make</find>
+      <find>attrib</find>
+      <find>maps</find>
+      <find>.m</find>
+      <find>is_dis</find>
+      <find>parse_linestring</find>
+      <find>IFILE</find>
+      <find>all_di</find>
+      <find>inspect</find>
+      <find>SubRouteUID</find>
+      <find>OSM</find>
+      <find>nearest</find>
+      <find>sklea</find>
+      <find>geode</find>
+      <find>motc_routes</find>
       <find>geodes</find>
-      <find>geodsi</find>
-      <find />
-      <find>tb =</find>
-      <find>insert_</find>
-      <find>dest</find>
-      <find>glob</find>
-      <find>unique</find>
-      <find>open</find>
-      <find>json_load_zip</find>
-      <find>dump_zip</find>
-      <find>json_dump_zip</find>
-      <find>{dt}</find>
-      <find>dt=</find>
-      <find>logged</find>
-      <find>zipjson_dump</find>
-      <find>commons.zipjson_load</find>
-      <find>zipjson_load</find>
-      <find>is_di</find>
-      <find>distance</find>
-      <find>convenience</find>
-      <find>listify</find>
+      <find>geodesi</find>
+      <find>geodesic</find>
+      <find>knn</find>
+      <find>geodis</find>
+      <find>binary</find>
+      <find>Binarytree</find>
+      <find>subgrap</find>
+      <find>subg</find>
+      <find>122</find>
+      <find>curvat</find>
+      <find>concate</find>
+      <find>_cloud</find>
+      <find>edge_len</find>
+      <find>meter_from_angle</find>
     </findStrings>
     <replaceStrings>
       <replace />
@@ -213,24 +227,32 @@
         <option value="$PROJECT_DIR$/20181028-BusCal/buscal.py" />
         <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.sh" />
         <option value="$PROJECT_DIR$/20181019-study1/02_filterroads.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
         <option value="$PROJECT_DIR$/20181019-study1/13_realtimevis.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
         <option value="$PROJECT_DIR$/20181019-study1/04_getapiroutes.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/commons.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/16_realtimevis.py" />
         <option value="$PROJECT_DIR$/20181019-study1/03_osm_vs_motc.py" />
         <option value="$PROJECT_DIR$/20181019-study1/07_faketimetable.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/00_motc_download.sh" />
+        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
         <option value="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/commons.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/.credentials/UV/mapbox-token.txt" />
+        <option value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/ideas.txt" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/maps.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/00_motc_tools.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/commons.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/16_realtimevis.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/graph.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
       </list>
     </option>
   </component>
   <component name="ProjectFrameBounds" extendedState="6">
     <option name="x" value="77" />
     <option name="y" value="47" />
-    <option name="width" value="1193" />
-    <option name="height" value="957" />
+    <option name="width" value="1084" />
+    <option name="height" value="876" />
   </component>
   <component name="ProjectInspectionProfilesVisibleTreeState">
     <entry key="Project Default">
@@ -252,7 +274,9 @@
       </profile-state>
     </entry>
   </component>
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="1" id="Add" />
+  </component>
   <component name="ProjectView">
     <navigator proportions="" version="1">
       <foldersAlwaysOnTop value="true" />
@@ -274,57 +298,30 @@
               <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
               <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
               <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
+              <item name=".credentials" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
               <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
               <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="02" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="02" type="462c0819:PsiDirectoryNode" />
+              <item name=".credentials" type="462c0819:PsiDirectoryNode" />
               <item name="UV" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
               <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
               <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="12" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="12" type="462c0819:PsiDirectoryNode" />
-              <item name="Kaohsiung" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="13" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name="OUTPUT" type="462c0819:PsiDirectoryNode" />
-              <item name="13" type="462c0819:PsiDirectoryNode" />
-              <item name="Kaohsiung" type="462c0819:PsiDirectoryNode" />
+              <item name="helpers" type="462c0819:PsiDirectoryNode" />
             </path>
             <path>
               <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
               <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
               <item name="20181025-nextbus" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
+              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
+              <item name="20181028-BusCal" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
@@ -337,13 +334,15 @@
     <property name="settings.editor.selected.configurable" value="Errors" />
   </component>
   <component name="RecentsManager">
-    <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/20181019-study1" />
-    </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/20181019-study1/.credentials/UV" />
+      <recent name="$PROJECT_DIR$/20181019-study1/helpers" />
       <recent name="$PROJECT_DIR$/20181019-study1/OUTPUT" />
       <recent name="$PROJECT_DIR$/20181019-study1" />
       <recent name="$PROJECT_DIR$/20181019-study1/ORIGINALS/bus_routes" />
+    </key>
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/20181019-study1" />
     </key>
   </component>
   <component name="RunDashboard">
@@ -358,8 +357,8 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.03_osm_motc">
-    <configuration name="03_osm_motc" type="PythonConfigurationType" factoryName="Python" temporary="true">
+  <component name="RunManager" selected="Python.graph">
+    <configuration name="00_motc_tools" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -371,8 +370,8 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" />
-      <option name="PARAMETERS" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/00_motc_tools.py" />
+      <option name="PARAMETERS" value="ROUTE_IMG" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -380,7 +379,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="12_realtimelog" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="02_osmgraph" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -392,8 +391,8 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
-      <option name="PARAMETERS" value="VIS1" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
+      <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -422,7 +421,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="13_realtimevis" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="16_realtimevis" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -443,7 +442,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="commons" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="graph" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -451,11 +450,11 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1/helpers" />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/commons.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/helpers/graph.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -465,19 +464,19 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.12_realtimelog" />
-      <item itemvalue="Python.13_realtimevis" />
+      <item itemvalue="Python.16_realtimevis" />
       <item itemvalue="Python.13_physicalbus" />
-      <item itemvalue="Python.commons" />
-      <item itemvalue="Python.03_osm_motc" />
+      <item itemvalue="Python.00_motc_tools" />
+      <item itemvalue="Python.graph" />
+      <item itemvalue="Python.02_osmgraph" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.03_osm_motc" />
-        <item itemvalue="Python.13_realtimevis" />
+        <item itemvalue="Python.graph" />
+        <item itemvalue="Python.02_osmgraph" />
+        <item itemvalue="Python.00_motc_tools" />
+        <item itemvalue="Python.16_realtimevis" />
         <item itemvalue="Python.13_physicalbus" />
-        <item itemvalue="Python.commons" />
-        <item itemvalue="Python.12_realtimelog" />
       </list>
     </recent_temporary>
   </component>
@@ -789,7 +788,7 @@
     <option name="localTasksCounter" value="43" />
     <servers />
   </component>
-  <component name="TodoView">
+  <component name="TodoView" selected-index="4">
     <todo-panel id="selected-file">
       <is-autoscroll-to-source value="true" />
     </todo-panel>
@@ -800,21 +799,22 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="67" y="25" width="1213" height="999" extended-state="6" />
+    <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.49942464" weight="0.18235295" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info id="Favorites" order="2" sideWeight="0.50057536" side_tool="true" weight="0.18235295" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.7433832" visible="true" weight="0.26890758" />
+      <window_info id="Structure" order="1" side_tool="true" weight="0.24957983" />
+      <window_info id="Favorites" order="2" sideWeight="0.2566168" side_tool="true" weight="0.26890758" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32911393" />
-      <window_info anchor="bottom" id="Run" order="2" weight="0.36363637" />
+      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.36363637" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.44188723" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.32911393" />
       <window_info anchor="bottom" id="Version Control" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Event Log" order="8" side_tool="true" />
-      <window_info anchor="bottom" id="Terminal" order="9" weight="0.32911393" />
-      <window_info anchor="bottom" id="Python Console" order="10" weight="0.32911393" />
+      <window_info anchor="bottom" id="Python Console" order="9" weight="0.32911393" />
+      <window_info anchor="bottom" id="Terminal" order="10" weight="0.32911393" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
@@ -844,32 +844,32 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="FORCE_NON_EMPTY_COMMENT" value="true" />
-    <MESSAGE value="RA: Fix empty stop list issue" />
-    <MESSAGE value="RA: Large sleep time; JSON format info" />
-    <MESSAGE value="RA: Removes some redundancy in JSON real time log files" />
-    <MESSAGE value="RA: Update every 50sec" />
-    <MESSAGE value="RA: History visualization" />
-    <MESSAGE value="RA: Renamed from &quot;02_filterroads&quot;" />
-    <MESSAGE value="RA: Include compression" />
-    <MESSAGE value="RA: Subdir output by date" />
-    <MESSAGE value="RA: Zombie file" />
-    <MESSAGE value="RA: Introduced commons; compression removes time stamps" />
-    <MESSAGE value="RA: Rudimentary post-realtime visualization" />
-    <MESSAGE value="RA: Common methods" />
-    <MESSAGE value="RA: Group real-time info by bus plate, segment by route/direction" />
-    <MESSAGE value="RA: PyCharm settings -- turn off spellcheck" />
-    <MESSAGE value="RA: Correction in &quot;listify&quot;" />
-    <MESSAGE value="RA: Correction in segmentation" />
-    <MESSAGE value="RA: Include function for geo-distance" />
-    <MESSAGE value="RA: Finer handling of equal-GPSTime records" />
-    <MESSAGE value="RA: Fixed typo -- [] instead of ()" />
-    <MESSAGE value="RA: Non-decreasing timestamp check" />
-    <MESSAGE value="RA: For a phys bus, show trajectory and route stops" />
-    <MESSAGE value="RA: Parametric listify" />
-    <MESSAGE value="RA: Minor comments" />
-    <MESSAGE value="RA: Show all recorded runs of a given subroute" />
-    <MESSAGE value="RA: Code rearrangements, e.g. moved &quot;align&quot; to commons" />
-    <option name="LAST_COMMIT_MESSAGE" value="RA: Code rearrangements, e.g. moved &quot;align&quot; to commons" />
+    <MESSAGE value="RA: Plot more info, check of monotonicity" />
+    <MESSAGE value="RA: Handle arg of type 'set' in 'inspect'" />
+    <MESSAGE value=" RA: Enable &quot;retina&quot; by default" />
+    <MESSAGE value="RA: Minor changes" />
+    <MESSAGE value="RA: Produce images of routes" />
+    <MESSAGE value="RA: Route name label on plot" />
+    <MESSAGE value="RA: Making it work for TPE also..." />
+    <MESSAGE value="RA: Unclear what to do with set-valued arg in 'inspect'" />
+    <MESSAGE value="RA: Fixed colors problem" />
+    <MESSAGE value="RA: Fix missing shapes problem" />
+    <MESSAGE value="RA: Unified code for KHH and TPE" />
+    <MESSAGE value="RA: File to log ideas" />
+    <MESSAGE value="RA: Draft for map matching routine" />
+    <MESSAGE value="RA: Moved dist_to_segment to the &quot;graph&quot; helper module" />
+    <MESSAGE value="RA: Compute knn also" />
+    <MESSAGE value="RA: Draft for bus stop map matching" />
+    <MESSAGE value="RA: Moved compute_knn to the &quot;graph&quot; module" />
+    <MESSAGE value="RA: Mostly plotting refinements" />
+    <MESSAGE value="RA: Export knn of a subgraph only" />
+    <MESSAGE value="RA: Unpickle knn" />
+    <MESSAGE value="RA: Introducing detailed decision clusters" />
+    <MESSAGE value="RA: Corrections in &quot;detailed decision node cluster&quot;" />
+    <MESSAGE value="RA: Minor cleanup; switch on DDNC for larger turns" />
+    <MESSAGE value="RA: Filter only bus-accessible roads" />
+    <MESSAGE value="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;" />
+    <option name="LAST_COMMIT_MESSAGE" value="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -884,6 +884,12 @@
         <breakpoints-dialog />
       </breakpoints-dialog>
     </breakpoint-manager>
+    <watches-manager>
+      <configuration name="PythonConfigurationType">
+        <watch expression="G.in_edges(nbunch=nb)" />
+        <watch expression="G.out_edges(nbunch=nb)" />
+      </configuration>
+    </watches-manager>
   </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/02/UV/unversioned">
@@ -915,13 +921,6 @@
     <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/04/kaohsiung_bus_routes.js" />
     <entry file="file://$PROJECT_DIR$/20181025-nextbus/html/index.htm" />
     <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/05_nextbus.py" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/01_downloadmap.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-617">
-          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file:///usr/lib/python3.6/json/encoder.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="160">
@@ -939,13 +938,7 @@
     <entry file="file://$PROJECT_DIR$/20181028-BusCal/.credentials/UV/credentials.json">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/front/index.htm">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
-          <caret line="1" selection-end-line="1" />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/20181025-nextbus/front/index.htm" />
     <entry file="file://$PROJECT_DIR$/20181025-nextbus/main.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="90">
@@ -953,41 +946,13 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181028-BusCal/buscal.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="405">
-          <caret line="27" column="26" selection-start-line="27" selection-start-column="26" selection-end-line="27" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC/Kaohsiung/CityBusApi_Route/data.json">
+    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_Route/data.json">
       <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1890">
-          <caret line="126" column="126" selection-start-line="126" selection-start-column="126" selection-end-line="126" selection-end-column="126" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-8">
-          <caret line="89" selection-start-line="89" selection-end-line="89" />
-        </state>
-      </provider>
     </entry>
     <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/-1247971763/builtins.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="160">
           <caret line="278" column="4" selection-start-line="278" selection-start-column="4" selection-end-line="278" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="132">
-          <caret line="6" lean-forward="true" selection-start-line="6" selection-end-line="6" />
         </state>
       </provider>
     </entry>
@@ -998,20 +963,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/04_getapiroutes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2114">
-          <caret line="2" column="16" selection-start-line="2" selection-start-column="16" selection-end-line="2" selection-end-column="16" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/commons.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="343">
-          <caret line="28" lean-forward="true" selection-start-line="28" selection-end-line="28" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/10_transit.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="222">
@@ -1019,54 +970,195 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/07_faketimetable.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2508">
+          <caret line="120" column="31" selection-start-line="120" selection-start-column="31" selection-end-line="120" selection-end-column="31" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/01_downloadmap.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="102">
+          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="198">
+          <caret line="9" lean-forward="true" selection-end-line="172" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="176">
+          <caret line="29" column="35" selection-start-line="29" selection-start-column="35" selection-end-line="29" selection-end-column="35" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_StopOfRoute/readme.txt">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_Route/readme.txt">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181028-BusCal/buscal.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-673">
+          <caret line="27" column="26" selection-start-line="27" selection-start-column="26" selection-end-line="27" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_download.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="242">
+          <caret line="11" lean-forward="true" selection-start-line="11" selection-end-line="11" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/04_getapiroutes.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-2024">
+          <caret line="6" lean-forward="true" selection-start-line="6" selection-end-line="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/.credentials/UV/mapbox-token.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="90" selection-start-column="90" selection-end-column="90" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/lib/python3.6/urllib/request.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="174">
+          <caret line="649" selection-start-line="649" selection-end-line="649" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="3696">
-          <caret line="175" column="62" selection-start-line="175" selection-start-column="8" selection-end-line="175" selection-end-column="62" />
-          <folding>
-            <element signature="e#71#85#0" expanded="true" />
-            <marker date="1541246653568" expanded="true" signature="4035:4067" ph="..." />
-          </folding>
+        <state relative-caret-position="154">
+          <caret line="145" column="81" selection-start-line="145" selection-start-column="81" selection-end-line="145" selection-end-column="81" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/ideas.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="66">
+          <caret line="3" lean-forward="true" selection-start-line="3" selection-end-line="3" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/matplotlib/axes/_axes.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="166">
+          <caret line="4222" selection-start-line="4222" selection-end-line="4222" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/maps.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1642">
+          <caret line="4" column="21" selection-start-line="4" selection-start-column="21" selection-end-line="4" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/numpy/lib/shape_base.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="327">
+          <caret line="601" column="48" selection-start-line="601" selection-start-column="48" selection-end-line="601" selection-end-column="48" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/16_realtimevis.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="660">
-          <caret line="36" selection-start-line="36" selection-end-line="36" />
+        <state relative-caret-position="-2898">
+          <caret line="8" column="41" selection-start-line="8" selection-start-column="41" selection-end-line="8" selection-end-column="41" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/-1247971763/sklearn/neighbors/ball_tree.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="154">
+          <caret line="7" lean-forward="true" selection-start-line="7" selection-end-line="7" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1298">
+          <caret line="61" column="34" selection-start-line="61" selection-start-column="34" selection-end-line="61" selection-end-column="34" />
           <folding>
-            <element signature="e#71#85#0" expanded="true" />
+            <element signature="e#100#111#0" expanded="true" />
+            <marker date="1542014859290" expanded="true" signature="1911:1914" ph="..." />
+            <marker date="1542014859290" expanded="true" signature="1975:1977" ph="..." />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/07_faketimetable.py">
+    <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2508">
-          <caret line="120" column="31" selection-start-line="120" selection-start-column="31" selection-end-line="120" selection-end-column="31" />
+        <state relative-caret-position="9680">
+          <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
           <folding>
             <element signature="e#71#80#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/algorithms/shortest_paths/weighted.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-4145">
-          <caret line="27" column="49" selection-start-line="27" selection-start-column="49" selection-end-line="27" selection-end-column="49" />
-          <folding>
-            <element signature="e#52#66#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="174">
+          <caret line="830" selection-start-line="830" selection-end-line="830" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/03_osm_motc.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="432">
-          <caret line="93" column="17" selection-start-line="93" selection-start-column="17" selection-end-line="93" selection-end-column="17" />
+        <state relative-caret-position="22">
+          <caret line="56" selection-start-line="56" selection-end-line="59" selection-end-column="47" />
           <folding>
-            <element signature="e#71#85#0" expanded="true" />
-            <marker date="1541348940696" expanded="true" signature="1676:1686" ph="..." />
+            <element signature="e#71#98#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="22">
+          <caret line="233" column="8" selection-start-line="233" selection-start-column="8" selection-end-line="233" selection-end-column="8" />
+          <folding>
+            <element signature="e#71#98#0" expanded="true" />
+            <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="308">
+          <caret line="122" lean-forward="true" selection-start-line="122" selection-end-line="122" />
+          <folding>
+            <element signature="e#19#46#0" expanded="true" />
+            <marker date="1542127766637" expanded="true" signature="1572:1574" ph="..." />
+            <marker date="1542127766637" expanded="true" signature="1764:1766" ph="..." />
+            <marker date="1542127766637" expanded="true" signature="2131:2132" ph="..." />
+            <marker date="1542127766637" expanded="true" signature="4197:4200" ph="..." />
+            <marker date="1542127766637" expanded="true" signature="4358:4438" ph="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="246">
+          <caret line="85" column="31" selection-start-line="85" selection-start-column="31" selection-end-line="85" selection-end-column="31" />
+          <folding>
+            <element signature="e#52#79#0" expanded="true" />
           </folding>
         </state>
       </provider>
