@@ -80,6 +80,13 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		filter_tags = ['highway']
 		if not any((t in w.tags) for t in filter_tags) : return
 
+		if 'highway' in w.tags :
+			t = w.tags['highway']
+			# https://wiki.openstreetmap.org/wiki/Key:highway
+			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified"]
+			highway_links = ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
+			if not (t in (highway_roads + highway_links)) : return
+
 		wtags = { t.k : t.v for t in w.tags }
 		self.way_tags[w.id] = wtags
 
