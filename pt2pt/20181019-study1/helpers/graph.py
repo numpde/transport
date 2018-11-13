@@ -231,6 +231,7 @@ def foo() :
 		for _ in range(23) :
 			if not rcto : break
 
+
 			make_ddnc = set()
 
 			try :
@@ -305,60 +306,78 @@ def foo() :
 						rcto.remove(nc)
 						break
 
+
 					# Did we get any improvement in the criteria?
 
-					def crit(md, tl, tc) : return ((md * 20) + tl) + (tc * 3)
+					def crit(md, tl) : return ((md * 20) + tl)
 
 					# Relative improvement new/old
-					rel = crit(miss_dist, total_len, total_cur) / crit(old_miss_dist, old_total_len, old_total_cur)
+					if not (old_miss_dist and old_total_len) : continue
+					rel = crit(miss_dist, total_len) / crit(old_miss_dist, old_total_len)
 
 					# Re-weight the current edge in its cloud
 					prob_clouds[nc][ce] *= (1.2 if (rel < 1) else 0.8)
 
-
-				# Old nodes
-				for nb in make_ddnc :
-					# Node cluster. Its nodes are G's edges
-					H = nx.DiGraph()
-					# Incoming edges
-					for ie in G.in_edges(nbunch=nb) :
-						# Outgoing edges
-						for oe in G.out_edges(nbunch=nb):
-							# Node IDs of those edges
-							(na, nb1, nb2, nc) = (ie + oe)
-							assert((nb1 == nb) and (nb2 == nb))
-							# Geolocations
-							(a, b, c) = (node_pos[na], node_pos[nb], node_pos[nc])
-							# TODO appropriate scaling of 'len' here
-							# New hyperedge between hypernodes
-							H.add_edge((na, nb), (nb, nc), len=abs(angle(a, b, c)))
-							# Geolocation of cluster hypernodes
-							node_pos[(na, nb)] = b
-							node_pos[(nb, nc)] = b
-
-					G = nx.compose(G, H)
-
-					for e in H.nodes() :
-						E = (e[0], e)
-						G.add_edge(*E, len=edge_length[e])
-						edge_length[E] = edge_length[e]
-
-					G.remove_edges_from(H.nodes())
-
-					for e in H.nodes() :
-						E = (e[0], e)
-						for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
-							if not (e in pc.keys()) : continue
-							prob_clouds[nc][E] = prob_clouds[nc][e]
-							dist_clouds[nc][E] = dist_clouds[nc][e]
-							del prob_clouds[nc][e]
-							del dist_clouds[nc][e]
-
-			except nx.NetworkXNoPath as e :
-				#prob_clouds[nc][ce] *= 0.9
+			except nx.NetworkXNoPath as e:
+				# prob_clouds[nc][ce] *= 0.9
 				print("No path error", prob_clouds[nc])
-			except Exception as e :
-				print(e)
+
+
+			for nb in make_ddnc :
+				print("DDNC node", nb)
+
+				# The following procedure may invalidate hashed shortest paths
+				sps_way = dict()
+
+				# Node cluster. Its nodes are G's edges
+				H = nx.DiGraph()
+				# Incoming edges
+				for ie in G.in_edges(nbunch=nb) :
+					# Outgoing edges
+					for oe in G.out_edges(nbunch=nb) :
+						# Node IDs of those edges
+						(na, nb1, nb2, nc) = (ie + oe)
+						assert((nb1 == nb) and (nb2 == nb))
+						# Geolocations
+						(a, b, c) = (node_pos[na], node_pos[nb], node_pos[nc])
+						# TODO appropriate scaling of 'len' here
+						# New hyperedge between hypernodes
+						H.add_edge((na, nb), (nb, nc), len=abs(angle(a, b, c)))
+						# Geolocation of cluster hypernodes
+						node_pos[(na, nb)] = b
+						node_pos[(nb, nc)] = b
+
+				# Interface between G and H
+				e2E = dict(
+					[(ie, (ie[0], ie)) for ie in G.in_edges(nbunch=nb)]
+					+
+					[(oe, (oe, oe[1])) for oe in G.out_edges(nbunch=nb)]
+				)
+
+				# Remove node and incident edges
+				G.remove_node(nb)
+
+				# Combine G and H (this is faster than nx.union or nx.combine)
+				G.add_nodes_from(H.nodes)
+				G.add_weighted_edges_from(H.edges.data('len'), weight='len')
+
+				for (a, b, d) in H.edges.data('len') :
+					edge_length[(a, b)] = d
+
+				# Interface
+				for (e, E) in e2E.items() :
+					edge_length[E] = edge_length[e]
+					G.add_edge(*E, len=edge_length[e])
+
+				for (e, E) in e2E.items() :
+					if e in ee : ee[ee.index(e)] = E
+					for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
+						if not (e in pc.keys()) : continue
+						prob_clouds[nc][E] = prob_clouds[nc][e]
+						dist_clouds[nc][E] = dist_clouds[nc][e]
+						del prob_clouds[nc][e]
+						del dist_clouds[nc][e]
+
 
 		# PLOT
 
