@@ -57,8 +57,9 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 
 	return min((da, s), (db, t))
 
-# signed angle (p, q) /_ (q, r) in degrees,
+# Signed angle (p, q) /_ (q, r) in degrees,
 # where p, q, r are (lat, lon) coordinates
+# https://stackoverflow.com/a/16180796/3609568
 def angle(p, q, r) :
 	# Note: the 'plus' is a concatenation of tuples here
 	pq = angles.bear(*map(angles.d2r, p + q))
@@ -105,8 +106,7 @@ def foo() :
 	)
 
 	# Waypoints
-	route_id = 'KHH1221'
-	direction = 0
+	(route_id, direction) = ('KHH1221', 0)
 	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
@@ -276,20 +276,12 @@ def foo() :
 					# Convert node IDs to coordinates
 					geo_path = [node_pos[i] for i in path]
 
-					# Criterion 3: Accumulated turn angle
-					# https://rosettacode.org/wiki/Angle_difference_between_two_bearings#Python
-					# https://stackoverflow.com/a/16180796/3609568
-					# http://gmc.yoyogames.com/index.php?showtopic=532420
-					total_cur = 0
+					# Criterion 3: Turns
 					for (a, b, c, bi) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
 						# Skip nodes in "detailed decision node cluster"s
 						if type(bi) is tuple : continue
-
-						turn = abs(angle(a, b, c))
-						total_cur += turn
-
 						# If there is a significant turn, insert a "detailed decision node cluster"
-						if (turn >= 30) : make_ddnc.add(bi)
+						if (abs(angle(a, b, c)) >= 60) : make_ddnc.add(bi)
 
 					if make_ddnc :
 						print("DDNC!")
