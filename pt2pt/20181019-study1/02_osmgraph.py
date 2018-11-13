@@ -83,7 +83,8 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		if 'highway' in w.tags :
 			t = w.tags['highway']
 			# https://wiki.openstreetmap.org/wiki/Key:highway
-			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified"]
+			# Exclude "service"
+			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential"]
 			highway_links = ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
 			if not (t in (highway_roads + highway_links)) : return
 
