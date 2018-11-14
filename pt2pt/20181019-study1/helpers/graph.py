@@ -4,10 +4,12 @@
 from helpers import commons
 from helpers import maps
 
+import datetime as dt
 import angles
 import networkx as nx
 import numpy as np
 import math
+import heapq
 import pickle
 import random
 import sklearn.neighbors
@@ -16,15 +18,35 @@ import gpxpy, gpxpy.gpx
 from itertools import chain, groupby, product
 from sklearn.neighbors import NearestNeighbors
 
-# Metric for (lat, lon) coordinates
 def geodist(a, b) :
+	""" Metric for (lat, lon) coordinates """
 	return geopy.distance.geodesic(a, b).m
 
-# th is accuracy tolerance in meters
-# TH is care-not radius for far-away segments
-# Returns a pair (distance, lambda) where
-# 0 <= lambda <= 1 is the relative location of the closest point
-def dist_to_segment(x, ab, th=5, TH=1000) :
+
+# Signed "turning" angle (p, q) to (q, r) in degrees,
+# where p, q, r are (lat, lon) coordinates
+# https://stackoverflow.com/a/16180796/3609568
+def angle(p, q, r) :
+	# Note: the +plus+ is a concatenation of tuples here
+	pq = angles.bear(*map(angles.d2r, p + q))
+	qr = angles.bear(*map(angles.d2r, q + r))
+	return (((angles.r2d(pq - qr) + 540) % 360) - 180)
+
+
+def dist_to_segment(x, ab, rel_acc=0.05) :
+	""" Compute the geo-distance of a point to a segment.
+	
+	Args:
+		x: geo-coordinates of the point as a pair (lat, lon).
+		ab: a pair (a, b) where a and b are endpoints of the segment.
+		rel_acc: approximate relative accuracy (default 0.05).
+
+	Returns:
+		A pair (distance, t) with the approximate distance
+			and a coordinate 0 <= t <= 1 of the closest point
+			where t = 0 and t = 1 correspond to a and b, respectively.
+	"""
+
 	# Endpoints of the segment
 	(a, b) = ab
 
@@ -34,14 +56,9 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 	# Distances to the endpoints
 	(da, db) = (geodist(x, a), geodist(x, b))
 
-	while True :
+	while (geodist(a, b) > rel_acc * min(da, db)) :
 
-		# Relative accuracy of about 5% achieved?
-		if (geodist(a, b) < 0.05 * min(da, db)) :
-			break
-			#(th < abs(da - db)) and (min(da, db) < TH)
-
-		# Note: potentially problematic at lon~180
+		# Note: problematic at lon~180
 		# Approximation of the midpoint (m is not necessarily on a geodesic?)
 		m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
 
@@ -57,19 +74,242 @@ def dist_to_segment(x, ab, th=5, TH=1000) :
 
 	return min((da, s), (db, t))
 
-# Signed "turning" angle (p, q) to (q, r) in degrees,
-# where p, q, r are (lat, lon) coordinates
-# https://stackoverflow.com/a/16180796/3609568
-def angle(p, q, r) :
-	# Note: the 'plus' is a concatenation of tuples here
-	pq = angles.bear(*map(angles.d2r, p + q))
-	qr = angles.bear(*map(angles.d2r, q + r))
-	return (((angles.r2d(pq - qr) + 540) % 360) - 180)
 
-def compute_knn(G : nx.DiGraph, locs, leaf_size=150):
+def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, callback: callable) :
+	""" Find a plausible bus route that visits the waypoints.
+
+	Returns:
+		A dictionary with the following keys
+			- 'path' is a list of nodes of the graph g, as an estimate of the route
+			- 'geo_path' is a list of (lat, lon) coordinates of those nodes
+			- 'edge_clouds' is a list of edge clouds, one for each waypoint
+			- 'active_edges' is a list of currently selected edges, one for each edge cloud
+	"""
+
+	# A turn of 90 degrees takes on average 25 seconds (wild guess)
+	# Assume an average bus speed of 6 m/s to compute equivalent distance in meters
+	# Penalize U-turns equivalently to a 200m run
+	# Note: could distinguish left and right turns here
+	meter_from_angle = (lambda a : (((25 * abs(a) / 90) * 6) if (abs(a) < 150) else 200))
+	# Assume an average bus speed of 6 m/s
+	crittime_from_meter_bus = (lambda d : (d / 6))
+	# Convert the distance busstop-road to bus-time equivalent
+	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
+
+	# Optimization criterion
+	def opticrit(indi):
+		return crittime_from_meter_stop(indi['miss']) + crittime_from_meter_bus(indi['dist'])
+
+	# Threshold turn for introducing "Detailed decision node clusters"
+	ddnc_threshold = 60
+
+	# Acceptance threshold for an edge in an edge cloud
+	# (where 1 means "complete")
+	acceptance_threshold = 0.98
+
+	# Copies of objects that will/could get modified
+	g = g
+	node_pos = node_pos
+
+	# Mark the original nodes as basenodes
+	for n in g.nodes : g.nodes[n]['basenode'] = n
+
+	# Locate k directed edges nearest to a point q
+	def nearest_edges(q, k=10) :
+		# Get some closest nodes first
+		nn = list(dict(knn(q, k=2*(k+5))).keys())
+		# Get their incident edges
+		ee = g.edges(nbunch=nn)
+		# Append reverse edges
+		ee = set(list(ee) + [(b, a) for (a, b) in ee if g.has_edge(b, a)])
+		# Attach distance from q
+		ee = [
+			(e, dist_to_segment(q, (node_pos[e[0]], node_pos[e[1]]))[0])
+			for e in ee
+		]
+		# Get the closest edges
+		ee = list(heapq.nsmallest(k, ee, key=(lambda ed : ed[1])))
+
+		return ee
+
+	# A cloud of candidate edges for each waypoint
+	dist_clouds = [dict(nearest_edges(wp)) for wp in waypoints]
+
+	# Edge clouds containing relative suitability of edges for the optimal solution
+	prob_clouds = [
+		{
+			# Initial likelihood inversely proportional to the distance to the waypoint
+			e : (1 / (1 + d))
+			for (e, d) in dc.items()
+		}
+		for dc in dist_clouds
+	]
+
+	# Intermediate edges -- random initial condition
+	seledges = [random.choices(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
+
+	# Partial shortest path cache, keyed by tuples (start-node, end-node)
+	sps_way = dict()
+
+	# Route quality indicators
+	indi = dict()
+
+	# Remaining edge clouds to optimize (index into prob_clouds)
+	recto = list(range(len(seledges)))
+
+	# Dictionary to pass to the callback function
+	result = { 'status' : 'init' }
+
+	# Report current status
+	callback(result)
+
+	# Replace node by "Detailed decision node clusters"
+	def make_ddnc(nb) :
+
+		# Incoming and outgoing edges
+		iedges = list(g.in_edges(nbunch=nb))
+		oedges = list(g.out_edges(nbunch=nb))
+
+		# Make the cluster
+		for (ie, oe) in product(iedges, oedges):
+			# New hyperedge between (new) hypernodes
+			g.add_edge(ie, oe, len=meter_from_angle(angle(node_pos[ie[0]], node_pos[nb], node_pos[oe[1]])))
+			# Refer to the basenode
+			(g.nodes[ie]['basenode'], g.nodes[oe]['basenode']) = [g.nodes[nb]['basenode']] * 2
+			# Geolocation of cluster hypernodes
+			(node_pos[ie], node_pos[oe]) = [node_pos[nb]] * 2
+
+		# Interface edges (old, new)
+		e2E = dict([(ie, (ie[0], ie)) for ie in iedges] + [(oe, (oe, oe[1])) for oe in oedges])
+
+		# Replace the interface edges, keeping the edge length
+		for (e, E) in e2E.items(): g.add_edge(*E, len=g.get_edge_data(*e)['len'])
+
+		# Remove old node and incident edges
+		g.remove_node(nb)
+
+		# Now fix the caches
+
+		# Remove invalidated shortest paths
+		for (ab, way) in list(sps_way.items()) :
+			if b in way :
+				sps_way.pop(ab)
+
+		for (e, E) in e2E.items():
+
+			# Currently selected edges: replace e by E
+			while e in seledges :
+				seledges[seledges.index(e)] = E
+
+			# Edge clouds: replace key e -> E
+			for (nc, _) in enumerate(zip(prob_clouds, dist_clouds)):
+				try:
+					dist_clouds[nc][E] = dist_clouds[nc].pop(e)
+					prob_clouds[nc][E] = prob_clouds[nc].pop(e)
+				except KeyError:
+					pass
+
+	# Optimization loop
+	while recto :
+
+		# Choose a random edge cloud, preferably the "least solved" one
+		# nc = number of the edge cloud
+		nc = random.choices(recto, weights=[(lambda v : (1 - max(v) / sum(v)))(prob_clouds[nc].values()) for nc in recto], k=1).pop()
+
+		#print(min(max(pc.values()) / sum(pc.values()) for pc in prob_clouds), recto)
+
+		# Spend a few rounds on the same edge cloud
+		while True :
+
+			# Cloud edges with weights w/o the currently selected edge
+			(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
+
+			# Choose a candidate edge from the cloud (w/o the currently selected edge)
+			seledges[nc] = random.choices(ce, weights=cw, k=1).pop()
+
+			# Precompute shortest path for each gap
+			for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
+				if (a, b) not in sps_way:
+					try :
+						sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='len')
+					except nx.NetworkXNoPath :
+						raise
+
+			path = [seledges[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(seledges, seledges[1:]))) + [seledges[-1][-1]]
+
+			# Convert node IDs to (lat, lon) coordinates
+			geo_path = [node_pos[i] for i in path]
+
+			# Undo "Detailed decision node cluster"s for the user
+			origpath = [g.nodes[n]['basenode'] for n in path]
+
+
+			# How certain we are about about the currently selected edge
+			cloud_certainty = prob_clouds[nc][seledges[nc]] / sum(prob_clouds[nc].values())
+
+			if (cloud_certainty >= acceptance_threshold) :
+				# Unschedule this cloud from further optimization
+				recto.remove(nc)
+				break
+
+			if (cloud_certainty >= 0.3) :
+
+				# Nodes to be replaced by "detailed decision node clusters"
+				def get_cand_ddnc() :
+					for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
+						# Check if the node is original and the turn is significant
+						if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
+							yield b
+
+				# Retain only the nodes influenced by the currently selected edge
+				cand_ddnc = set(get_cand_ddnc()) & set(chain.from_iterable(
+					sps_way[(e[1], f[0])]
+					for (e, f) in zip(seledges, seledges[1:]) if (seledges[nc] in [e, f])
+				))
+
+				if cand_ddnc :
+					# Introduce DDNC
+					for b in cand_ddnc : make_ddnc(b)
+					# Continue optimizing the current cloud
+					# without updating the indicators
+					continue
+
+			# Previous value of the quality indicators
+			old_indi = indi.copy()
+			# Indicator 1: Sum of distances of the selected edges to waypoints
+			indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
+			# Indicator 2: The total length of the path
+			indi['dist'] = sum(g.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
+			# TODO: check that all edges have 'len' in the beginning
+
+			# Re-weight the current edge in its cloud
+			if not old_indi : continue
+			prob_clouds[nc][seledges[nc]] *= (2 if (opticrit(indi) < opticrit(old_indi)) else 0.5)
+
+			# Leave this cloud
+			if (random.random() < cloud_certainty) :
+				break
+
+		# Callback
+
+		result['status'] = 'opti'
+		result['path'] = origpath
+		result['geo_path'] = geo_path
+		result['edge_clouds'] = prob_clouds
+		result['active_edges'] = seledges
+
+		callback(result)
+
+	result['status'] = 'done'
+	callback(result)
+
+	return result
+
+
+def compute_knn(G: nx.DiGraph, locs, leaf_size=150):
 
 	# Only care about the OSM nodes that are in the road network graph
-	locs = { i: locs[i] for i in G.nodes() }
+	locs = {i: locs[i] for i in G.nodes()}
 
 	(I, X) = (list(locs.keys()), list(locs.values()))
 
@@ -77,6 +317,7 @@ def compute_knn(G : nx.DiGraph, locs, leaf_size=150):
 		'node_ids': I,
 		'knn_tree': sklearn.neighbors.BallTree(X, leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
 	}
+
 
 def foo() :
 
@@ -89,16 +330,20 @@ def foo() :
 	print("Loading OSM...")
 	OSM = pickle.load(open(osm_graph_file, 'rb'))
 
+	print("Building the KNN tree...")
+
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
-	G : nx.DiGraph
+	g : nx.DiGraph
 	knn_tree : NearestNeighbors
-	(G, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
+	(g, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
 
 	# Locations of the graph nodes
 	node_pos = OSM['locs']
 
-	# Free up some memory
+	# Free up memory
 	del OSM
+
+	#
 
 	# Get some waypoints
 	routes_file = "../OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_StopOfRoute.json"
@@ -116,18 +361,9 @@ def foo() :
 	# (route_id, direction) = ('KHH87', 1)
 	# (route_id, direction) = ('KHH121', 1)
 	(route_id, direction) = ('KHH11', 1)
-	WP = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
-
-	#print(list(map(commons.inspect('StopName'), motc_routes['KHH122']['Stops'][0])))
-
-	# DEBUG
-	# WP = WP[0:3]
-	# WP = WP[0:20]
-	# WP = WP[-15:-11]
+	waypoints = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#
-
-	print("Locating nearest edges to waypoints...")
 
 	def nearest_nodes(q, k=10) :
 
@@ -137,277 +373,93 @@ def foo() :
 		# Get the in-graph node indices and flatten the arrays
 		(dist, ind) = (dist.reshape(-1), [knn_ids[i] for i in ind.reshape(-1)])
 
-		# Return a list of pairs (graph-node-id, distance-to-q) sorted by distance
+		# Return pairs (graph-node-id, distance-to-q) sorted by distance
 		return list(zip(ind, dist))
-
-	def nearest_edges(q, k=10) :
-		# Get a number of closest nodes
-		nn = [n for (n, d) in nearest_nodes(q, k=2*k+20)]
-		# Get their incident edges
-		ee = list(G.edges(nbunch=nn))
-		# Append reverse edges
-		ee = list(set(ee + [(b, a) for (a, b) in ee if G.has_edge(b, a)]))
-		# Attach distance to q
-		ee = [
-			(e, dist_to_segment(q, (node_pos[e[0]], node_pos[e[1]]))[0])
-			for e in ee
-		]
-		# Sort by distance
-		ee = sorted(ee, key=(lambda ed : ed[1]))
-		# Get the closest ones
-		ee = ee[0:k]
-		return ee
 
 	# TODO: abort if nearest edges are too far
 
-	# A cloud of edges for each waypoint
-	dist_clouds = [dict(nearest_edges(wp)) for wp in WP]
+	try :
+		# Plotting business
 
-	print("Connecting clouds...")
+		import matplotlib.pyplot as plt
 
-	# Edge clouds containing relative likelihood/suitability of edges for the optimal solution
-	prob_clouds = [
-		{
-			# Initial likelihood inversely proportional to the distance to the waypoint
-			e : (1 / (1 + d))
-			for (e, d) in cloud.items()
-		}
-		for cloud in dist_clouds
-	]
+		fig : plt.Figure
+		ax : plt.Axes
+		(fig, ax) = plt.subplots()
 
-	# Intermediate edges -- random initial condition
-	ee = [random.choices(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
+		for (n, (y, x)) in enumerate(waypoints):
+			ax.plot(x, y, 'bo')
 
-	# Remaining clouds to optimize (index into prob_clouds)
-	rcto = list(range(len(ee)))
+		# Get the dimensions of the plot (again)
+		(left, right, bottom, top) = ax.axis()
 
-	# Quality markers
-	(miss_dist, total_len) = (None, None)
+		# Compute a nicer aspect ratio if it is too narrow
+		(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
+		if (w < h / phi) : (left, right) = (((left + right) / 2 + s * h / phi / 2) for s in (-1, +1))
+		if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + s * w / phi / 2) for s in (-1, +1))
 
-	# Partial shortest path cache, keyed by tuples (start-node, end-node)
-	sps_way = dict()
+		# Set new dimensions
+		ax.axis([left, right, bottom, top])
+		ax.autoscale(enable=False)
 
+		# Download the background map
+		mapi = maps.get_map_by_bbox((left, bottom, right, top), token=mapbox_token)
 
-	# Plotting business
-
-	import matplotlib.pyplot as plt
-
-	fig : plt.Figure
-	ax : plt.Axes
-	(fig, ax) = plt.subplots()
-
-	for (n, (y, x)) in enumerate(WP):
-		ax.plot(x, y, 'bo')
-
-	# Get the dimensions of the plot (again)
-	(left, right, bottom, top) = ax.axis()
-
-	# Compute a nicer aspect ratio if it is too narrow
-	(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
-	if (w < h / phi) : (left, right) = (((left + right) / 2 + s * h / phi / 2) for s in (-1, +1))
-	if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + s * w / phi / 2) for s in (-1, +1))
-
-	# Set new dimensions
-	ax.axis([left, right, bottom, top])
-
-	# Bounding box for the map
-	bbox = (left, bottom, right, top)
-
-	ax.autoscale(enable=False)
-
-	# Download the background map
-	mapi = maps.get_map_by_bbox(bbox, token=mapbox_token)
-
-	plt.ion()
-	plt.show()
+		plt.ion()
+		plt.show()
+	except :
+		raise
 
 
-	# A turn of 90 degrees takes on average 25 seconds (wild guess)
-	# Assume an average bus speed of 6 m/s to compute equivalent distance in meters
-	# Penalize U-turns equivalently to a 200m run
-	# Note: could distinguish left and right turns here
-	meter_from_angle = (lambda a : (((25 * abs(a) / 90) * 6) if (abs(a) < 150) else 200))
-	# Assume an average bus speed of 6 m/s
-	crittime_from_meter_bus = (lambda d : (d / 6))
-	# Convert the distance busstop-road to bus-time equivalent
-	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
+	def mm_callback(result) :
 
-	# Optimization criterion
-	def opticrit(miss_dist, total_len):
-		return crittime_from_meter_stop(miss_dist) + crittime_from_meter_bus(total_len)
+		if (result['status'] == "init") :
+			return
 
-	# Threshold turn for introducing "Detailed decision node clusters"
-	ddnc_threshold = 60
-
-	# Acceptance threshold for an edge in an edge cloud
-	# (where certainty_level = 1 means complete certainty)
-	certainty_level = 0.98
-
-	# "Detailed decision node cluster" interface edge pairs (old, new)
-	unmake_ddnc = []
-
-	# Optimization loop
-	while rcto :
-
-		for _ in range(23) :
-			if not rcto : break
-
-			# Nodes to be replaced by "detailed decision node clusters"
-			make_ddnc = set()
-
-			try :
-
-				# Choose a random edge cloud
-				# nc = number of the edge cloud
-				nc = random.choice(rcto)
-
-				# Spend a few rounds on the same edge cloud
-				for _ in range(10) :
-
-					# pc = edge weights in this cloud (modified below)
-					pc = prob_clouds[nc]
-
-					# Cloud edges with weights
-					(ec, cw) = map(list, (pc.keys(), pc.values()))
-					# Exclude the currently selected edge
-					(ec, cw) = zip(*[(e, p) for (e, p) in zip(ec, cw) if (e != ee[nc])])
-
-					# Choose a candidate edge from the cloud (w/o the currently selected edge)
-					ee[nc] = random.choices(ec, weights=cw, k=1).pop()
-
-					# Precompute shortest path for each gap
-					for ((_, a), (b, _)) in zip(ee, ee[1:]) :
-						if (a, b) not in sps_way:
-							sps_way[(a, b)] = nx.shortest_path(G, source=a, target=b, weight='len')
-
-					# Previous metrics
-					(old_miss_dist, old_total_len) = (miss_dist, total_len)
-
-					# Criterion 1: Sum of distances of the selected edges to waypoints
-					miss_dist = sum(dc[e] for (e, dc) in zip(ee, dist_clouds))
-
-					# Criterion 2: The total length of the path
-					path = [ee[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(ee, ee[1:]))) + [ee[-1][-1]]
-					total_len = sum(G.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
-
-					# Convert node IDs to (lat, lon) coordinates
-					geo_path = [node_pos[i] for i in path]
-
-					# Criterion 3: Turns
-					for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
-						# Skip nodes that are already part of a "detailed decision node cluster"
-						if type(b) is tuple : continue
-						# Upon a significant turn, schedule creation of a "detailed decision node cluster"
-						if (abs(angle(p, q, r)) >= ddnc_threshold) : make_ddnc.add(b)
-
-					#print("miss dist: {}, total len: {}".format(miss_dist, total_len))
-
-					# Detailed decision node clusters scheduled
-					if make_ddnc : break
-
-					# Nothing to compare to in the first round
-					if not (old_miss_dist and old_total_len) : continue
-
-					# Consider this cloud "solved"?
-					if (prob_clouds[nc][ee[nc]] >= certainty_level * sum(prob_clouds[nc].values())) :
-						# Unschedule this cloud from further optimization
-						rcto.remove(nc)
-						break
-
-					# Relative improvement new/old
-					rel = opticrit(miss_dist, total_len) / opticrit(old_miss_dist, old_total_len)
-
-					# Re-weight the current edge in its cloud
-					prob_clouds[nc][ee[nc]] *= (2 if (rel < 1) else 0.5)
-
-			except nx.NetworkXNoPath :
-				raise
-
-
-			# Replace selected nodes by "Detail decision node clusters"
-			for nb in make_ddnc :
-
-				# Incoming and outgoing edges
-				iedges = list(G.in_edges(nbunch=nb))
-				oedges = list(G.out_edges(nbunch=nb))
-
-				# Make the cluster
-				for (ie, oe) in product(iedges, oedges) :
-					# New hyperedge between (new) hypernodes
-					G.add_edge(ie, oe, len=meter_from_angle(angle(node_pos[ie[0]], node_pos[nb], node_pos[oe[1]])))
-					# Geolocation of cluster hypernodes
-					(node_pos[ie], node_pos[oe]) = [node_pos[nb]] * 2
-
-				# Interface edges (old, new)
-				e2E = dict( [(ie, (ie[0], ie)) for ie in iedges] + [(oe, (oe, oe[1])) for oe in oedges] )
-
-				# Replace the interface edges, keeping the edge length
-				for (e, E) in e2E.items() : G.add_edge(*E, len=G.get_edge_data(*e)['len'])
-
-				# Remove old node and incident edges
-				G.remove_node(nb)
-
-				# To undo this process, record the interface edges
-				unmake_ddnc.append(e2E)
-
-				# Now fix the caches
-
-				# Invalidated shortest paths
-				sps_way = {ab: way for (ab, way) in sps_way.items() if not (nb in way)}
-
-				for (e, E) in e2E.items():
-
-					# Currently selected edges: replace e by E
-					ee = [{e: E}.get(f, f) for f in ee]
-
-					# Edge clouds: replace key e -> E
-					for (nc, _) in enumerate(zip(prob_clouds, dist_clouds)) :
-						try :
-							dist_clouds[nc][E] = dist_clouds[nc].pop(e)
-							prob_clouds[nc][E] = prob_clouds[nc].pop(e)
-						except KeyError :
-							pass
-
-
-		# PLOT
+		if (result['status'] == "opti") :
+			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
+				return
 
 		# Clear the axes
 		ax.cla()
 
 		# Apply the background map
 		ax.axis((left, right, bottom, top))
-		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
+		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='none', zorder=-100)
 
-		if geo_path :
-			(y, x) = zip(*geo_path)
-			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
+		(y, x) = zip(*result['geo_path'])
+		ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-		for (n, (y, x)) in enumerate(WP) :
+		for (n, (y, x)) in enumerate(waypoints) :
 			c = 'm'
 			ax.plot(x, y, 'o', c=c, markersize=4)
 
-		for (nc, pc) in enumerate(prob_clouds) :
+		for (nc, pc) in enumerate(result['edge_clouds']) :
 			m = max(pc.values())
 			for (e, p) in pc.items() :
 				(y, x) = zip(*[node_pos[i] for i in e])
-				c = ('g' if (ee[nc] == e) else 'r')
+				c = ('g' if (result['active_edges'][nc] == e) else 'r')
 				ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
 
-		plt.draw()
+		#plt.draw()
 
 		#plt.show()
-		plt.pause(0.5)
+		plt.pause(0.1)
+
+		# Next figure update
+		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
+
+
+	print("Connecting clouds...")
+
+	result = mapmatch(waypoints, g, node_pos, nearest_nodes, mm_callback)
 
 	print("Finished")
 
 	plt.ioff()
 	plt.show()
 
-	# # Note: this invalidates certain caches
-	# while unmake_ddnc :
-	# 	n = unmake_ddnc.pop()
-	# 	G.remove_node(n)
-	# 	G.add_edge(n)
+	return
 
 	# GPX
 
@@ -419,7 +471,7 @@ def foo() :
 
 		gpx = gpxpy.gpx.GPX()
 
-		for (lat, lon) in WP :
+		for (lat, lon) in waypoints :
 			gpx.waypoints.append(gpxpy.gpx.GPXWaypoint(latitude=lat, longitude=lon))
 
 		gpx_track = gpxpy.gpx.GPXTrack()
