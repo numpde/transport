@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 # Script for downloading realtime bus information in Kaohsiung
 # RA, 2018-10-31
