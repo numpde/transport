@@ -167,36 +167,6 @@ def compress() :
 
 		return j
 
-	def remove_global_route_redundancies(J) :
-		if not J : return J
-
-		assert(type(J) is list)
-
-		def common_data(J) :
-
-			# Set of common keys of entries of J
-			# Typically, not all have the field 'BusStatus'
-			K = sorted(set.intersection(*[set(j.keys()) for j in J]))
-
-			for k in K :
-				V = set(json.dumps(j[k]) for j in J)
-				if (1 == len(V)) :
-					yield (k, json.loads(V.pop()))
-
-		C = dict(common_data(J))
-
-		# print("Common key-values:", C)
-		#
-		# for (i, _) in enumerate(J) :
-		# 	for k in C.keys() :
-		# 		if k in J[i] :
-		# 			pass
-		# 			#del J[i][k]
-		#
-		# #J.append(C)
-
-		return J
-
 	for fn in response_files :
 		try :
 			J = commons.zipjson_load(fn)
