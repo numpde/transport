@@ -57,11 +57,6 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-# Log which files are opened
-def logged_open(filename, mode='r', *argv, **kwargs) :
-	print("({}):\t{}".format(mode, filename))
-	return open(filename, mode, *argv, **kwargs)
-
 
 ## ===================== WORK :
 
@@ -71,7 +66,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 	def node(self, n) :
 		self.node_tags[n.id] = { t.k : t.v for t in n.tags }
-		self.locs[n.id] = (n.location.lat, n.location.lon)
+		self.node_locs[n.id] = (n.location.lat, n.location.lon)
 
 	def way(self, w) :
 		# Filter out the ways that do not have any of these tags:
@@ -83,8 +78,8 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		if 'highway' in w.tags :
 			t = w.tags['highway']
 			# https://wiki.openstreetmap.org/wiki/Key:highway
-			# Exclude "service"
-			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential"]
+			# Exclude "service" later
+			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"]
 			highway_links = ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
 			if not (t in (highway_roads + highway_links)) : return
 
@@ -132,7 +127,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		# Step 0: read map file into buffers
 
 		self.node_tags = {}
-		self.locs = {}
+		self.node_locs = {}
 		self.way_nodes = defaultdict(dict)
 		self.way_tags = {}
 		self.rels = defaultdict(dict)
@@ -151,7 +146,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 		# We do not need all the OSM nodes
 		# The nodes that support roads will be added automatically
-		# self.G.add_nodes_from(self.locs.keys())
+		# self.G.add_nodes_from(self.node_locs.keys())
 
 		# Step 2: construct edges of the road graph
 
@@ -168,13 +163,19 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 			# Attach those attributes to all segments of the way
 			pathattr = { 'wid' : wid }
 
+			for k in ['highway'] :
+				if k in wtags :
+					pathattr[k] = wtags[k]
+
 			# Note: nx.get_edge_attributes(G, 'wid') returns
 			#       a dict of wid's keyed by edge (a, b)
-
-			self.G.add_path(wnodes_bothways[True], wid=wid)
-			self.G.add_path(wnodes_bothways[False], wid=wid)
+			self.G.add_path(wnodes_bothways[True], **pathattr)
+			self.G.add_path(wnodes_bothways[False], **pathattr) # Could be an empty path here
 
 			time.sleep(0.001)
+
+		# Set geo-coordinates of the graph nodes
+		nx.set_node_attributes(self.G, self.node_locs, 'pos')
 
 		# Step 3: compute lengths of graph edges (in meters)
 
@@ -184,16 +185,16 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		# Location expected as a (lat, lon) pair
 		# https://geopy.readthedocs.io/
 		# https://stackoverflow.com/a/43211266
-		lens = { (a, b): commons.geodesic(self.locs[a], self.locs[b]) for (a, b) in self.G.edges() }
+		lens = { (a, b): commons.geodesic(self.node_locs[a], self.node_locs[b]) for (a, b) in self.G.edges() }
 		nx.set_edge_attributes(self.G, lens, name='len')
 
-		return (self.G, self.node_tags, self.locs, self.way_tags, self.way_nodes, self.rels)
+		return (self.G, self.node_tags, self.node_locs, self.way_tags, self.way_nodes, self.rels)
 
 
 # Example of using the above class
 def illustration() :
 
-	(G, node_tags, locs, way_tags, way_nodes, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region="kaohsiung"))
+	(G, node_tags, node_locs, way_tags, way_nodes, rels) = RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region="kaohsiung"))
 
 	# Draw a bus route by its name
 	# route_name = "建國幹線(返程)" # the route should have the number 88
@@ -215,48 +216,51 @@ def illustration() :
 
 		try :
 			if len(r['n']) :
-				nx.draw_networkx_nodes(G, pos=locs, nodelist=r['n'], node_size=10)
-				nx.draw_networkx_nodes(G, pos=locs, nodelist=r['n'][0:1], node_size=40)
+				nx.draw_networkx_nodes(G, pos=node_locs, nodelist=r['n'], node_size=10)
+				nx.draw_networkx_nodes(G, pos=node_locs, nodelist=r['n'][0:1], node_size=40)
 
 			for i in r['w'] :
 				e = pathify(way_nodes[i][True]) + pathify(way_nodes[i][False])
-				nx.draw_networkx_edges(G, pos=locs, edgelist=e, arrows=False)
+				nx.draw_networkx_edges(G, pos=node_locs, edgelist=e, arrows=False)
 
 		except nx.NetworkXError as e :
 			# Happens if nonexisting nodes or ways
 			# are referenced by the relation
 			print(e)
 
-	input()
+	input("Press ENTER")
 
 # Extract roads and routes, write to file
 def extract(region) :
 
 	print("I. Processing the OSM file")
 
-	(G, node_tags, locs, way_tags, way_nodes, rels) = (
+	(G, node_tags, node_locs, way_tags, way_nodes, rels) = (
 		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
 	)
 
 	for mode in ['WithoutNN', 'WithNN'] :
 
 		if (mode == 'WithoutNN') :
-			main_component_knn = None
+			main_component_with_knn = None
 		else :
 			print("II. Making the nearest-neighbor tree for the main component...")
 
 			# Restrict to the largest weakly/strongly connected component
+			g : nx.DiGraph
 			g = nx.subgraph(G, max(nx.weakly_connected_components(G), key=len)).copy()
+
+			# Remove the edges corresponding to OSM's highway=service tag
+			g.remove_edges_from(
+				list((a, b) for (a, b, d) in g.edges.data('highway') if (d == "service"))
+			)
 
 			# Note: Graph.copy() does not deep-copy container attributes
 			# https://networkx.github.io/documentation/latest/reference/classes/generated/networkx.Graph.copy.html
 
-			knn = graph.compute_knn(g, locs)
-
-			main_component_knn = {
+			main_component_with_knn = {
 				'g' : g,
-				'node_ids' : knn['node_ids'],
-				'knn_tree' : knn['knn_tree'],
+				'knn' : graph.compute_geo_knn(nx.get_node_attributes(g, 'pos')),
 			}
 
 		pickle.dump(
@@ -267,8 +271,8 @@ def extract(region) :
 				# OSM node info, indexed by node ID
 				'node_tags' : node_tags,
 
-				# lon-lat location of the graph vertices
-				'locs' : locs,
+				# lon-lat location of the OSM and graph nodes
+				'node_locs' : node_locs,
 
 				# Tags of OSM's ways as a dict, indexed by way ID
 				'way_tags' : way_tags,
@@ -280,13 +284,15 @@ def extract(region) :
 				# then as 'n'odes, 'w'ays, 'r'elations and 't'ags
 				'rels' : rels,
 
-				# Nearest-neighbor tree
-				'main_component_knn' : main_component_knn,
+				# Main graph component with nearest-neighbor tree
+				'main_component_with_knn' : main_component_with_knn,
 
 				# The contents of this script
 				'script' : THIS,
 			},
-			logged_open(OFILE['OSM-pickled'].format(region=region), 'wb'),
+
+			# Pickle to:
+			commons.logged_open(OFILE['OSM-pickled'].format(region=region), 'wb'),
 			pickle.HIGHEST_PROTOCOL
 		)
 
