@@ -59,7 +59,7 @@ def dist_to_segment(x, ab, rel_acc=0.05) :
 	while (geodist(a, b) > rel_acc * min(da, db)) :
 
 		# Note: problematic at lon~180
-		# Approximation of the midpoint (m is not necessarily on a geodesic?)
+		# Approximation of the midpoint (m is not necessarily on a geodesic)
 		m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
 
 		# Distance to the midpoint
@@ -75,7 +75,7 @@ def dist_to_segment(x, ab, rel_acc=0.05) :
 	return min((da, s), (db, t))
 
 
-def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, callback: callable) :
+def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable = None) :
 	""" Find a plausible bus route that visits the waypoints.
 
 	Returns:
@@ -109,7 +109,10 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 
 	# Copies of objects that will/could get modified
 	g = g
-	node_pos = node_pos
+
+	# Check for the existence of those attributes
+	nx.get_node_attributes(g, 'pos') # Node (lat, lon)
+	nx.get_edge_attributes(g, 'len') # Edge lengths
 
 	# Mark the original nodes as basenodes
 	for n in g.nodes : g.nodes[n]['basenode'] = n
@@ -124,7 +127,7 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 		ee = set(list(ee) + [(b, a) for (a, b) in ee if g.has_edge(b, a)])
 		# Attach distance from q
 		ee = [
-			(e, dist_to_segment(q, (node_pos[e[0]], node_pos[e[1]]))[0])
+			(e, dist_to_segment(q, (g.nodes[e[0]]['pos'], g.nodes[e[1]]['pos']))[0])
 			for e in ee
 		]
 		# Get the closest edges
@@ -154,14 +157,11 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 	# Route quality indicators
 	indi = dict()
 
-	# Remaining edge clouds to optimize (index into prob_clouds)
-	recto = list(range(len(seledges)))
-
 	# Dictionary to pass to the callback function
 	result = { 'status' : 'init' }
 
 	# Report current status
-	callback(result)
+	if callback : callback(result)
 
 	# Replace node by "Detailed decision node clusters"
 	def make_ddnc(nb) :
@@ -173,17 +173,18 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 		# Make the cluster
 		for (ie, oe) in product(iedges, oedges):
 			# New hyperedge between (new) hypernodes
-			g.add_edge(ie, oe, len=meter_from_angle(angle(node_pos[ie[0]], node_pos[nb], node_pos[oe[1]])))
-			# Refer to the basenode
-			(g.nodes[ie]['basenode'], g.nodes[oe]['basenode']) = [g.nodes[nb]['basenode']] * 2
-			# Geolocation of cluster hypernodes
-			(node_pos[ie], node_pos[oe]) = [node_pos[nb]] * 2
+			g.add_edge(ie, oe, len=meter_from_angle(angle(*(g.nodes[n]['pos'] for n in (ie[0], nb, oe[1])))))
 
 		# Interface edges (old, new)
 		e2E = dict([(ie, (ie[0], ie)) for ie in iedges] + [(oe, (oe, oe[1])) for oe in oedges])
 
-		# Replace the interface edges, keeping the edge length
-		for (e, E) in e2E.items(): g.add_edge(*E, len=g.get_edge_data(*e)['len'])
+		for (e, E) in e2E.items():
+			# Refer new nodes to the basenode
+			g.nodes[e]['basenode'] = g.nodes[nb]['basenode']
+			# Geolocation of the hypernodes
+			g.nodes[e]['pos'] = g.nodes[nb]['pos']
+			# Replace the interface edges, keeping the edge length
+			g.add_edge(*E, len=g.get_edge_data(*e)['len'])
 
 		# Remove old node and incident edges
 		g.remove_node(nb)
@@ -208,6 +209,9 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 					prob_clouds[nc][E] = prob_clouds[nc].pop(e)
 				except KeyError:
 					pass
+
+	# Remaining edge clouds to optimize (index into prob_clouds)
+	recto = list(range(len(seledges)))
 
 	# Optimization loop
 	while recto :
@@ -238,7 +242,7 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 			path = [seledges[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(seledges, seledges[1:]))) + [seledges[-1][-1]]
 
 			# Convert node IDs to (lat, lon) coordinates
-			geo_path = [node_pos[i] for i in path]
+			geo_path = [g.nodes[n]['pos'] for n in path]
 
 			# Undo "Detailed decision node cluster"s for the user
 			origpath = [g.nodes[n]['basenode'] for n in path]
@@ -247,11 +251,13 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 			# How certain we are about about the currently selected edge
 			cloud_certainty = prob_clouds[nc][seledges[nc]] / sum(prob_clouds[nc].values())
 
+			# Consider this cloud solved?
 			if (cloud_certainty >= acceptance_threshold) :
 				# Unschedule this cloud from further optimization
 				recto.remove(nc)
 				break
 
+			# Introduct turn penalization
 			if (cloud_certainty >= 0.3) :
 
 				# Nodes to be replaced by "detailed decision node clusters"
@@ -270,25 +276,24 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 				if cand_ddnc :
 					# Introduce DDNC
 					for b in cand_ddnc : make_ddnc(b)
-					# Continue optimizing the current cloud
-					# without updating the indicators
+					# Continue optimizing the current cloud w/o updating the indicators
 					continue
 
 			# Previous value of the quality indicators
 			old_indi = indi.copy()
+
 			# Indicator 1: Sum of distances of the selected edges to waypoints
 			indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
+
 			# Indicator 2: The total length of the path
 			indi['dist'] = sum(g.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
-			# TODO: check that all edges have 'len' in the beginning
 
 			# Re-weight the current edge in its cloud
 			if not old_indi : continue
 			prob_clouds[nc][seledges[nc]] *= (2 if (opticrit(indi) < opticrit(old_indi)) else 0.5)
 
-			# Leave this cloud
-			if (random.random() < cloud_certainty) :
-				break
+			# Leave this edge cloud (more likely for nearly-solved clouds)
+			if (random.random() < cloud_certainty) : break
 
 		# Callback
 
@@ -298,20 +303,17 @@ def mapmatch(waypoints: list, g: nx.DiGraph, node_pos: dict, knn: callable, call
 		result['edge_clouds'] = prob_clouds
 		result['active_edges'] = seledges
 
-		callback(result)
+		if callback: callback(result)
 
 	result['status'] = 'done'
-	callback(result)
+	if callback: callback(result)
 
 	return result
 
 
-def compute_knn(G: nx.DiGraph, locs, leaf_size=150):
+def compute_knn(g: nx.DiGraph, node_pos, leaf_size=20):
 
-	# Only care about the OSM nodes that are in the road network graph
-	locs = {i: locs[i] for i in G.nodes()}
-
-	(I, X) = (list(locs.keys()), list(locs.values()))
+	(I, X) = (list(node_pos.keys()), list(node_pos.values()))
 
 	return {
 		'node_ids': I,
@@ -330,7 +332,7 @@ def foo() :
 	print("Loading OSM...")
 	OSM = pickle.load(open(osm_graph_file, 'rb'))
 
-	print("Building the KNN tree...")
+	print("Retrieving the KNN tree...")
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g : nx.DiGraph
@@ -338,7 +340,7 @@ def foo() :
 	(g, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
 
 	# Locations of the graph nodes
-	node_pos = OSM['locs']
+	nx.set_node_attributes(g, OSM['locs'], 'pos')
 
 	# Free up memory
 	del OSM
@@ -361,6 +363,7 @@ def foo() :
 	# (route_id, direction) = ('KHH87', 1)
 	# (route_id, direction) = ('KHH121', 1)
 	(route_id, direction) = ('KHH11', 1)
+	#
 	waypoints = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
 	#
@@ -370,7 +373,7 @@ def foo() :
 		# Find nearest nodes
 		(dist, ind) = knn_tree.query(np.asarray(q).reshape(1, -1), k=k)
 
-		# Get the in-graph node indices and flatten the arrays
+		# Get the graph node indices and flatten the arrays
 		(dist, ind) = (dist.reshape(-1), [knn_ids[i] for i in ind.reshape(-1)])
 
 		# Return pairs (graph-node-id, distance-to-q) sorted by distance
@@ -414,7 +417,11 @@ def foo() :
 	def mm_callback(result) :
 
 		if (result['status'] == "init") :
+			print("(Optimizing)")
 			return
+
+		if (result['status'] == "done") :
+			print("(Done)")
 
 		if (result['status'] == "opti") :
 			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
@@ -437,13 +444,10 @@ def foo() :
 		for (nc, pc) in enumerate(result['edge_clouds']) :
 			m = max(pc.values())
 			for (e, p) in pc.items() :
-				(y, x) = zip(*[node_pos[i] for i in e])
+				(y, x) = zip(*[g.nodes[i]['pos'] for i in e])
 				c = ('g' if (result['active_edges'][nc] == e) else 'r')
 				ax.plot(x, y, '-', c=c, linewidth=1, alpha=p/m, zorder=150)
 
-		#plt.draw()
-
-		#plt.show()
 		plt.pause(0.1)
 
 		# Next figure update
@@ -452,9 +456,7 @@ def foo() :
 
 	print("Connecting clouds...")
 
-	result = mapmatch(waypoints, g, node_pos, nearest_nodes, mm_callback)
-
-	print("Finished")
+	result = mapmatch(waypoints, g, nearest_nodes, mm_callback)
 
 	plt.ioff()
 	plt.show()
