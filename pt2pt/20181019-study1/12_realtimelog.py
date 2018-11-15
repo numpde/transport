@@ -24,16 +24,16 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'response' : "OUTPUT/12/Kaohsiung/UV/{d}/{t}.json",
+	'realtime' : "OUTPUT/12/Kaohsiung/UV/{d}/{t}.json",
 
-	'routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Route/data.json",
+	'routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Route.json",
 }
 
 
 ## =================== OUTPUT :
 
 OFILE = {
-	'response' : IFILE['response'],
+	'realtime' : IFILE['realtime'],
 }
 
 
@@ -56,9 +56,8 @@ def download() :
 
 
 def compress() :
-
-	response_files = sorted(glob.glob(IFILE['response'].format(d="*", t="*")))
-	#print(response_files)
+	realtime_files = sorted(glob.glob(IFILE['realtime'].format(d="*", t="*")))
+	#print(realtime_files)
 
 	# Allow for pending write operations
 	time.sleep(1)
@@ -69,7 +68,7 @@ def compress() :
 	print("COMPRESSION 0")
 
 	# Brutal compression step
-	for fn in response_files :
+	for fn in realtime_files :
 		continue
 		#commons.zipjson_dump(commons.zipjson_load(fn), fn)
 
@@ -77,34 +76,34 @@ def compress() :
 	# Compression I:
 	# Remove records from file if present in the subsequent file
 
-	print("COMPRESSION I: Remove duplicates in back-to-back records")
-
-	for (fn1, fn2) in zip(response_files[:-1], response_files[1:]) :
-		def hashable(J) :
-			assert(type(J) is list)
-			return list(map(json.dumps, J))
-
-		def unhashable(J) :
-			assert(type(J) is list)
-			return list(map(json.loads, J))
-
-		try :
-			J1 = set(hashable(commons.zipjson_load(fn1)))
-			J2 = set(hashable(commons.zipjson_load(fn2)))
-		except EOFError :
-			# Raised by zipjson_load if a file is empty
-			continue
-
-		if not J1.intersection(J2) :
-			continue
-
-		J1 = J1.difference(J2)
-
-		J1 = list(unhashable(list(J1)))
-		J2 = list(unhashable(list(J2)))
-
-		print("Compressing", fn1)
-		commons.zipjson_dump(J1, fn1)
+	# print("COMPRESSION I: Remove duplicates in back-to-back records")
+	#
+	# for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
+	# 	def hashable(J) :
+	# 		assert(type(J) is list)
+	# 		return list(map(json.dumps, J))
+	#
+	# 	def unhashable(J) :
+	# 		assert(type(J) is list)
+	# 		return list(map(json.loads, J))
+	#
+	# 	try :
+	# 		J1 = set(hashable(commons.zipjson_load(fn1)))
+	# 		J2 = set(hashable(commons.zipjson_load(fn2)))
+	# 	except EOFError :
+	# 		# Raised by zipjson_load if a file is empty
+	# 		continue
+	#
+	# 	if not J1.intersection(J2) :
+	# 		continue
+	#
+	# 	J1 = J1.difference(J2)
+	#
+	# 	J1 = list(unhashable(list(J1)))
+	# 	J2 = list(unhashable(list(J2)))
+	#
+	# 	print("Compressing", fn1)
+	# 	commons.zipjson_dump(J1, fn1)
 
 
 	# Compression II:
@@ -133,14 +132,20 @@ def compress() :
 	def remove_single_route_redundancies(j) :
 
 		subroute_id = j['SubRouteUID']
-		assert(subroute_id in S)
+
+		if not (subroute_id in S) :
+			print("Warning: Unknown subroute {}".format(subroute_id))
+			return j
+
 		assert(j['Direction'] in S[subroute_id])
 		s = S[subroute_id][j['Direction']]
 
 		for key in ['SubRouteName', 'SubRouteID'] :
 			if key in j :
-				assert(j[key] == s[key])
-				del j[key]
+				if not (j[key] == s[key]) :
+					print("Warning: Unexpected attribute value {}={}".format(key, j[key]))
+				else :
+					del j[key]
 
 		if ('RouteUID' in j) :
 			route_id = j['RouteUID']
@@ -149,8 +154,10 @@ def compress() :
 
 			for key in ['RouteName', 'RouteID'] :
 				if key in j :
-					assert(j[key] == r[key])
-					del j[key]
+					if not (j[key] == r[key]) :
+						print("Warning: Unexpected attribute value {}={}".format(key, j[key]))
+					else :
+						del j[key]
 
 			assert(j['RouteUID'] == j['SubRouteUID'])
 			del j['RouteUID']
@@ -167,14 +174,30 @@ def compress() :
 
 		return j
 
-	for fn in response_files :
+	for fn in realtime_files :
 		try :
 			J = commons.zipjson_load(fn)
 		except EOFError :
 			print("Warning: {} appears empty".format(fn))
 			continue
+		except Exception :
+			print("Warning: Failed to open {}".format(fn))
+			continue
+
 		b = len(json.dumps(J)) # Before compression
-		J = list(map(remove_single_route_redundancies, J))
+
+		try :
+			J = list(map(remove_single_route_redundancies, J))
+		except ValueError as e :
+			print("Warning: ValueError at {} -- {}".format(fn, e))
+			continue
+		except AssertionError as e :
+			print("Warning: Assertion error at {} -- {}".format(fn, e))
+			continue
+		except Exception as e :
+			print("Warning: Compression attempt failed for {} -- {}".format(fn, e))
+			continue
+
 		# J = remove_global_route_redundancies(J)
 		a = len(json.dumps(J)) # After compression
 
