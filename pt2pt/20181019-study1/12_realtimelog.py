@@ -73,41 +73,35 @@ def compress() :
 		#commons.zipjson_dump(commons.zipjson_load(fn), fn)
 
 
-	# Compression I:
-	# Remove records from file if present in the subsequent file
+	print("COMPRESSION I: Remove duplicates in back-to-back records")
 
-	# print("COMPRESSION I: Remove duplicates in back-to-back records")
-	#
-	# for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
-	# 	def hashable(J) :
-	# 		assert(type(J) is list)
-	# 		return list(map(json.dumps, J))
-	#
-	# 	def unhashable(J) :
-	# 		assert(type(J) is list)
-	# 		return list(map(json.loads, J))
-	#
-	# 	try :
-	# 		J1 = set(hashable(commons.zipjson_load(fn1)))
-	# 		J2 = set(hashable(commons.zipjson_load(fn2)))
-	# 	except EOFError :
-	# 		# Raised by zipjson_load if a file is empty
-	# 		continue
-	#
-	# 	if not J1.intersection(J2) :
-	# 		continue
-	#
-	# 	J1 = J1.difference(J2)
-	#
-	# 	J1 = list(unhashable(list(J1)))
-	# 	J2 = list(unhashable(list(J2)))
-	#
-	# 	print("Compressing", fn1)
-	# 	commons.zipjson_dump(J1, fn1)
+	for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
+		def hashable(J) :
+			assert(type(J) is list)
+			return list(map(json.dumps, J))
 
+		def unhashable(J) :
+			assert(type(J) is list)
+			return list(map(json.loads, J))
 
-	# Compression II:
-	# Remove route names if available elsewhere
+		try :
+			J1 = set(hashable(commons.zipjson_load(fn1)))
+			J2 = set(hashable(commons.zipjson_load(fn2)))
+		except EOFError :
+			# Raised by zipjson_load if a file is empty
+			continue
+
+		if not J1.intersection(J2) :
+			continue
+
+		J1 = J1.difference(J2)
+
+		J1 = list(unhashable(list(J1)))
+		J2 = list(unhashable(list(J2)))
+
+		print("Compressing", fn1)
+		commons.zipjson_dump(J1, fn1)
+
 
 	print("COMPRESSION II: Remove redundancies from individual records")
 
