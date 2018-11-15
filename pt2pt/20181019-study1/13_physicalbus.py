@@ -11,6 +11,7 @@ import json
 import glob
 import inspect
 import datetime as dt
+import dateutil.parser
 from itertools import chain
 
 
@@ -36,7 +37,7 @@ commons.makedirs(OFILE)
 
 ## ================= METADATA :
 
-# Keys in a response file JSON record
+# Keys in the realtime bus network snapshot JSON record
 KEYS = {
 	'busid': 'PlateNumb',
 
@@ -90,12 +91,11 @@ def follow(b):
 	# but duplicates will be eliminated later
 
 	for x in zip(*[listify(b[k]) for k in KEYS.values()]):
-		yield (dict(zip(KEYS.values(), x)))
+		yield dict(zip(KEYS.values(), x))
 
 	return
 
-# Segment a list-like bb of bus records
-# by route/direction
+# Segment a list-like bb of bus records by route/direction
 def segments(bb):
 	# Put segment boundary when any of these keys change
 	indicators = [KEYS['routeid'], KEYS['dir']]
@@ -110,23 +110,26 @@ def segments(bb):
 		# Build segment while no indicators change
 		while bb and all((bb[-1][k] == s[-1][k]) for k in indicators) :
 
-			b = bb.pop()
-
 			# None of the indicators have changed: continue the segment record
 
-			# TODO: Segment if delta(GPSTime) is large?
+			# Unless there is a large time gap
+			segment_timegap_minutes = 10
+			(t0, t1) = (dateutil.parser.parse(b[KEYS['time']]) for b in [bb[-1], s[-1]])
+			if ((t1 - t0) > dt.timedelta(minutes=segment_timegap_minutes)) : break
 
-			# However, if the timestamp is the same,
-			if (b[KEYS['time']] == s[-1][KEYS['time']]):
-				# ... then the rest of the record should be the same
-				if not (b == s[-1]) :
-					# Timestamp is the same but the complete record is not
-					pos = (lambda r : (r[KEYS['pos']][KEYS_POS['Lat']], r[KEYS['pos']][KEYS_POS['Lon']]))
-					d = commons.geodesic(pos(b), pos(s[-1]))
-					# Grace of a few meters: displacement + GPS inaccuracy
-					assert(d <= 200)
-				# Skip this redundant record
-				continue
+			b = bb.pop()
+
+			# If the timestamp is the same,
+			if (t0 == t1): continue
+				# # ... then the rest of the record should be the same
+				# if not (b == s[-1]) :
+				# 	# Timestamp is the same but the complete record is not
+				# 	pos = (lambda r : commons.inspect({KEYS['pos']: (KEYS_POS['Lat'], KEYS_POS['Lon'])})(r))
+				# 	d = commons.geodesic(pos(b), pos(s[-1]))
+				# 	# Grace of a few meters: displacement + GPS inaccuracy
+				# 	assert(d <= 200)
+				# # Skip this redundant record
+				# continue
 
 			s.append(b)
 
@@ -141,14 +144,19 @@ def segments(bb):
 
 ## ===================== WORK :
 
-def extract_busses() :
+def extract_busses(realtime_files=None) :
 
-	response_files = sorted(glob.glob(IFILE['response'].format(d="20181103", t="0*")))
-	time.sleep(1)
+	if not realtime_files :
+		realtime_files = sorted(glob.glob(IFILE['response'].format(d="20181103", t="0*")))
+
+	# Allow for file writes to finish
+	time.sleep(0.1)
+
+	print("Loading the realtime log files")
 
 	# Load all bus records, group by Bus ID
 	B = commons.index_dicts_by_key(
-		chain.from_iterable(commons.zipjson_load(fn) for fn in response_files),
+		chain.from_iterable(commons.zipjson_load(fn) for fn in realtime_files),
 		BUSID_OF
 	)
 
@@ -161,14 +169,14 @@ def extract_busses() :
 		T = [dt.datetime.fromisoformat(t) for t in T]
 		assert(all((s <= t) for (s, t) in zip(T[:-1], T[1:])))
 
-	# Overview:
-	# For each physical bus (identified by plate number)
-	for b in B.values() :
-		# Extract movement segments grouped by (SubRouteUID, Direction)
-		for s in segments(follow(b)) :
-			# Here, the segment s looks like
-			# {'PlateNumb': '756-V2', 'SubRouteUID': 'KHH912', 'Direction': 1, 'GPSTime': [List of time stamps], 'BusPosition': [List of positions]}
-			pass
+	# # Overview:
+	# # For each physical bus (identified by plate number)
+	# for b in B.values() :
+	# 	# Extract movement segments grouped by (SubRouteUID, Direction)
+	# 	for s in segments(follow(b)) :
+	# 		# Here, the segment s looks like
+	# 		# {'PlateNumb': '756-V2', 'SubRouteUID': 'KHH912', 'Direction': 1, 'GPSTime': [List of time stamps], 'BusPosition': [List of positions]}
+	# 		pass
 
 	# Function to "unwrap" the list of positions for a segment
 	def unwrap_pos(s) :
@@ -191,6 +199,7 @@ def extract_busses() :
 
 	# Dump info to disk
 	for (busid, b) in B.items() :
+		print("Segmenting bus {}".format(busid))
 		J = list(unwrap_pos(s) for s in segments(follow(b)))
 		with open(OFILE['busses'].format(busid=busid), 'w') as fd :
 			json.dump(J, fd)
@@ -210,5 +219,4 @@ OPTIONS = {
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-
-	assert(commons.parse_options(OPTIONS))
+	commons.parse_options(OPTIONS)
