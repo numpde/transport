@@ -75,7 +75,13 @@ def dist_to_segment(x, ab, rel_acc=0.05) :
 	return min((da, s), (db, t))
 
 
-def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable = None) :
+def mapmatch(
+		waypoints: list,
+		g: nx.DiGraph,
+		kne: callable,
+		callback: callable = None,
+		stubborn: float = 1
+):
 	""" Find a plausible bus route that visits the waypoints.
 
 	Returns:
@@ -96,9 +102,9 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 	# Convert the distance busstop-road to bus-time equivalent
 	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
 
-	# Optimization criterion
+	# Optimization criterion (lower is better)
 	def opticrit(indi):
-		return crittime_from_meter_stop(indi['miss']) + crittime_from_meter_bus(indi['dist'])
+		return stubborn * crittime_from_meter_stop(indi['miss']) + crittime_from_meter_bus(indi['dist'])
 
 	# Threshold turn for introducing "Detailed decision node clusters"
 	ddnc_threshold = 60
@@ -107,36 +113,18 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 	# (where 1 means "complete")
 	acceptance_threshold = 0.98
 
-	# Copies of objects that will/could get modified
+	# This will be modified
 	g = g
 
 	# Check for the existence of those attributes
-	nx.get_node_attributes(g, 'pos') # Node (lat, lon)
-	nx.get_edge_attributes(g, 'len') # Edge lengths
+	assert(nx.get_node_attributes(g, 'pos')) # Node (lat, lon)
+	assert(nx.get_edge_attributes(g, 'len')) # Edge lengths
 
 	# Mark the original nodes as basenodes
 	for n in g.nodes : g.nodes[n]['basenode'] = n
 
-	# Locate k directed edges nearest to a point q
-	def nearest_edges(q, k=10) :
-		# Get some closest nodes first
-		nn = list(dict(knn(q, k=2*(k+5))).keys())
-		# Get their incident edges
-		ee = g.edges(nbunch=nn)
-		# Append reverse edges
-		ee = set(list(ee) + [(b, a) for (a, b) in ee if g.has_edge(b, a)])
-		# Attach distance from q
-		ee = [
-			(e, dist_to_segment(q, (g.nodes[e[0]]['pos'], g.nodes[e[1]]['pos']))[0])
-			for e in ee
-		]
-		# Get the closest edges
-		ee = list(heapq.nsmallest(k, ee, key=(lambda ed : ed[1])))
-
-		return ee
-
 	# A cloud of candidate edges for each waypoint
-	dist_clouds = [dict(nearest_edges(wp)) for wp in waypoints]
+	dist_clouds = [dict(kne(wp)) for wp in waypoints]
 
 	# Edge clouds containing relative suitability of edges for the optimal solution
 	prob_clouds = [
@@ -156,12 +144,6 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 
 	# Route quality indicators
 	indi = dict()
-
-	# Dictionary to pass to the callback function
-	result = { 'status' : 'init' }
-
-	# Report current status
-	if callback : callback(result)
 
 	# Replace node by "Detailed decision node clusters"
 	def make_ddnc(nb) :
@@ -213,6 +195,12 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 	# Remaining edge clouds to optimize (index into prob_clouds)
 	recto = list(range(len(seledges)))
 
+	# Dictionary to pass to the callback function
+	result = { 'waypoints' : waypoints, 'status' : "init" }
+
+	# Report current status
+	if callback : callback(result)
+
 	# Optimization loop
 	while recto :
 
@@ -257,7 +245,7 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 				recto.remove(nc)
 				break
 
-			# Introduct turn penalization
+			# Introduce turn penalization
 			if (cloud_certainty >= 0.3) :
 
 				# Nodes to be replaced by "detailed decision node clusters"
@@ -290,14 +278,14 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 
 			# Re-weight the current edge in its cloud
 			if not old_indi : continue
-			prob_clouds[nc][seledges[nc]] *= (2 if (opticrit(indi) < opticrit(old_indi)) else 0.5)
+			prob_clouds[nc][seledges[nc]] *= (1.7 if (opticrit(indi) < opticrit(old_indi)) else 0.7)
 
 			# Leave this edge cloud (more likely for nearly-solved clouds)
 			if (random.random() < cloud_certainty) : break
 
 		# Callback
 
-		result['status'] = 'opti'
+		result['status'] = "opti"
 		result['path'] = origpath
 		result['geo_path'] = geo_path
 		result['edge_clouds'] = prob_clouds
@@ -305,20 +293,57 @@ def mapmatch(waypoints: list, g: nx.DiGraph, knn: callable, callback: callable =
 
 		if callback: callback(result)
 
-	result['status'] = 'done'
+	result['status'] = "done"
 	if callback: callback(result)
 
 	return result
 
 
-def compute_knn(g: nx.DiGraph, node_pos, leaf_size=20):
-
-	(I, X) = (list(node_pos.keys()), list(node_pos.values()))
-
+# node_pos is a dictionary node id -> (lat, lon)
+def compute_geo_knn(node_pos, leaf_size=20):
 	return {
-		'node_ids': I,
-		'knn_tree': sklearn.neighbors.BallTree(X, leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
+		'node_ids': list(node_pos.keys()),
+		'knn_tree': sklearn.neighbors.BallTree(list(node_pos.values()), leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
 	}
+
+
+# Nearest graph edges to a geo-location q = (lat, lon)
+def estimate_kne(g, knn, q, ke=33) :
+	assert('knn_tree' in knn)
+	assert('node_ids' in knn)
+
+	def nearest_nodes(q, kn=10) :
+		# Find nearest nodes using the KNN tree
+		(dist, ind) = (boo.reshape(-1) for boo in knn['knn_tree'].query(np.asarray(q).reshape(1, -1), k=kn))
+		# Return pairs (graph-node-id, distance-to-q) sorted by distance
+		return list(zip([knn['node_ids'][i] for i in ind], dist))
+
+	# Locate k nearest directed edges among a set of candidates
+	# Return a list of pairs (edge, distance-to-q)
+	# Assumes node (lat, lon) coordinates in the node attribute 'pos'
+	def filter_nearest_edges(g, q, edges, k):
+		return list(heapq.nsmallest(
+			k,
+			[
+				# Attach distance from q
+				(e, dist_to_segment(q, (g.nodes[e[0]]['pos'], g.nodes[e[1]]['pos']))[0])
+				for e in edges
+			],
+			key=(lambda ed : ed[1])
+		))
+
+	for kn in range(ke, 10*ke, 5) :
+		# Get some closest nodes first, then their incident edges
+		ee = set(g.edges(nbunch=list(dict(nearest_nodes(q, kn=kn)).keys())))
+		# Append reverse edges, just in case
+		ee = set(list(ee) + [(b, a) for (a, b) in ee if g.has_edge(b, a)])
+		# Continue looking for more edges?
+		if (len(ee) < (3*ke)) : continue
+		# Filter down to the nearest ones
+		ee = filter_nearest_edges(g, q, ee, ke)
+		return ee
+
+	raise RuntimeError("Could not find enough nearest edges.")
 
 
 def foo() :
@@ -336,11 +361,9 @@ def foo() :
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g : nx.DiGraph
-	knn_tree : NearestNeighbors
-	(g, knn_ids, knn_tree) = commons.inspect(('g', 'node_ids', 'knn_tree'))(OSM['main_component_knn'])
+	(g, knn) = commons.inspect(('g', 'knn'))(OSM['main_component_with_knn'])
 
-	# Locations of the graph nodes
-	nx.set_node_attributes(g, OSM['locs'], 'pos')
+	kne = (lambda q : estimate_kne(g, knn, q, ke=10))
 
 	# Free up memory
 	del OSM
@@ -366,18 +389,9 @@ def foo() :
 	#
 	waypoints = list(map(commons.inspect({'StopPosition': ('PositionLat', 'PositionLon')}), motc_routes[route_id]['Stops'][direction]))
 
+	waypoints = [(22.62269, 120.367767), (22.623899, 120.366409), (22.626039, 120.359397), (22.62615, 120.357887), (22.62602, 120.35337), (22.625059, 120.345809), (22.625989, 120.342529), (22.625999, 120.343856), (22.626169, 120.344413), (22.628049, 120.344436), (22.628969, 120.340843), (22.62993, 120.338348), (22.63025, 120.337356), (22.631309, 120.334068), (22.63269, 120.329841), (22.63307, 120.328491), (22.63297, 120.326713), (22.632949, 120.324851), (22.63385, 120.319831), (22.637609, 120.307678), (22.637609, 120.305633), (22.63762, 120.304847), (22.637859, 120.300231), (22.63796, 120.297439), (22.63787, 120.296707), (22.63739, 120.294357), (22.637079, 120.293472), (22.6359, 120.289939), (22.63537, 120.288353), (22.634149, 120.284728), (22.629299, 120.28228), (22.62652, 120.280738), (22.62354, 120.283637), (22.622549, 120.28572), (22.622999, 120.28627), (22.625379, 120.285156)]
+
 	#
-
-	def nearest_nodes(q, k=10) :
-
-		# Find nearest nodes
-		(dist, ind) = knn_tree.query(np.asarray(q).reshape(1, -1), k=k)
-
-		# Get the graph node indices and flatten the arrays
-		(dist, ind) = (dist.reshape(-1), [knn_ids[i] for i in ind.reshape(-1)])
-
-		# Return pairs (graph-node-id, distance-to-q) sorted by distance
-		return list(zip(ind, dist))
 
 	# TODO: abort if nearest edges are too far
 
@@ -431,15 +445,14 @@ def foo() :
 		ax.cla()
 
 		# Apply the background map
-		ax.axis((left, right, bottom, top))
 		img = ax.imshow(mapi, extent=(left, right, bottom, top), interpolation='none', zorder=-100)
-
-		(y, x) = zip(*result['geo_path'])
-		ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
 		for (n, (y, x)) in enumerate(waypoints) :
 			c = 'm'
 			ax.plot(x, y, 'o', c=c, markersize=4)
+
+		(y, x) = zip(*result['geo_path'])
+		ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
 		for (nc, pc) in enumerate(result['edge_clouds']) :
 			m = max(pc.values())
@@ -456,7 +469,7 @@ def foo() :
 
 	print("Connecting clouds...")
 
-	result = mapmatch(waypoints, g, nearest_nodes, mm_callback)
+	result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
 
 	plt.ioff()
 	plt.show()
