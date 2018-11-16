@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;">
+    <list default="true" id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="RA: Enabled Compression I">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/14_maproute.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/14_maproute.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/OUTPUT/13/Kaohsiung/UV/unversioned" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/helpers/commons.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/helpers/commons.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/helpers/graph.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/helpers/graph.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -15,11 +19,11 @@
     <session id="691266365">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="13" />
+          <entry key="project.closed" value="14" />
           <entry key="project.open.time.15" value="1" />
           <entry key="project.open.time.18" value="1" />
           <entry key="project.open.time.19" value="2" />
-          <entry key="project.open.time.20" value="2" />
+          <entry key="project.open.time.20" value="3" />
           <entry key="project.open.time.21" value="3" />
           <entry key="project.open.time.22" value="1" />
           <entry key="project.open.time.24" value="1" />
@@ -31,7 +35,7 @@
           <entry key="project.open.time.36" value="2" />
           <entry key="project.open.time.37" value="1" />
           <entry key="project.open.time.4" value="1" />
-          <entry key="project.opened" value="21" />
+          <entry key="project.opened" value="22" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
@@ -39,38 +43,42 @@
           <entry key="htm" value="4" />
           <entry key="js" value="8" />
           <entry key="json" value="2" />
-          <entry key="py" value="99" />
-          <entry key="sh" value="5" />
+          <entry key="py" value="118" />
+          <entry key="sh" value="7" />
           <entry key="txt" value="4" />
           <entry key="unversioned" value="2" />
+          <entry key="xml" value="1" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
+          <entry key="Bash" value="2" />
           <entry key="HTML" value="4" />
           <entry key="JSON" value="2" />
           <entry key="JavaScript" value="8" />
           <entry key="PLAIN_TEXT" value="11" />
-          <entry key="Python" value="99" />
+          <entry key="Python" value="118" />
+          <entry key="XML" value="1" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="Python Console" value="3350" />
+          <entry key="Python Console" value="4001" />
           <entry key="dummy" value="35" />
           <entry key="htm" value="149" />
           <entry key="js" value="284" />
-          <entry key="py" value="120320" />
-          <entry key="sh" value="756" />
-          <entry key="txt" value="3703" />
+          <entry key="py" value="138802" />
+          <entry key="sh" value="758" />
+          <entry key="txt" value="4091" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
+          <entry key="Bash" value="2" />
           <entry key="HTML" value="149" />
           <entry key="JavaScript" value="284" />
-          <entry key="PLAIN_TEXT" value="4494" />
-          <entry key="Python" value="123669" />
+          <entry key="PLAIN_TEXT" value="4882" />
+          <entry key="Python" value="142802" />
           <entry key="RegExp" value="1" />
         </counts>
       </usages-collector>
@@ -84,8 +92,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="22">
-              <caret line="233" column="8" selection-start-line="233" selection-start-column="8" selection-end-line="233" selection-end-column="8" />
+            <state relative-caret-position="5742">
+              <caret line="276" column="9" selection-start-line="276" selection-start-column="9" selection-end-line="276" selection-end-column="9" />
               <folding>
                 <element signature="e#71#98#0" expanded="true" />
                 <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
@@ -95,12 +103,12 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="246">
-              <caret line="85" column="31" selection-start-line="85" selection-start-column="31" selection-end-line="85" selection-end-column="31" />
+            <state relative-caret-position="203">
+              <caret line="251" column="65" selection-start-line="251" selection-start-column="65" selection-end-line="251" selection-end-column="65" />
               <folding>
-                <element signature="e#52#79#0" expanded="true" />
+                <element signature="e#19#46#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -109,41 +117,38 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1298">
-              <caret line="61" column="34" selection-start-line="61" selection-start-column="34" selection-end-line="61" selection-end-column="34" />
+            <state relative-caret-position="3520">
+              <caret line="161" column="39" selection-start-line="161" selection-start-column="39" selection-end-line="161" selection-end-column="39" />
               <folding>
-                <element signature="e#100#111#0" expanded="true" />
-                <marker date="1542014859290" expanded="true" signature="1911:1914" ph="..." />
-                <marker date="1542014859290" expanded="true" signature="1975:1977" ph="..." />
+                <element signature="e#100#113#0" expanded="true" />
+                <marker date="1542362211708" expanded="true" signature="151:188" ph="..." />
+                <marker date="1542362211708" expanded="true" signature="2080:2083" ph="..." />
+                <marker date="1542362211708" expanded="true" signature="2144:2146" ph="..." />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="308">
-              <caret line="122" lean-forward="true" selection-start-line="122" selection-end-line="122" />
+            <state relative-caret-position="2640">
+              <caret line="129" column="44" selection-start-line="129" selection-start-column="44" selection-end-line="129" selection-end-column="44" />
               <folding>
-                <element signature="e#19#46#0" expanded="true" />
-                <marker date="1542127766637" expanded="true" signature="1572:1574" ph="..." />
-                <marker date="1542127766637" expanded="true" signature="1764:1766" ph="..." />
-                <marker date="1542127766637" expanded="true" signature="2131:2132" ph="..." />
-                <marker date="1542127766637" expanded="true" signature="4197:4200" ph="..." />
-                <marker date="1542127766637" expanded="true" signature="4358:4438" ph="..." />
+                <element signature="e#71#98#0" expanded="true" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/14_maproute.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="9680">
-              <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
+            <state relative-caret-position="-760">
+              <caret line="144" column="35" lean-forward="true" selection-start-line="144" selection-start-column="35" selection-end-line="144" selection-end-column="35" />
               <folding>
-                <element signature="e#71#80#0" expanded="true" />
+                <element signature="e#71#111#0" expanded="true" />
+                <marker date="1542369536766" expanded="true" signature="2469:2470" ph="..." />
               </folding>
             </state>
           </provider>
@@ -160,28 +165,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>make</find>
-      <find>attrib</find>
-      <find>maps</find>
-      <find>.m</find>
-      <find>is_dis</find>
-      <find>parse_linestring</find>
-      <find>IFILE</find>
-      <find>all_di</find>
-      <find>inspect</find>
-      <find>SubRouteUID</find>
-      <find>OSM</find>
-      <find>nearest</find>
-      <find>sklea</find>
-      <find>geode</find>
-      <find>motc_routes</find>
-      <find>geodes</find>
-      <find>geodesi</find>
-      <find>geodesic</find>
-      <find>knn</find>
-      <find>geodis</find>
-      <find>binary</find>
-      <find>Binarytree</find>
       <find>subgrap</find>
       <find>subg</find>
       <find>122</find>
@@ -190,6 +173,28 @@
       <find>_cloud</find>
       <find>edge_len</find>
       <find>meter_from_angle</find>
+      <find>dist_cloud</find>
+      <find>sps_len</find>
+      <find>edge_length</find>
+      <find>miss_dist</find>
+      <find>total_len</find>
+      <find>node_pos</find>
+      <find>kne</find>
+      <find>node_</find>
+      <find>self.locs</find>
+      <find>error:</find>
+      <find>response</find>
+      <find>parser</find>
+      <find>signifi</find>
+      <find>ddnc</find>
+      <find>stubbo</find>
+      <find>1 +</find>
+      <find>plt</find>
+      <find>tight</find>
+      <find>savefig</find>
+      <find>': '</find>
+      <find>KEYS['time']</find>
+      <find>randomly</find>
     </findStrings>
     <replaceStrings>
       <replace />
@@ -201,6 +206,9 @@
       <replace>self.routestops</replace>
       <replace>self.platforms</replace>
       <replace>distance-tty</replace>
+      <replace>indi['miss']</replace>
+      <replace>indi['dist']</replace>
+      <replace>KEYS.time</replace>
     </replaceStrings>
     <dirStrings>
       <dir>$PROJECT_DIR$/20181025-nextbus/html</dir>
@@ -225,7 +233,6 @@
         <option value="$PROJECT_DIR$/20181025-nextbus/main.py" />
         <option value="$PROJECT_DIR$/20181025-nextbus/nextbus.py" />
         <option value="$PROJECT_DIR$/20181028-BusCal/buscal.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.sh" />
         <option value="$PROJECT_DIR$/20181019-study1/02_filterroads.py" />
         <option value="$PROJECT_DIR$/20181019-study1/13_realtimevis.py" />
         <option value="$PROJECT_DIR$/20181019-study1/04_getapiroutes.py" />
@@ -233,18 +240,20 @@
         <option value="$PROJECT_DIR$/20181019-study1/07_faketimetable.py" />
         <option value="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" />
         <option value="$PROJECT_DIR$/20181019-study1/00_motc_download.sh" />
-        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
         <option value="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" />
         <option value="$PROJECT_DIR$/20181019-study1/commons.py" />
         <option value="$PROJECT_DIR$/20181019-study1/.credentials/UV/mapbox-token.txt" />
-        <option value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
         <option value="$PROJECT_DIR$/20181019-study1/ideas.txt" />
         <option value="$PROJECT_DIR$/20181019-study1/helpers/maps.py" />
         <option value="$PROJECT_DIR$/20181019-study1/00_motc_tools.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/helpers/commons.py" />
         <option value="$PROJECT_DIR$/20181019-study1/16_realtimevis.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/helpers/graph.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.sh" />
         <option value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/commons.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/14_maproute.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/graph.py" />
       </list>
     </option>
   </component>
@@ -282,6 +291,7 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
+      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -298,36 +308,12 @@
               <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
               <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
               <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name=".credentials" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
-              <item name=".credentials" type="462c0819:PsiDirectoryNode" />
-              <item name="UV" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181019-study1" type="462c0819:PsiDirectoryNode" />
               <item name="helpers" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181025-nextbus" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="pt2pt" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pt2pt" type="462c0819:PsiDirectoryNode" />
-              <item name="20181028-BusCal" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
         </subPane>
       </pane>
-      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -357,28 +343,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.graph">
-    <configuration name="00_motc_tools" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="pt2pt" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/00_motc_tools.py" />
-      <option name="PARAMETERS" value="ROUTE_IMG" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Python.14_maproute">
     <configuration name="02_osmgraph" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -392,6 +357,27 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="12_realtimelog" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <module name="pt2pt" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -421,7 +407,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="16_realtimevis" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration name="14_maproute" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -433,7 +419,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/16_realtimevis.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/14_maproute.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -464,19 +450,19 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.16_realtimevis" />
-      <item itemvalue="Python.13_physicalbus" />
-      <item itemvalue="Python.00_motc_tools" />
       <item itemvalue="Python.graph" />
       <item itemvalue="Python.02_osmgraph" />
+      <item itemvalue="Python.12_realtimelog" />
+      <item itemvalue="Python.13_physicalbus" />
+      <item itemvalue="Python.14_maproute" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.graph" />
-        <item itemvalue="Python.02_osmgraph" />
-        <item itemvalue="Python.00_motc_tools" />
-        <item itemvalue="Python.16_realtimevis" />
+        <item itemvalue="Python.14_maproute" />
         <item itemvalue="Python.13_physicalbus" />
+        <item itemvalue="Python.graph" />
+        <item itemvalue="Python.12_realtimelog" />
+        <item itemvalue="Python.02_osmgraph" />
       </list>
     </recent_temporary>
   </component>
@@ -806,14 +792,14 @@
       <window_info id="Favorites" order="2" sideWeight="0.2566168" side_tool="true" weight="0.26890758" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32911393" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.36363637" />
+      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.49915966" weight="0.3049482" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.44188723" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.32911393" />
       <window_info anchor="bottom" id="Version Control" order="7" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Event Log" order="8" side_tool="true" />
-      <window_info anchor="bottom" id="Python Console" order="9" weight="0.32911393" />
+      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.50084037" side_tool="true" weight="0.3049482" />
+      <window_info active="true" anchor="bottom" id="Python Console" order="9" visible="true" weight="0.32796317" />
       <window_info anchor="bottom" id="Terminal" order="10" weight="0.32911393" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -844,19 +830,6 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="FORCE_NON_EMPTY_COMMENT" value="true" />
-    <MESSAGE value="RA: Plot more info, check of monotonicity" />
-    <MESSAGE value="RA: Handle arg of type 'set' in 'inspect'" />
-    <MESSAGE value=" RA: Enable &quot;retina&quot; by default" />
-    <MESSAGE value="RA: Minor changes" />
-    <MESSAGE value="RA: Produce images of routes" />
-    <MESSAGE value="RA: Route name label on plot" />
-    <MESSAGE value="RA: Making it work for TPE also..." />
-    <MESSAGE value="RA: Unclear what to do with set-valued arg in 'inspect'" />
-    <MESSAGE value="RA: Fixed colors problem" />
-    <MESSAGE value="RA: Fix missing shapes problem" />
-    <MESSAGE value="RA: Unified code for KHH and TPE" />
-    <MESSAGE value="RA: File to log ideas" />
-    <MESSAGE value="RA: Draft for map matching routine" />
     <MESSAGE value="RA: Moved dist_to_segment to the &quot;graph&quot; helper module" />
     <MESSAGE value="RA: Compute knn also" />
     <MESSAGE value="RA: Draft for bus stop map matching" />
@@ -869,7 +842,20 @@
     <MESSAGE value="RA: Minor cleanup; switch on DDNC for larger turns" />
     <MESSAGE value="RA: Filter only bus-accessible roads" />
     <MESSAGE value="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;" />
-    <option name="LAST_COMMIT_MESSAGE" value="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;" />
+    <MESSAGE value="RA: Include &quot;residential&quot; roads" />
+    <MESSAGE value="RA: Simplifications" />
+    <MESSAGE value="RA: Encapsulate map matching" />
+    <MESSAGE value="RA: Map matching in a separate function" />
+    <MESSAGE value="RA: Fixed shebang" />
+    <MESSAGE value="RA: Removed redundant def" />
+    <MESSAGE value="RA: Cleanup in mapmatch" />
+    <MESSAGE value="RA: Better error handling in compression" />
+    <MESSAGE value="RA: Enabled Compression I" />
+    <MESSAGE value="RA: Segmentation by time gap;" />
+    <MESSAGE value="RA: Forward highway tag to the graph; modified knn; simplifications" />
+    <MESSAGE value="RA: Separated nearest-edges function" />
+    <MESSAGE value="RA: Route from bus runs -- draft" />
+    <option name="LAST_COMMIT_MESSAGE" value="RA: Route from bus runs -- draft" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -878,6 +864,16 @@
           <url>file:///usr/local/lib/python3.6/dist-packages/scipy/spatial/distance.py</url>
           <line>2638</line>
           <option name="timeStamp" value="2" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/20181019-study1/helpers/graph.py</url>
+          <line>516</line>
+          <option name="timeStamp" value="10" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/20181019-study1/helpers/graph.py</url>
+          <line>133</line>
+          <option name="timeStamp" value="11" />
         </line-breakpoint>
       </breakpoints>
       <breakpoints-dialog>
@@ -984,20 +980,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="198">
-          <caret line="9" lean-forward="true" selection-end-line="172" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="176">
-          <caret line="29" column="35" selection-start-line="29" selection-start-column="35" selection-end-line="29" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_StopOfRoute/readme.txt">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
@@ -1039,13 +1021,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="154">
-          <caret line="145" column="81" selection-start-line="145" selection-start-column="81" selection-end-line="145" selection-end-column="81" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/ideas.txt">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="66">
@@ -1074,39 +1049,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/16_realtimevis.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2898">
-          <caret line="8" column="41" selection-start-line="8" selection-start-column="41" selection-end-line="8" selection-end-column="41" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/-1247971763/sklearn/neighbors/ball_tree.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="154">
           <caret line="7" lean-forward="true" selection-start-line="7" selection-end-line="7" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1298">
-          <caret line="61" column="34" selection-start-line="61" selection-start-column="34" selection-end-line="61" selection-end-column="34" />
-          <folding>
-            <element signature="e#100#111#0" expanded="true" />
-            <marker date="1542014859290" expanded="true" signature="1911:1914" ph="..." />
-            <marker date="1542014859290" expanded="true" signature="1975:1977" ph="..." />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="9680">
-          <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
-          <folding>
-            <element signature="e#71#80#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -1121,16 +1067,65 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="22">
           <caret line="56" selection-start-line="56" selection-end-line="59" selection-end-column="47" />
-          <folding>
-            <element signature="e#71#98#0" expanded="true" />
-          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/.idea/workspace.xml">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="185">
+          <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/classes/reportviews.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="191">
+          <caret line="666" selection-start-line="666" selection-end-line="666" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/classes/digraph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="323">
+          <caret line="748" selection-start-line="748" selection-end-line="748" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.sh">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="132">
+          <caret line="6" selection-start-line="6" selection-end-line="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1760">
+          <caret line="86" column="13" lean-forward="true" selection-start-line="86" selection-start-column="13" selection-end-line="86" selection-end-column="13" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1485">
+          <caret line="206" lean-forward="true" selection-start-line="206" selection-end-line="206" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/16_realtimevis.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="264">
+          <caret line="155" column="25" lean-forward="true" selection-start-line="155" selection-start-column="25" selection-end-line="155" selection-end-column="25" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="22">
-          <caret line="233" column="8" selection-start-line="233" selection-start-column="8" selection-end-line="233" selection-end-column="8" />
+        <state relative-caret-position="5742">
+          <caret line="276" column="9" selection-start-line="276" selection-start-column="9" selection-end-line="276" selection-end-column="9" />
           <folding>
             <element signature="e#71#98#0" expanded="true" />
             <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
@@ -1138,27 +1133,46 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
+    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="308">
-          <caret line="122" lean-forward="true" selection-start-line="122" selection-end-line="122" />
+        <state relative-caret-position="3520">
+          <caret line="161" column="39" selection-start-line="161" selection-start-column="39" selection-end-line="161" selection-end-column="39" />
           <folding>
-            <element signature="e#19#46#0" expanded="true" />
-            <marker date="1542127766637" expanded="true" signature="1572:1574" ph="..." />
-            <marker date="1542127766637" expanded="true" signature="1764:1766" ph="..." />
-            <marker date="1542127766637" expanded="true" signature="2131:2132" ph="..." />
-            <marker date="1542127766637" expanded="true" signature="4197:4200" ph="..." />
-            <marker date="1542127766637" expanded="true" signature="4358:4438" ph="..." />
+            <element signature="e#100#113#0" expanded="true" />
+            <marker date="1542362211708" expanded="true" signature="151:188" ph="..." />
+            <marker date="1542362211708" expanded="true" signature="2080:2083" ph="..." />
+            <marker date="1542362211708" expanded="true" signature="2144:2146" ph="..." />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+    <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="246">
-          <caret line="85" column="31" selection-start-line="85" selection-start-column="31" selection-end-line="85" selection-end-column="31" />
+        <state relative-caret-position="2640">
+          <caret line="129" column="44" selection-start-line="129" selection-start-column="44" selection-end-line="129" selection-end-column="44" />
           <folding>
-            <element signature="e#52#79#0" expanded="true" />
+            <element signature="e#71#98#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/14_maproute.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-760">
+          <caret line="144" column="35" lean-forward="true" selection-start-line="144" selection-start-column="35" selection-end-line="144" selection-end-column="35" />
+          <folding>
+            <element signature="e#71#111#0" expanded="true" />
+            <marker date="1542369536766" expanded="true" signature="2469:2470" ph="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="203">
+          <caret line="251" column="65" selection-start-line="251" selection-start-column="65" selection-end-line="251" selection-end-column="65" />
+          <folding>
+            <element signature="e#19#46#0" expanded="true" />
           </folding>
         </state>
       </provider>
