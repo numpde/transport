@@ -3,6 +3,15 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import random
+import numpy as np
+
+def seed(a=123) :
+	random.seed(a)
+	np.random.seed(a)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import time
 import hashlib
 import urllib.parse, urllib.request
@@ -147,10 +156,18 @@ import os
 
 # Create output directories
 def makedirs(OFILE) :
+	if type(OFILE) is str :
+		try :
+			os.makedirs(os.path.dirname(OFILE.format()), exist_ok=True)
+		except (IndexError, KeyError) :
+			pass
+		return
+
 	if type(OFILE) is dict :
 		return makedirs(OFILE.values())
+
 	for f in OFILE :
-		os.makedirs(os.path.dirname(f).format(), exist_ok=True)
+		makedirs(f)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
