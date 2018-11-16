@@ -21,7 +21,7 @@ from math import pi, log, tan, exp, atan
 MAPBOX_ZOOM0_SIZE = 512 # Not 256
 
 # Keep copies of downloaded maps
-CACHEDIR = "../helpers/wget_cache/maps/"
+CACHEDIR = "helpers/wget_cache/maps/"
 
 # https://www.mapbox.com/api-documentation/#styles
 class MapBoxStyle(Enum) :
