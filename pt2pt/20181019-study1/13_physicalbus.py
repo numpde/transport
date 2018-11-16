@@ -7,6 +7,7 @@
 from helpers import commons
 
 import time
+import uuid
 import json
 import glob
 import inspect
@@ -113,7 +114,7 @@ def segments(bb):
 			# None of the indicators have changed: continue the segment record
 
 			# Unless there is a large time gap
-			segment_timegap_minutes = 10
+			segment_timegap_minutes = 5
 			(t0, t1) = (dateutil.parser.parse(b[KEYS['time']]) for b in [bb[-1], s[-1]])
 			if ((t1 - t0) > dt.timedelta(minutes=segment_timegap_minutes)) : break
 
@@ -137,7 +138,12 @@ def segments(bb):
 		assert(1 == len(set(map(BUSID_OF, s))))
 
 		# Collapse into one record
-		yield next(iter(commons.index_dicts_by_key(s, BUSID_OF).values()))
+		run = next(iter(commons.index_dicts_by_key(s, BUSID_OF).values()))
+
+		# Attach a tag
+		run['RunUUID'] = uuid.uuid4().hex
+
+		yield run
 
 	return
 
