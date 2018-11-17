@@ -20,11 +20,11 @@ import inspect
 import datetime as dt
 import numpy as np
 import dateutil.parser
-from itertools import chain
+from copy import deepcopy
+from itertools import chain, product, groupby
 
 import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.pyplot as plt
+# Note: do not import pyplot here -- need to select renderer
 
 ## ==================== NOTES :
 
@@ -35,6 +35,8 @@ pass
 
 IFILE = {
 	'busses' : "OUTPUT/13/Kaohsiung/UV/{busid}.json",
+
+	'mapmatched' : "OUTPUT/14/UV/mapmatched/{routeid}/{direction}/{estpathid}",
 }
 
 
@@ -44,7 +46,7 @@ OFILE = {
 	'progress_img': "OUTPUT/14/UV/progress/current_route.png",
 	'progress_txt': "OUTPUT/14/UV/progress/current_route.txt",
 
-	'mapmatched' : "OUTPUT/14/UV/mapmatched/{routeid}/{direction}/{estpathid}.json",
+	'mapmatched' : IFILE['mapmatched'],
 }
 
 commons.makedirs(OFILE)
@@ -83,6 +85,8 @@ PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
+
+	'map_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 }
 
 
@@ -91,37 +95,28 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
+def run_waypoints(run) :
+	return list(zip(run[KEYS_POS.lat], run[KEYS_POS.lon]))
 
-
-
+def is_in_map(lat, lon) :
+	(left, bottom, right, top) = PARAM['map_bbox']
+	return ((bottom < lat < top) and (left < lon < right))
 
 ## ===================== WORK :
 
-def maproute(route_id, direction) :
-	routeid_of = (lambda r: r[KEYS.routeid])
-	direction_of = (lambda r: r[KEYS.dir])
+def mapmatch_runs(runs) :
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
-	g : nx.DiGraph
+	g: nx.DiGraph
 	(g, knn) = commons.inspect(('g', 'knn'))(
 		pickle.load(open(PARAM['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
 
-	kne = (lambda q : graph.estimate_kne(g, knn, q, ke=20))
+	# Nearest edges
+	kne = (lambda q: graph.estimate_kne(g, knn, q, ke=20))
 
-
-	# List of filenames, one file per physical bus, identified by plate number
-	bus_files = sorted(glob.glob(IFILE['busses'].format(busid="*")))
-
-	# Filter bus runs by the route ID
-	runs = list(
-		run
-		for fn in bus_files
-		for run in commons.zipjson_load(fn)
-		if ((routeid_of(run), direction_of(run)) == (route_id, direction))
-	)
-
-	print("Found {} runs for route ID {}".format(len(runs), route_id))
+	mpl.use('Agg')
+	import matplotlib.pyplot as plt
 
 	def mm_callback(result) :
 		fig: plt.Figure
@@ -131,8 +126,9 @@ def maproute(route_id, direction) :
 			(fig, ax) = plt.subplots()
 			result['plt'] = { 'fig' : fig, 'ax' : ax }
 
-		if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
-			return
+		if (result['status'] == "opti") :
+			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
+				return
 
 		(fig, ax) = commons.inspect({'plt' : ('fig', 'ax')})(result)
 
@@ -148,16 +144,14 @@ def maproute(route_id, direction) :
 
 		ax.set_title("{} ({}%)".format(result['status'], math.floor(100 * result.get('progress', 0))))
 
-		try :
-			fig.savefig(OFILE['progress_img'], bbox_inches='tight', pad_inches=0)
-		except Exception as e :
-			print("Could not save figure {} ({})".format(OFILE['progress_img'], e))
+		# Display/save figure here
+		commons.makedirs(OFILE['progress_img'])
+		fig.savefig(OFILE['progress_img'], bbox_inches='tight', pad_inches=0)
 
 		# Next figure update
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
 
-		if (result['status'] == "done") :
-			plt.close(fig)
+		# Note: need to close figure
 
 
 	# Keep a certain distance between waypoints
@@ -171,8 +165,10 @@ def maproute(route_id, direction) :
 
 	for run in runs :
 
-		waypoints = list(sparsify(zip(run[KEYS_POS.lat], run[KEYS_POS.lon])))
+		waypoints = list(sparsify(run_waypoints(run)))
 		if (len(waypoints) < 5) : continue
+
+		print("waypoints:", waypoints)
 
 		mapmatch_attempt = {
 			k: run[k] for k in [KEYS.routeid, KEYS.dir, KEYS.runid, KEYS.busid]
@@ -180,32 +176,194 @@ def maproute(route_id, direction) :
 
 		mapmatch_attempt['EstPathUUID'] = uuid.uuid4().hex
 
-		#waypoints = [(22.622249, 120.368713), (22.622039, 120.368301), (22.621929, 120.367332), (22.622669, 120.367736), (22.623569, 120.366722), (22.624959, 120.364402), (22.625329, 120.36338), (22.625549, 120.363357), (22.625379, 120.362777), (22.62565, 120.361061), (22.62594, 120.359947), (22.62602, 120.354911), (22.62577, 120.351226), (22.625219, 120.34732), (22.62494, 120.3442), (22.624849, 120.34317), (22.62597, 120.342582), (22.626169, 120.344428), (22.62811, 120.344451), (22.62968, 120.33908), (22.63017, 120.337562), (22.630279, 120.33715), (22.63042, 120.336341), (22.631919, 120.331932), (22.632989, 120.327766), (22.632789, 120.325233), (22.632829, 120.324371), (22.633199, 120.32283), (22.633449, 120.321639), (22.63459, 120.31707), (22.636629, 120.314437), (22.63758, 120.308952), (22.6375, 120.307777), (22.637899, 120.301162), (22.63788, 120.298866), (22.637899, 120.297393), (22.63718, 120.294151), (22.636989, 120.293609), (22.6354, 120.288566), (22.635179, 120.287719), (22.634139, 120.284576), (22.632179, 120.28379), (22.631229, 120.283309), (22.628789, 120.28199), (22.62845, 120.281806), (22.62507, 120.28054), (22.624259, 120.282028), (22.622869, 120.284973), (22.62247, 120.285827), (22.623029, 120.286407), (22.62531, 120.28524)]
-		#waypoints = [(22.62269, 120.367767), (22.623899, 120.366409), (22.626039, 120.359397), (22.62615, 120.357887), (22.62602, 120.35337), (22.625059, 120.345809), (22.625989, 120.342529), (22.625999, 120.343856), (22.626169, 120.344413), (22.628049, 120.344436), (22.628969, 120.340843), (22.62993, 120.338348), (22.63025, 120.337356), (22.63043, 120.337013), (22.631309, 120.334068), (22.63269, 120.329841), (22.63307, 120.328491), (22.63297, 120.326713), (22.632949, 120.324851), (22.63385, 120.319831), (22.637609, 120.307678), (22.637609, 120.305633), (22.63762, 120.304847), (22.637859, 120.300231), (22.63796, 120.297439), (22.63787, 120.296707), (22.63739, 120.294357), (22.637079, 120.293472), (22.6359, 120.289939), (22.63537, 120.288353), (22.634149, 120.284728), (22.629299, 120.28228), (22.62652, 120.280738), (22.62354, 120.283637), (22.622549, 120.28572), (22.622999, 120.28627), (22.625379, 120.285156)])
-		#waypoints = [(22.62203, 120.368293), (22.62195, 120.367401), (22.624559, 120.36515), (22.624929, 120.364448), (22.62585, 120.363113), (22.625549, 120.36177), (22.6261, 120.357627), (22.625509, 120.349677), (22.62503, 120.345596), (22.62589, 120.342307), (22.627979, 120.344459), (22.628539, 120.34201), (22.629989, 120.33805), (22.63025, 120.337219), (22.63211, 120.331581), (22.633039, 120.328659), (22.63307, 120.327308), (22.63294, 120.326156), (22.632989, 120.323699), (22.63342, 120.321418), (22.63743, 120.310119), (22.63755, 120.305641), (22.637639, 120.304267), (22.636949, 120.293319), (22.6355, 120.289062), (22.63454, 120.285987), (22.63076, 120.283088), (22.62968, 120.282478), (22.627229, 120.281188), (22.62647, 120.280693), (22.62516, 120.280387), (22.624099, 120.282401), (22.622669, 120.285308), (22.62313, 120.286369), (22.625169, 120.285667)]
-
-		print("waypoints ({}): {}". format(len(waypoints), waypoints))
-
-		commons.seed()
-		result = graph.mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
-
-		#mapmatch_attempt['mapmatch_result'] = result # Figure not jsonable
-		for k in ['geo_path', 'path'] :
-			mapmatch_attempt[k] = result[k]
-
 		filename = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], estpathid=mapmatch_attempt['EstPathUUID'])
-		commons.makedirs(filename)
+
+		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
 
 		try :
-			with commons.logged_open(filename, 'w') as fd :
+			commons.seed()
+			result = graph.mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
+		except Exception as e :
+			print("Mapmatch failed on run {} ({})".format(run[KEYS.runid], e))
+			time.sleep(2)
+			continue
+
+		# Note: because figure is not jsonable cannot do
+		# mapmatch_attempt['mapmatch_result'] = result
+
+		for k in ['geo_path', 'path'] : mapmatch_attempt[k] = result[k]
+
+		try :
+			(fig, ax) = commons.inspect({'plt': ('fig', 'ax')})(result)
+			commons.makedirs(filename)
+			fig.savefig(filename + ".png", bbox_inches='tight', pad_inches=0)
+			plt.close(fig)
+		except Exception as e :
+			print("Could not save figure {} ({})".format(filename + ".png", e))
+
+		try :
+			commons.makedirs(filename)
+			with commons.logged_open(filename + ".json", 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
-			print("Failed to write mapmatch file {} ({})".format(filename, e))
+			print("Failed to write mapmatch file {} ({})".format(filename + ".json", e))
 
-		time.sleep(2)
+		time.sleep(1)
 
-def test_map_route() :
-	maproute('KHH122', 0)
+
+def distill_shape(routeid, direction) :
+	mpl.use('TkAgg')
+	import matplotlib.pyplot as plt
+
+	def remove_repeats(xx) :
+		xx = list(xx)
+		return [x for (x, y) in zip(xx, xx[1:]) if (x != y)] + xx[-1:]
+
+	def commonest(xx) :
+		xx = list(xx)
+		return max(xx, key=xx.count)
+
+	matchedruns_files = sorted(glob.glob(OFILE['mapmatched'].format(routeid=routeid, direction=direction, estpathid="*")))
+
+	mms = [
+		commons.zipjson_load(fn)
+		for fn in matchedruns_files
+	]
+
+	from difflib import SequenceMatcher
+	def pathsim(a, b) : return SequenceMatcher(None, a, b).ratio()
+
+	# Number of map matched suggestions
+	nmm = len(mms)
+	nclusters = 3
+
+	# Affinity matrix
+	M = np.zeros((nmm, nmm))
+	for ((i, mm1), (j, mm2)) in product(enumerate(mms), repeat=2) :
+		M[i, j] = 1 - pathsim(remove_repeats(mm1['path']), remove_repeats(mm2['path']))
+
+	from sklearn.cluster import AgglomerativeClustering
+	labels = list(AgglomerativeClustering(linkage='complete', affinity='precomputed', n_clusters=nclusters).fit_predict(M))
+
+	# Most common label -- largest cluster
+	label1 = commonest(labels)
+
+	print("Largest cluster size:", labels.count(label1))
+
+	# Get the mapmatched paths corresponding to the largest cluster
+	mms = [mm for (mm, label) in zip(mms, labels) if (label == label1)]
+
+	geopaths = [[tuple(p) for p in remove_repeats(mm['geo_path'])] for mm in mms]
+	#geo_path = [tuple(p) for p in ]
+
+	(fig, ax) = plt.subplots()
+
+	# Define start and end point for the route
+	(a, b) = (commonest([gp[0] for gp in geopaths]), commonest([gp[-1] for gp in geopaths]))
+
+	(y, x) = a
+	ax.plot(x, y, 'o', c='g')
+
+	(y, x) = b
+	ax.plot(x, y, 'o', c='b')
+
+	# pp = list(chain.from_iterable(geopaths))
+	# pp = set([p for p in pp if (pp.count(p) > len(geopaths) / 2)])
+	# geopaths = [
+	# 	[p for p in gp if (p in pp)]
+	# 	for gp in geopaths
+	# ]
+
+	plt.ion()
+	plt.show()
+
+	def get_route(geopaths) :
+		geopaths = deepcopy(geopaths)
+
+		def index_try(xx, x) :
+			try :
+				return xx.index(x)
+			except ValueError :
+				return None
+
+		# Define start and end point for the route
+		(p0, p1) = (commonest([gp[0] for gp in geopaths]), commonest([gp[-1] for gp in geopaths]))
+
+		p = None
+		while (len(geopaths) > 1) :
+			p_old = p
+
+			# The most frequent candidate-location
+			p = commonest(gp[0] for gp in geopaths)
+
+			# Where does it appear in other paths?
+			for (i, m) in enumerate(index_try(gp, p) for gp in geopaths) :
+				if (m is not None) :
+					geopaths[i] = geopaths[i][(m + 1):]
+
+			# Remove emptied geopaths
+			geopaths = [gp for gp in geopaths if gp]
+
+			if (p == p0) : p0 = None # The start of the route
+
+			# Have met the start, but not past the end of route
+			# Do not trust a weak suggestion
+			if (not p0) :
+
+				yield p
+
+				# if (p_old):
+				# 	(y, x) = zip(p, p_old)
+				# 	ax.plot(x, y, '.-')
+				# 	plt.pause(0.1)
+
+			if (p == p1) : break
+
+	route = list(get_route(geopaths))
+
+	(y, x) = zip(*route)
+	ax.plot(x, y, 'r-')
+
+	plt.ioff()
+	plt.show()
+
+	return route
+
+def map_routes() :
+	routeid_of = (lambda r: r[KEYS.routeid])
+	direction_of = (lambda r: r[KEYS.dir])
+	run_id = (lambda r : (routeid_of(r), direction_of(r)))
+
+	# List of filenames, one file per physical bus, identified by plate number
+	bus_files = sorted(glob.glob(IFILE['busses'].format(busid="*")))
+
+	runs = list(
+		run
+		for fn in bus_files
+		for run in commons.zipjson_load(fn)
+	)
+
+	print("Found {} runs".format(len(runs)))
+
+	runs = [run for run in runs if all(is_in_map(*p) for p in run_waypoints(run))]
+
+	print("Found {} runs inside the map".format(len(runs)))
+
+	runs = { k : list(g) for (k, g) in groupby(sorted(runs, key=run_id), run_id) }
+	#runs = commons.index_dicts_by_key(runs, run_id))
+
+	# Sort the route-directions by decreasing number of measurements
+	for (case, runs) in sorted(runs.items(), key=(lambda cr : -len(cr[1]))) :
+		print("Route {}, direction {} ({} runs)".format(*case, len(runs)))
+
+		if (len(runs) <= 4) :
+			print("Aborting: too few runs.")
+			break
+
+		mapmatch_runs(runs)
+		route = distill_shape(*case)
+
+		print(route)
 
 
 ## ===================== PLAY :
@@ -216,7 +374,7 @@ pass
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'MAP_ROUTE' : test_map_route,
+	'MAP_ROUTES' : map_routes,
 }
 
 ## ==================== ENTRY :
