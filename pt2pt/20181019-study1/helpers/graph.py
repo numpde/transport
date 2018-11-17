@@ -204,15 +204,17 @@ def mapmatch(
 	if callback : callback(result)
 
 	# Optimization loop
-	for group_size in np.round(2 ** np.linspace(1, np.log2(len(prob_clouds)), 5)) :
+	for group_size in np.round(np.logspace(np.log10(2), np.log10(len(prob_clouds)), 5)) :
+		# Get rid of np datatype
+		group_size = int(group_size)
 
 		group_acceptance_threshold = acceptance_threshold * (group_size / len(prob_clouds))
 
-		for _ in range(round(len(prob_clouds) / group_size * 1.4)) :
+		for _ in np.arange(np.round(len(prob_clouds) / group_size * 1.4)) :
 
 			# (Remaining) edge clouds to optimize (index into prob_clouds)
-			# TODO: contiguous selection
-			recto = random.choices(list(range(len(prob_clouds))), k=group_size)
+			# Random contiguous selection of length "group_size"
+			recto = list(random.choice([range(n, n + group_size) for n in range(len(prob_clouds) - group_size + 1)]))
 
 			while recto :
 
@@ -241,20 +243,20 @@ def mapmatch(
 						select_new_edge = True
 
 					# Precompute shortest path for each gap
-					for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
-						if (a, b) not in sps_way:
-							try :
+					try :
+						for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
+							if (a, b) not in sps_way:
 								sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='len')
-							except nx.NetworkXNoPath :
-								raise
+					except nx.NetworkXNoPath :
+						raise
 
 					path = [seledges[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(seledges, seledges[1:]))) + [seledges[-1][-1]]
-					# TODO: remove repeated nodes/geo-coordinates
+
 					# Convert node IDs to (lat, lon) coordinates
-					geo_path = [g.nodes[n]['pos'] for n in path]
+					geo_path = commons.remove_repeats([g.nodes[n]['pos'] for n in path])
 
 					# Undo "Detailed decision node cluster"s for the user
-					origpath = [g.nodes[n]['basenode'] for n in path]
+					origpath = commons.remove_repeats([g.nodes[n]['basenode'] for n in path])
 
 					# Previous value of the quality indicators
 					old_indi = indi.copy()
