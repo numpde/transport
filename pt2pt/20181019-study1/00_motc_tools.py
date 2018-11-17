@@ -33,6 +33,7 @@ pass
 
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+	'mapbox_cache_dir' : "helpers/maps_cache/UV/",
 
 	'City' : "Kaohsiung",
 
@@ -264,7 +265,7 @@ def write_route_img() :
 		ax.get_yaxis().set_visible(False)
 
 		# Download the background map
-		i = maps.get_map_by_bbox(bbox, token=PARAM['mapbox_api_token'])
+		i = maps.get_map_by_bbox(bbox, token=PARAM['mapbox_api_token'], cachedir=PARAM['mapbox_cache_dir'])
 
 		# Apply the background map
 		img = ax.imshow(i, extent=(left, right, bottom, top), interpolation='quadric', zorder=-100)
