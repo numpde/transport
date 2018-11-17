@@ -3,6 +3,13 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# Remove consecutive repeats
+def remove_repeats(xx):
+	xx = list(xx)
+	return [x for (x, y) in zip(xx, xx[1:]) if (x != y)] + xx[-1:]
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import random
 import numpy as np
 
@@ -199,7 +206,7 @@ def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singleton
 						J[j][k] = V.pop()
 
 	# Convert all defaultdict to dict
-	J = json.loads(json.dumps(J))
+	J = { k : dict(j) for (k, j) in J.items() }
 
 	return J
 
