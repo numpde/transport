@@ -20,9 +20,6 @@ from math import pi, log, tan, exp, atan
 # Therefore:
 MAPBOX_ZOOM0_SIZE = 512 # Not 256
 
-# Keep copies of downloaded maps
-CACHEDIR = "helpers/wget_cache/maps/"
-
 # https://www.mapbox.com/api-documentation/#styles
 class MapBoxStyle(Enum) :
 	streets = 'streets-v10'
@@ -51,7 +48,7 @@ def p2g(x, y, zoom):
 	)
 
 # bbox = (left, bottom, right, top) in degrees
-def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light) :
+def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 
 	if not token :
 		raise RuntimeError("An API token is required")
@@ -89,7 +86,7 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light) :
 	url = url.format(style=style, lat=lat, lon=lon, token=token, zoom=zoom, w=w, h=h, retina=retina)
 
 	# Download the rendered image
-	b = commons.wget(url, cachedir=CACHEDIR).bytes
+	b = commons.wget(url, cachedir=cachedir).bytes
 
 	# Convert bytes to image object
 	I = Image.open(io.BytesIO(b))
