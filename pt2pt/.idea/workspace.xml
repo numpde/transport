@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="RA: Enabled Compression I">
+    <list default="true" id="9704c38b-b658-4f9d-a41f-33c9f35ee60c" name="Default Changelist" comment="RA: def remove_repeats; cleaner defaultdict -&gt; dict">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/20181019-study1/14_maproute.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/14_maproute.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/20181019-study1/OUTPUT/13/Kaohsiung/UV/unversioned" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/20181019-study1/OUTPUT/14/UV/unversioned" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/20181019-study1/helpers/commons.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/helpers/commons.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/20181019-study1/helpers/graph.py" beforeDir="false" afterPath="$PROJECT_DIR$/20181019-study1/helpers/graph.py" afterDir="false" />
     </list>
+    <ignored path="$PROJECT_DIR$/20181019-study1/OUTPUT/12/Kaohsiung/UV/" />
+    <ignored path="$PROJECT_DIR$/20181019-study1/OUTPUT/13/Kaohsiung/UV/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,67 +22,33 @@
     <session id="691266365">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="14" />
-          <entry key="project.open.time.15" value="1" />
-          <entry key="project.open.time.18" value="1" />
-          <entry key="project.open.time.19" value="2" />
-          <entry key="project.open.time.20" value="3" />
-          <entry key="project.open.time.21" value="3" />
-          <entry key="project.open.time.22" value="1" />
-          <entry key="project.open.time.24" value="1" />
-          <entry key="project.open.time.25" value="1" />
-          <entry key="project.open.time.27" value="1" />
-          <entry key="project.open.time.30" value="2" />
-          <entry key="project.open.time.31" value="1" />
-          <entry key="project.open.time.32" value="1" />
-          <entry key="project.open.time.36" value="2" />
-          <entry key="project.open.time.37" value="1" />
-          <entry key="project.open.time.4" value="1" />
-          <entry key="project.opened" value="22" />
+          <entry key="project.closed" value="2" />
+          <entry key="project.open.time.23" value="2" />
+          <entry key="project.opened" value="2" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
         <counts>
-          <entry key="htm" value="4" />
-          <entry key="js" value="8" />
-          <entry key="json" value="2" />
-          <entry key="py" value="118" />
-          <entry key="sh" value="7" />
-          <entry key="txt" value="4" />
-          <entry key="unversioned" value="2" />
-          <entry key="xml" value="1" />
+          <entry key="py" value="14" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.open">
         <counts>
-          <entry key="Bash" value="2" />
-          <entry key="HTML" value="4" />
-          <entry key="JSON" value="2" />
-          <entry key="JavaScript" value="8" />
-          <entry key="PLAIN_TEXT" value="11" />
-          <entry key="Python" value="118" />
-          <entry key="XML" value="1" />
+          <entry key="Python" value="14" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
-          <entry key="Python Console" value="4001" />
-          <entry key="dummy" value="35" />
-          <entry key="htm" value="149" />
-          <entry key="js" value="284" />
-          <entry key="py" value="138802" />
-          <entry key="sh" value="758" />
-          <entry key="txt" value="4091" />
+          <entry key="Python Console" value="1864" />
+          <entry key="dummy" value="8" />
+          <entry key="py" value="13262" />
+          <entry key="txt" value="180" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Bash" value="2" />
-          <entry key="HTML" value="149" />
-          <entry key="JavaScript" value="284" />
-          <entry key="PLAIN_TEXT" value="4882" />
-          <entry key="Python" value="142802" />
-          <entry key="RegExp" value="1" />
+          <entry key="PLAIN_TEXT" value="188" />
+          <entry key="Python" value="15126" />
         </counts>
       </usages-collector>
     </session>
@@ -90,14 +59,10 @@
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
+        <entry file="file://$PROJECT_DIR$/20181019-study1/14_maproute.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="5742">
-              <caret line="276" column="9" selection-start-line="276" selection-start-column="9" selection-end-line="276" selection-end-column="9" />
-              <folding>
-                <element signature="e#71#98#0" expanded="true" />
-                <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
-              </folding>
+            <state relative-caret-position="2999">
+              <caret line="384" selection-start-line="384" selection-end-line="384" />
             </state>
           </provider>
         </entry>
@@ -105,115 +70,38 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="203">
-              <caret line="251" column="65" selection-start-line="251" selection-start-column="65" selection-end-line="251" selection-end-column="65" />
-              <folding>
-                <element signature="e#19#46#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="3520">
-              <caret line="161" column="39" selection-start-line="161" selection-start-column="39" selection-end-line="161" selection-end-column="39" />
-              <folding>
-                <element signature="e#100#113#0" expanded="true" />
-                <marker date="1542362211708" expanded="true" signature="151:188" ph="..." />
-                <marker date="1542362211708" expanded="true" signature="2080:2083" ph="..." />
-                <marker date="1542362211708" expanded="true" signature="2144:2146" ph="..." />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2640">
-              <caret line="129" column="44" selection-start-line="129" selection-start-column="44" selection-end-line="129" selection-end-column="44" />
-              <folding>
-                <element signature="e#71#98#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/20181019-study1/14_maproute.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-760">
-              <caret line="144" column="35" lean-forward="true" selection-start-line="144" selection-start-column="35" selection-end-line="144" selection-end-column="35" />
-              <folding>
-                <element signature="e#71#111#0" expanded="true" />
-                <marker date="1542369536766" expanded="true" signature="2469:2470" ph="..." />
-              </folding>
+            <state relative-caret-position="271">
+              <caret line="616" column="20" selection-start-line="615" selection-start-column="28" selection-end-line="616" selection-end-column="20" />
             </state>
           </provider>
         </entry>
       </file>
     </leaf>
   </component>
-  <component name="FileTemplateManagerImpl">
-    <option name="RECENT_TEMPLATES">
-      <list>
-        <option value="Python Script" />
-      </list>
-    </option>
-  </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>subgrap</find>
-      <find>subg</find>
-      <find>122</find>
-      <find>curvat</find>
-      <find>concate</find>
-      <find>_cloud</find>
-      <find>edge_len</find>
-      <find>meter_from_angle</find>
-      <find>dist_cloud</find>
-      <find>sps_len</find>
-      <find>edge_length</find>
-      <find>miss_dist</find>
-      <find>total_len</find>
-      <find>node_pos</find>
-      <find>kne</find>
-      <find>node_</find>
-      <find>self.locs</find>
-      <find>error:</find>
-      <find>response</find>
-      <find>parser</find>
-      <find>signifi</find>
-      <find>ddnc</find>
-      <find>stubbo</find>
-      <find>1 +</find>
-      <find>plt</find>
-      <find>tight</find>
-      <find>savefig</find>
-      <find>': '</find>
-      <find>KEYS['time']</find>
-      <find>randomly</find>
+      <find>maps.</find>
+      <find>glob</find>
+      <find>agg</find>
+      <find>len(pro</find>
+      <find>acceptance_threshold</find>
+      <find>bbox</find>
+      <find>sparsi</find>
+      <find>failed</find>
+      <find>gpxpy</find>
+      <find>weakly</find>
+      <find>graph_fi</find>
+      <find>mapmatched</find>
+      <find>routeid</find>
+      <find>estpath</find>
+      <find>waypoints</find>
+      <find>3000</find>
+      <find>1.1</find>
+      <find>(22.613109, 120.301681)</find>
+      <find>normali</find>
+      <find>choices</find>
+      <find>choice</find>
     </findStrings>
-    <replaceStrings>
-      <replace />
-      <replace>self.routes_by_lang</replace>
-      <replace>try-local-routes</replace>
-      <replace>try-local-routestops</replace>
-      <replace>'url-routes'</replace>
-      <replace>init_original</replace>
-      <replace>self.routestops</replace>
-      <replace>self.platforms</replace>
-      <replace>distance-tty</replace>
-      <replace>indi['miss']</replace>
-      <replace>indi['dist']</replace>
-      <replace>KEYS.time</replace>
-    </replaceStrings>
-    <dirStrings>
-      <dir>$PROJECT_DIR$/20181025-nextbus/html</dir>
-      <dir>$PROJECT_DIR$/20181028-BusCal/credentials</dir>
-    </dirStrings>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
@@ -221,38 +109,12 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/20181019-study1/05_transit.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/03_faketimetable.py" />
-        <option value="$PROJECT_DIR$/route.js" />
-        <option value="$PROJECT_DIR$/20181019-study1/ORIGINALS/bus_routes/kaohsiung.js" />
-        <option value="$PROJECT_DIR$/20181019-study1/ORIGINALS/04/kaohsiung_bus_routes.js" />
-        <option value="$PROJECT_DIR$/20181025-nextbus/html/index.htm" />
-        <option value="$PROJECT_DIR$/20181025-nextbus/front/index.htm" />
-        <option value="$PROJECT_DIR$/20181019-study1/OUTPUT/05_nextbus.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/05_nextbus.py" />
-        <option value="$PROJECT_DIR$/20181025-nextbus/main.py" />
-        <option value="$PROJECT_DIR$/20181025-nextbus/nextbus.py" />
-        <option value="$PROJECT_DIR$/20181028-BusCal/buscal.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/02_filterroads.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/13_realtimevis.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/04_getapiroutes.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/03_osm_vs_motc.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/07_faketimetable.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/00_motc_download.sh" />
-        <option value="$PROJECT_DIR$/20181019-study1/03_osm_motc.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/commons.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/.credentials/UV/mapbox-token.txt" />
-        <option value="$PROJECT_DIR$/20181019-study1/ideas.txt" />
         <option value="$PROJECT_DIR$/20181019-study1/helpers/maps.py" />
         <option value="$PROJECT_DIR$/20181019-study1/00_motc_tools.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/16_realtimevis.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.sh" />
+        <option value="$PROJECT_DIR$/20181019-study1/01_downloadmap.py" />
         <option value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
-        <option value="$PROJECT_DIR$/20181019-study1/helpers/commons.py" />
         <option value="$PROJECT_DIR$/20181019-study1/14_maproute.py" />
+        <option value="$PROJECT_DIR$/20181019-study1/helpers/commons.py" />
         <option value="$PROJECT_DIR$/20181019-study1/helpers/graph.py" />
       </list>
     </option>
@@ -269,7 +131,7 @@
         <expanded-state>
           <State />
           <State>
-            <id>Python</id>
+            <id>General</id>
           </State>
           <State>
             <id>Spelling</id>
@@ -277,7 +139,7 @@
         </expanded-state>
         <selected-state>
           <State>
-            <id>PyArgumentEqualDefaultInspection</id>
+            <id>LongLine</id>
           </State>
         </selected-state>
       </profile-state>
@@ -291,7 +153,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -314,21 +175,15 @@
           <select />
         </subPane>
       </pane>
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
-    <property name="settings.editor.selected.configurable" value="Errors" />
+    <property name="settings.editor.selected.configurable" value="editor.breadcrumbs" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/20181019-study1/.credentials/UV" />
-      <recent name="$PROJECT_DIR$/20181019-study1/helpers" />
-      <recent name="$PROJECT_DIR$/20181019-study1/OUTPUT" />
-      <recent name="$PROJECT_DIR$/20181019-study1" />
-      <recent name="$PROJECT_DIR$/20181019-study1/ORIGINALS/bus_routes" />
-    </key>
-    <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/20181019-study1" />
+      <recent name="$PROJECT_DIR$/20181019-study1/helpers/maps_cache" />
     </key>
   </component>
   <component name="RunDashboard">
@@ -343,70 +198,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.14_maproute">
-    <configuration name="02_osmgraph" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="pt2pt" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/02_osmgraph.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="12_realtimelog" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="pt2pt" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/12_realtimelog.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="13_physicalbus" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <module name="pt2pt" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/20181019-study1" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/20181019-study1/13_physicalbus.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Python.graph">
     <configuration name="14_maproute" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="pt2pt" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -450,331 +242,20 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.graph" />
-      <item itemvalue="Python.02_osmgraph" />
-      <item itemvalue="Python.12_realtimelog" />
-      <item itemvalue="Python.13_physicalbus" />
       <item itemvalue="Python.14_maproute" />
+      <item itemvalue="Python.graph" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.14_maproute" />
-        <item itemvalue="Python.13_physicalbus" />
         <item itemvalue="Python.graph" />
-        <item itemvalue="Python.12_realtimelog" />
-        <item itemvalue="Python.02_osmgraph" />
+        <item itemvalue="Python.14_maproute" />
       </list>
     </recent_temporary>
   </component>
   <component name="SvnConfiguration">
-    <configuration>$USER_HOME$/.subversion</configuration>
+    <configuration />
   </component>
-  <component name="TaskManager">
-    <task active="true" id="Default" summary="Default task">
-      <changelist id="390f7e1b-a08a-4a00-99a6-359d00947c7f" name="Default Changelist" comment="" />
-      <created>1540203775108</created>
-      <option name="number" value="Default" />
-      <option name="presentableId" value="Default" />
-      <updated>1540203775108</updated>
-    </task>
-    <task id="LOCAL-00001" summary="RA: Template for transit computation">
-      <created>1540279954084</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1540279954084</updated>
-    </task>
-    <task id="LOCAL-00002" summary="RA: Generate fake timetables, first draft">
-      <created>1540280011180</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1540280011180</updated>
-    </task>
-    <task id="LOCAL-00003" summary="RA: removed way_edges in favor of way_nodes">
-      <created>1540280046468</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1540280046468</updated>
-    </task>
-    <task id="LOCAL-00004" summary="RA: More stuff to ignore, mainly the UV folders">
-      <created>1540280098478</created>
-      <option name="number" value="00004" />
-      <option name="presentableId" value="LOCAL-00004" />
-      <option name="project" value="LOCAL" />
-      <updated>1540280098478</updated>
-    </task>
-    <task id="LOCAL-00005" summary="RA: Add meta file for maps">
-      <created>1540280121368</created>
-      <option name="number" value="00005" />
-      <option name="presentableId" value="LOCAL-00005" />
-      <option name="project" value="LOCAL" />
-      <updated>1540280121368</updated>
-    </task>
-    <task id="LOCAL-00006" summary="RA: PyCharm styles">
-      <created>1540280127237</created>
-      <option name="number" value="00006" />
-      <option name="presentableId" value="LOCAL-00006" />
-      <option name="project" value="LOCAL" />
-      <updated>1540280127237</updated>
-    </task>
-    <task id="LOCAL-00007" summary="RA: Stop-to-route mapping">
-      <created>1540329466394</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1540329466422</updated>
-    </task>
-    <task id="LOCAL-00008" summary="RA: Map update">
-      <created>1540329491758</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1540329491758</updated>
-    </task>
-    <task id="LOCAL-00009" summary="RA: Corrected the dynamic programming routine">
-      <created>1540379624833</created>
-      <option name="number" value="00009" />
-      <option name="presentableId" value="LOCAL-00009" />
-      <option name="project" value="LOCAL" />
-      <updated>1540379624833</updated>
-    </task>
-    <task id="LOCAL-00010" summary="RA: Node tags are also saved">
-      <created>1540395354240</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1540395354240</updated>
-    </task>
-    <task id="LOCAL-00011" summary="RA: Fake time tables are now generated">
-      <created>1540395373604</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1540395373604</updated>
-    </task>
-    <task id="LOCAL-00012" summary="RA: Print more status info">
-      <created>1540436584584</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1540436584584</updated>
-    </task>
-    <task id="LOCAL-00013" summary="RA: Bus routes of Kaohsiung">
-      <created>1540436630505</created>
-      <option name="number" value="00013" />
-      <option name="presentableId" value="LOCAL-00013" />
-      <option name="project" value="LOCAL" />
-      <updated>1540436630505</updated>
-    </task>
-    <task id="LOCAL-00014" summary="RA: Renamed file">
-      <created>1540439721363</created>
-      <option name="number" value="00014" />
-      <option name="presentableId" value="LOCAL-00014" />
-      <option name="project" value="LOCAL" />
-      <updated>1540439721363</updated>
-    </task>
-    <task id="LOCAL-00015" summary="RA: Renamed file">
-      <created>1540447410459</created>
-      <option name="number" value="00015" />
-      <option name="presentableId" value="LOCAL-00015" />
-      <option name="project" value="LOCAL" />
-      <updated>1540447410459</updated>
-    </task>
-    <task id="LOCAL-00016" summary="RA: Re-add to repo">
-      <created>1540447515635</created>
-      <option name="number" value="00016" />
-      <option name="presentableId" value="LOCAL-00016" />
-      <option name="project" value="LOCAL" />
-      <updated>1540447515635</updated>
-    </task>
-    <task id="LOCAL-00017" summary="RA: Download en-zh to one file instead of two">
-      <created>1540449495783</created>
-      <option name="number" value="00017" />
-      <option name="presentableId" value="LOCAL-00017" />
-      <option name="project" value="LOCAL" />
-      <updated>1540449495783</updated>
-    </task>
-    <task id="LOCAL-00018" summary="RA: Index routes by stops">
-      <created>1540461959577</created>
-      <option name="number" value="00018" />
-      <option name="presentableId" value="LOCAL-00018" />
-      <option name="project" value="LOCAL" />
-      <updated>1540461959577</updated>
-    </task>
-    <task id="LOCAL-00019" summary="RA: Index routes by stops">
-      <created>1540462305383</created>
-      <option name="number" value="00019" />
-      <option name="presentableId" value="LOCAL-00019" />
-      <option name="project" value="LOCAL" />
-      <updated>1540462305383</updated>
-    </task>
-    <task id="LOCAL-00020" summary="RA: 'r' instead of 'rb' for json">
-      <created>1540462419958</created>
-      <option name="number" value="00020" />
-      <option name="presentableId" value="LOCAL-00020" />
-      <option name="project" value="LOCAL" />
-      <updated>1540462419958</updated>
-    </task>
-    <task id="LOCAL-00021" summary="RA: Reindex stops by Id instead of SID">
-      <created>1540486555237</created>
-      <option name="number" value="00021" />
-      <option name="presentableId" value="LOCAL-00021" />
-      <option name="project" value="LOCAL" />
-      <updated>1540486555237</updated>
-    </task>
-    <task id="LOCAL-00022" summary="RA: Basic data setup (routes, stops)">
-      <created>1540584079230</created>
-      <option name="number" value="00022" />
-      <option name="presentableId" value="LOCAL-00022" />
-      <option name="project" value="LOCAL" />
-      <updated>1540584079231</updated>
-    </task>
-    <task id="LOCAL-00023" summary="RA: Include KNN stops">
-      <created>1540654258509</created>
-      <option name="number" value="00023" />
-      <option name="presentableId" value="LOCAL-00023" />
-      <option name="project" value="LOCAL" />
-      <updated>1540654258510</updated>
-    </task>
-    <task id="LOCAL-00024" summary="RA: wget throttling, routes in stops, more on KNN">
-      <created>1540662282444</created>
-      <option name="number" value="00024" />
-      <option name="presentableId" value="LOCAL-00024" />
-      <option name="project" value="LOCAL" />
-      <updated>1540662282444</updated>
-    </task>
-    <task id="LOCAL-00025" summary="RA: ETA draft">
-      <created>1540674383566</created>
-      <option name="number" value="00025" />
-      <option name="presentableId" value="LOCAL-00025" />
-      <option name="project" value="LOCAL" />
-      <updated>1540674383566</updated>
-    </task>
-    <task id="LOCAL-00026" summary="RA: ETA draft'">
-      <created>1540676327868</created>
-      <option name="number" value="00026" />
-      <option name="presentableId" value="LOCAL-00026" />
-      <option name="project" value="LOCAL" />
-      <updated>1540676327868</updated>
-    </task>
-    <task id="LOCAL-00027" summary="RA: Refined ETA computation, renamed classes, removed dependency on RoutesMeta">
-      <created>1540712711906</created>
-      <option name="number" value="00027" />
-      <option name="presentableId" value="LOCAL-00027" />
-      <option name="project" value="LOCAL" />
-      <updated>1540712711906</updated>
-    </task>
-    <task id="LOCAL-00028" summary="RA: First draft">
-      <created>1540793726915</created>
-      <option name="number" value="00028" />
-      <option name="presentableId" value="LOCAL-00028" />
-      <option name="project" value="LOCAL" />
-      <updated>1540793726915</updated>
-    </task>
-    <task id="LOCAL-00029" summary="RA: Separated main">
-      <created>1540793753043</created>
-      <option name="number" value="00029" />
-      <option name="presentableId" value="LOCAL-00029" />
-      <option name="project" value="LOCAL" />
-      <updated>1540793753045</updated>
-    </task>
-    <task id="LOCAL-00030" summary="RA: Realtime bus info logger">
-      <created>1540986566970</created>
-      <option name="number" value="00030" />
-      <option name="presentableId" value="LOCAL-00030" />
-      <option name="project" value="LOCAL" />
-      <updated>1540986566970</updated>
-    </task>
-    <task id="LOCAL-00031" summary="RA: Fix empty stop list issue">
-      <created>1540986591198</created>
-      <option name="number" value="00031" />
-      <option name="presentableId" value="LOCAL-00031" />
-      <option name="project" value="LOCAL" />
-      <updated>1540986591198</updated>
-    </task>
-    <task id="LOCAL-00032" summary="RA: Large sleep time; JSON format info">
-      <created>1540995931895</created>
-      <option name="number" value="00032" />
-      <option name="presentableId" value="LOCAL-00032" />
-      <option name="project" value="LOCAL" />
-      <updated>1540995931895</updated>
-    </task>
-    <task id="LOCAL-00033" summary="RA: Removes some redundancy in JSON real time log files">
-      <created>1540996021342</created>
-      <option name="number" value="00033" />
-      <option name="presentableId" value="LOCAL-00033" />
-      <option name="project" value="LOCAL" />
-      <updated>1540996021342</updated>
-    </task>
-    <task id="LOCAL-00034" summary="RA: Update every 50sec">
-      <created>1541014757128</created>
-      <option name="number" value="00034" />
-      <option name="presentableId" value="LOCAL-00034" />
-      <option name="project" value="LOCAL" />
-      <updated>1541014757147</updated>
-    </task>
-    <task id="LOCAL-00035" summary="RA: History visualization">
-      <created>1541014793815</created>
-      <option name="number" value="00035" />
-      <option name="presentableId" value="LOCAL-00035" />
-      <option name="project" value="LOCAL" />
-      <updated>1541014793815</updated>
-    </task>
-    <task id="LOCAL-00036" summary="RA: Renamed from &quot;02_filterroads&quot;">
-      <created>1541082673302</created>
-      <option name="number" value="00036" />
-      <option name="presentableId" value="LOCAL-00036" />
-      <option name="project" value="LOCAL" />
-      <updated>1541082673302</updated>
-    </task>
-    <task id="LOCAL-00037" summary="RA: Include compression">
-      <created>1541082715559</created>
-      <option name="number" value="00037" />
-      <option name="presentableId" value="LOCAL-00037" />
-      <option name="project" value="LOCAL" />
-      <updated>1541082715559</updated>
-    </task>
-    <task id="LOCAL-00038" summary="RA: Subdir output by date">
-      <created>1541082737971</created>
-      <option name="number" value="00038" />
-      <option name="presentableId" value="LOCAL-00038" />
-      <option name="project" value="LOCAL" />
-      <updated>1541082737971</updated>
-    </task>
-    <task id="LOCAL-00039" summary="RA: Zombie file">
-      <created>1541083146109</created>
-      <option name="number" value="00039" />
-      <option name="presentableId" value="LOCAL-00039" />
-      <option name="project" value="LOCAL" />
-      <updated>1541083146109</updated>
-    </task>
-    <task id="LOCAL-00040" summary="RA: Introduced commons; compression removes time stamps">
-      <created>1541097200777</created>
-      <option name="number" value="00040" />
-      <option name="presentableId" value="LOCAL-00040" />
-      <option name="project" value="LOCAL" />
-      <updated>1541097200777</updated>
-    </task>
-    <task id="LOCAL-00041" summary="RA: Rudimentary post-realtime visualization">
-      <created>1541097236762</created>
-      <option name="number" value="00041" />
-      <option name="presentableId" value="LOCAL-00041" />
-      <option name="project" value="LOCAL" />
-      <updated>1541097236762</updated>
-    </task>
-    <task id="LOCAL-00042" summary="RA: Common methods">
-      <created>1541097256105</created>
-      <option name="number" value="00042" />
-      <option name="presentableId" value="LOCAL-00042" />
-      <option name="project" value="LOCAL" />
-      <updated>1541097256105</updated>
-    </task>
-    <option name="localTasksCounter" value="43" />
-    <servers />
-  </component>
-  <component name="TodoView" selected-index="4">
+  <component name="TodoView">
     <todo-panel id="selected-file">
       <is-autoscroll-to-source value="true" />
     </todo-panel>
@@ -787,19 +268,19 @@
     <frame x="67" y="25" width="1213" height="999" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.7433832" visible="true" weight="0.26890758" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.24957983" />
+      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.5960265" weight="0.20168068" />
+      <window_info id="Structure" order="1" sideWeight="0.40397352" side_tool="true" weight="0.20168068" />
       <window_info id="Favorites" order="2" sideWeight="0.2566168" side_tool="true" weight="0.26890758" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32911393" />
-      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.49915966" weight="0.3049482" />
+      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.49831933" visible="true" weight="0.3049482" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.44188723" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.32911393" />
       <window_info anchor="bottom" id="Version Control" order="7" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.50084037" side_tool="true" weight="0.3049482" />
-      <window_info active="true" anchor="bottom" id="Python Console" order="9" visible="true" weight="0.32796317" />
+      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.5016807" side_tool="true" weight="0.3049482" />
+      <window_info anchor="bottom" id="Python Console" order="9" weight="0.32796317" />
       <window_info anchor="bottom" id="Terminal" order="10" weight="0.32911393" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -829,351 +310,82 @@
     <option name="myLimit" value="2678400000" />
   </component>
   <component name="VcsManagerConfiguration">
-    <option name="FORCE_NON_EMPTY_COMMENT" value="true" />
-    <MESSAGE value="RA: Moved dist_to_segment to the &quot;graph&quot; helper module" />
-    <MESSAGE value="RA: Compute knn also" />
-    <MESSAGE value="RA: Draft for bus stop map matching" />
-    <MESSAGE value="RA: Moved compute_knn to the &quot;graph&quot; module" />
-    <MESSAGE value="RA: Mostly plotting refinements" />
-    <MESSAGE value="RA: Export knn of a subgraph only" />
-    <MESSAGE value="RA: Unpickle knn" />
-    <MESSAGE value="RA: Introducing detailed decision clusters" />
-    <MESSAGE value="RA: Corrections in &quot;detailed decision node cluster&quot;" />
-    <MESSAGE value="RA: Minor cleanup; switch on DDNC for larger turns" />
-    <MESSAGE value="RA: Filter only bus-accessible roads" />
-    <MESSAGE value="RA: Cleaner optimization criterion; &quot;detail decision node clusters&quot;" />
-    <MESSAGE value="RA: Include &quot;residential&quot; roads" />
-    <MESSAGE value="RA: Simplifications" />
-    <MESSAGE value="RA: Encapsulate map matching" />
-    <MESSAGE value="RA: Map matching in a separate function" />
-    <MESSAGE value="RA: Fixed shebang" />
-    <MESSAGE value="RA: Removed redundant def" />
-    <MESSAGE value="RA: Cleanup in mapmatch" />
-    <MESSAGE value="RA: Better error handling in compression" />
-    <MESSAGE value="RA: Enabled Compression I" />
-    <MESSAGE value="RA: Segmentation by time gap;" />
-    <MESSAGE value="RA: Forward highway tag to the graph; modified knn; simplifications" />
-    <MESSAGE value="RA: Separated nearest-edges function" />
-    <MESSAGE value="RA: Route from bus runs -- draft" />
-    <option name="LAST_COMMIT_MESSAGE" value="RA: Route from bus runs -- draft" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint suspend="THREAD" type="python-line">
-          <url>file:///usr/local/lib/python3.6/dist-packages/scipy/spatial/distance.py</url>
-          <line>2638</line>
-          <option name="timeStamp" value="2" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/20181019-study1/helpers/graph.py</url>
-          <line>516</line>
-          <option name="timeStamp" value="10" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/20181019-study1/helpers/graph.py</url>
-          <line>133</line>
-          <option name="timeStamp" value="11" />
-        </line-breakpoint>
-      </breakpoints>
-      <breakpoints-dialog>
-        <breakpoints-dialog />
-      </breakpoints-dialog>
-    </breakpoint-manager>
-    <watches-manager>
-      <configuration name="PythonConfigurationType">
-        <watch expression="G.in_edges(nbunch=nb)" />
-        <watch expression="G.out_edges(nbunch=nb)" />
-      </configuration>
-    </watches-manager>
+    <MESSAGE value="RA: def remove_repeats; cleaner defaultdict -&gt; dict" />
+    <MESSAGE value="RA: contiguous selection; fixed np datatype" />
+    <MESSAGE value="RA: Cachedir parameter" />
+    <MESSAGE value="RA: More systematic route extraction" />
+    <option name="LAST_COMMIT_MESSAGE" value="RA: More systematic route extraction" />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/02/UV/unversioned">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret selection-end-line="2" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/01/UV/unversioned">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="30">
-          <caret line="2" lean-forward="true" selection-start-line="2" selection-end-line="2" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/05_transit.py" />
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/scipy/spatial/distance.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="199">
-          <caret line="2638" column="33" selection-start-line="2638" selection-start-column="27" selection-end-line="2638" selection-end-column="33" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/bus_routes/route.js" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/03_faketimetable.py" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/bus_routes/kaohsiung.js" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/04/route_1431.js" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/04/kaohsiung_bus_routes.js" />
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/html/index.htm" />
-    <entry file="file://$PROJECT_DIR$/20181019-study1/OUTPUT/05_nextbus.py" />
-    <entry file="file:///usr/lib/python3.6/json/encoder.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="160">
-          <caret line="198" selection-start-line="198" selection-end-line="198" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/lib/python3.6/json/__init__.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="169">
-          <caret line="230" selection-start-line="230" selection-end-line="230" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181028-BusCal/.credentials/UV/credentials.json">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/front/index.htm" />
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/main.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="90">
-          <caret line="6" selection-start-line="6" selection-end-line="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_Route/data.json">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/-1247971763/builtins.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="160">
-          <caret line="278" column="4" selection-start-line="278" selection-start-column="4" selection-end-line="278" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/05_nextbus_zombie.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="220">
-          <caret line="13" lean-forward="true" selection-start-line="13" selection-end-line="13" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/10_transit.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="222">
-          <caret line="17" column="9" lean-forward="true" selection-start-line="17" selection-start-column="9" selection-end-line="17" selection-end-column="9" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/07_faketimetable.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2508">
-          <caret line="120" column="31" selection-start-line="120" selection-start-column="31" selection-end-line="120" selection-end-column="31" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/01_downloadmap.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="102">
-          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_StopOfRoute/readme.txt">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ORIGINALS/MOTC_obsolete/Kaohsiung/CityBusApi_Route/readme.txt">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181028-BusCal/buscal.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-673">
-          <caret line="27" column="26" selection-start-line="27" selection-start-column="26" selection-end-line="27" selection-end-column="26" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_download.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="242">
-          <caret line="11" lean-forward="true" selection-start-line="11" selection-end-line="11" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/04_getapiroutes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2024">
-          <caret line="6" lean-forward="true" selection-start-line="6" selection-end-line="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/.credentials/UV/mapbox-token.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="90" selection-start-column="90" selection-end-column="90" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/lib/python3.6/urllib/request.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="649" selection-start-line="649" selection-end-line="649" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/ideas.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="66">
-          <caret line="3" lean-forward="true" selection-start-line="3" selection-end-line="3" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/matplotlib/axes/_axes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="166">
-          <caret line="4222" selection-start-line="4222" selection-end-line="4222" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/maps.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1642">
-          <caret line="4" column="21" selection-start-line="4" selection-start-column="21" selection-end-line="4" selection-end-column="21" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/numpy/lib/shape_base.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="327">
-          <caret line="601" column="48" selection-start-line="601" selection-start-column="48" selection-end-line="601" selection-end-column="48" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/.PyCharmCE2018.2/system/python_stubs/-1247971763/sklearn/neighbors/ball_tree.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="154">
-          <caret line="7" lean-forward="true" selection-start-line="7" selection-end-line="7" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/algorithms/shortest_paths/weighted.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="174">
-          <caret line="830" selection-start-line="830" selection-end-line="830" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/03_osm_motc.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="22">
-          <caret line="56" selection-start-line="56" selection-end-line="59" selection-end-column="47" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/.idea/workspace.xml">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181025-nextbus/nextbus.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="185">
-          <caret line="453" column="75" selection-start-line="453" selection-start-column="60" selection-end-line="453" selection-end-column="75" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/classes/reportviews.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="191">
-          <caret line="666" selection-start-line="666" selection-end-line="666" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/classes/digraph.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="323">
-          <caret line="748" selection-start-line="748" selection-end-line="748" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.sh">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="132">
-          <caret line="6" selection-start-line="6" selection-end-line="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/12_realtimelog.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1760">
-          <caret line="86" column="13" lean-forward="true" selection-start-line="86" selection-start-column="13" selection-end-line="86" selection-end-column="13" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1485">
-          <caret line="206" lean-forward="true" selection-start-line="206" selection-end-line="206" />
+        <state relative-caret-position="-1094">
+          <caret line="20" column="33" selection-start-line="20" selection-start-column="33" selection-end-line="20" selection-end-column="33" />
+          <folding>
+            <element signature="e#19#28#0" expanded="true" />
+            <marker date="1542437106565" expanded="true" signature="537:549" ph="..." />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/16_realtimevis.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="264">
-          <caret line="155" column="25" lean-forward="true" selection-start-line="155" selection-start-column="25" selection-end-line="155" selection-end-column="25" />
+        <state relative-caret-position="-1980">
+          <caret line="6" selection-start-line="6" selection-end-line="6" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/00_motc_tools.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="5742">
-          <caret line="276" column="9" selection-start-line="276" selection-start-column="9" selection-end-line="276" selection-end-column="9" />
-          <folding>
-            <element signature="e#71#98#0" expanded="true" />
-            <marker date="1541948281842" expanded="true" signature="4927:4929" ph="..." />
-          </folding>
+        <state relative-caret-position="202">
+          <caret line="259" column="41" lean-forward="true" selection-start-line="259" selection-start-column="8" selection-end-line="259" selection-end-column="41" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file:///usr/local/lib/python3.6/dist-packages/networkx/algorithms/shortest_paths/weighted.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="381">
+          <caret line="737" selection-start-line="737" selection-end-line="737" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/commons.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="3520">
-          <caret line="161" column="39" selection-start-line="161" selection-start-column="39" selection-end-line="161" selection-end-column="39" />
-          <folding>
-            <element signature="e#100#113#0" expanded="true" />
-            <marker date="1542362211708" expanded="true" signature="151:188" ph="..." />
-            <marker date="1542362211708" expanded="true" signature="2080:2083" ph="..." />
-            <marker date="1542362211708" expanded="true" signature="2144:2146" ph="..." />
-          </folding>
+        <state relative-caret-position="286">
+          <caret line="13" column="18" lean-forward="true" selection-start-line="13" selection-start-column="18" selection-end-line="13" selection-end-column="18" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/20181019-study1/13_physicalbus.py">
+    <entry file="file://$PROJECT_DIR$/20181019-study1/03_osm_motc.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2640">
-          <caret line="129" column="44" selection-start-line="129" selection-start-column="44" selection-end-line="129" selection-end-column="44" />
-          <folding>
-            <element signature="e#71#98#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="-462" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/02_osmgraph.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="396">
+          <caret line="259" column="98" selection-start-line="259" selection-start-column="98" selection-end-line="259" selection-end-column="98" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/20181019-study1/01_downloadmap.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="417">
+          <caret line="93" selection-start-line="93" selection-end-line="93" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/14_maproute.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-760">
-          <caret line="144" column="35" lean-forward="true" selection-start-line="144" selection-start-column="35" selection-end-line="144" selection-end-column="35" />
-          <folding>
-            <element signature="e#71#111#0" expanded="true" />
-            <marker date="1542369536766" expanded="true" signature="2469:2470" ph="..." />
-          </folding>
+        <state relative-caret-position="2999">
+          <caret line="384" selection-start-line="384" selection-end-line="384" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/20181019-study1/helpers/graph.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="203">
-          <caret line="251" column="65" selection-start-line="251" selection-start-column="65" selection-end-line="251" selection-end-column="65" />
-          <folding>
-            <element signature="e#19#46#0" expanded="true" />
-          </folding>
+        <state relative-caret-position="271">
+          <caret line="616" column="20" selection-start-line="615" selection-start-column="28" selection-end-line="616" selection-end-column="20" />
         </state>
       </provider>
     </entry>
