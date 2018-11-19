@@ -22,10 +22,8 @@ PARAM = {
 	# https://wiki.openstreetmap.org/wiki/API_v0.6
 
 	'regions' : {
-		# Small area
-		'kaohsiung_small' : [120.2593, 22.5828, 120.3935, 22.6886],
-
-		# Larger area
+		#'kaohsiung_smaller' : [120.2593, 22.5828, 120.3935, 22.6886],
+		'kaohsiung_small' : [120.2206, 22.4827, 120.4308, 22.7578],
 		#'kaohsiung_large' : [119.9377, 22.1645, 120.8084, 23.3347],
 	},
 

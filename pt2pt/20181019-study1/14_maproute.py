@@ -17,6 +17,7 @@ import math
 import pickle
 import random
 import inspect
+import gpxpy.gpx
 import datetime as dt
 import numpy as np
 import dateutil.parser
@@ -36,17 +37,22 @@ pass
 IFILE = {
 	'busses' : "OUTPUT/13/Kaohsiung/UV/{busid}.json",
 
-	'mapmatched' : "OUTPUT/14/UV/mapmatched/{routeid}/{direction}/{estpathid}",
+	'mapmatched' : "OUTPUT/14/mapmatched/{routeid}/{direction}/UV/{mapmatch_uuid}.{ext}",
+
+	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
 }
 
 
 ## =================== OUTPUT :
 
 OFILE = {
-	'progress_img': "OUTPUT/14/UV/progress/current_route.png",
-	'progress_txt': "OUTPUT/14/UV/progress/current_route.txt",
+	'progress_img': "OUTPUT/14/progress/UV/current_route.png",
+	'progress_txt': "OUTPUT/14/progress/UV/current_route.txt",
+	'progress_gpx': "OUTPUT/14/progress/UV/current_route.gpx",
 
 	'mapmatched' : IFILE['mapmatched'],
+
+	'mapped_routes' : "OUTPUT/14/mapped/{routeid}-{direction}.{ext}",
 }
 
 commons.makedirs(OFILE)
@@ -84,8 +90,6 @@ BUSID_OF = (lambda b: b[KEYS.busid])
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
-	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
-
 	'map_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 }
 
@@ -109,7 +113,7 @@ def mapmatch_runs(runs) :
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g: nx.DiGraph
 	(g, knn) = commons.inspect(('g', 'knn'))(
-		pickle.load(open(PARAM['OSM_graph_file'], 'rb'))['main_component_with_knn']
+		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
 
 	# Nearest edges
@@ -134,6 +138,8 @@ def mapmatch_runs(runs) :
 
 		ax.cla()
 
+		ax.set_title("{} ({}%)".format(result['status'], math.floor(100 * result.get('progress', 0))))
+
 		if ('waypoints' in result) :
 			(y, x) = zip(*result['waypoints'])
 			ax.plot(x, y, 'o', c='m', markersize=4)
@@ -142,14 +148,16 @@ def mapmatch_runs(runs) :
 			(y, x) = zip(*result['geo_path'])
 			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-		ax.set_title("{} ({}%)".format(result['status'], math.floor(100 * result.get('progress', 0))))
-
 		# Display/save figure here
 		commons.makedirs(OFILE['progress_img'])
 		fig.savefig(OFILE['progress_img'], bbox_inches='tight', pad_inches=0)
 
 		# Next figure update
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
+
+		# Log into a GPX file
+		with open(OFILE['progress_gpx'], 'w') as fd :
+			fd.write(graph.simple_gpx(result['waypoints'], [result.get('geo_path', [])]).to_xml())
 
 		# Note: need to close figure
 
@@ -174,9 +182,9 @@ def mapmatch_runs(runs) :
 			k: run[k] for k in [KEYS.routeid, KEYS.dir, KEYS.runid, KEYS.busid]
 		}
 
-		mapmatch_attempt['EstPathUUID'] = uuid.uuid4().hex
+		mapmatch_attempt['MapMatchUUID'] = uuid.uuid4().hex
 
-		filename = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], estpathid=mapmatch_attempt['EstPathUUID'])
+		filename = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="")
 
 		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
 
@@ -191,27 +199,36 @@ def mapmatch_runs(runs) :
 		# Note: because figure is not jsonable cannot do
 		# mapmatch_attempt['mapmatch_result'] = result
 
-		for k in ['geo_path', 'path'] : mapmatch_attempt[k] = result[k]
+		for k in ['waypoints', 'path', 'geo_path'] : mapmatch_attempt[k] = result[k]
+
+		# Save the result in different formats
+
+		#  o) Image
 
 		try :
 			(fig, ax) = commons.inspect({'plt': ('fig', 'ax')})(result)
 			commons.makedirs(filename)
-			fig.savefig(filename + ".png", bbox_inches='tight', pad_inches=0)
+			fig.savefig(filename + "png", bbox_inches='tight', pad_inches=0)
 			plt.close(fig)
 		except Exception as e :
-			print("Could not save figure {} ({})".format(filename + ".png", e))
+			print("Could not save figure {} ({})".format(filename + "png", e))
+
+		#  o) JSON
 
 		try :
 			commons.makedirs(filename)
-			with commons.logged_open(filename + ".json", 'w') as fd :
+			with commons.logged_open(filename + "json", 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
-			print("Failed to write mapmatch file {} ({})".format(filename + ".json", e))
+			print("Failed to write mapmatch file {} ({})".format(filename + "json", e))
+
+		#  o) GPX (TODO)
+
 
 		time.sleep(1)
 
 
-def distill_shape(routeid, direction) :
+def distill_shape(mapmatch_files) :
 	mpl.use('TkAgg')
 	import matplotlib.pyplot as plt
 
@@ -223,11 +240,9 @@ def distill_shape(routeid, direction) :
 		xx = list(xx)
 		return max(xx, key=xx.count)
 
-	matchedruns_files = sorted(glob.glob(OFILE['mapmatched'].format(routeid=routeid, direction=direction, estpathid="*")))
-
 	mms = [
 		commons.zipjson_load(fn)
-		for fn in matchedruns_files
+		for fn in mapmatch_files
 	]
 
 	from difflib import SequenceMatcher
@@ -360,10 +375,25 @@ def map_routes() :
 			print("Aborting: too few runs.")
 			break
 
-		mapmatch_runs(runs)
-		route = distill_shape(*case)
+		while True :
+			mapmatch_files = list(glob.glob(OFILE['mapmatched'].format(routeid=case[0], direction=case[1], mapmatch_uuid="*", ext="json")))
 
-		print(route)
+			if input("{} mapmatchings found. Proceed with mapmatching (y/n)? ".format(len(mapmatch_files))).lower().startswith("y") :
+				mapmatch_runs(runs)
+			else :
+				break
+
+		if not mapmatch_files :
+			continue
+
+		route = distill_shape(mapmatch_files)
+
+		basefile = OFILE['mapped_routes'].format(routeid=case[0], direction=case[1], ext="{ext}")
+		commons.makedirs(basefile)
+
+		# Write a GPX file of the route
+		with commons.logged_open(basefile.format(ext="gpx"), 'w') as fd :
+			fd.write(graph.simple_gpx([], [route]).to_xml())
 
 
 ## ===================== PLAY :

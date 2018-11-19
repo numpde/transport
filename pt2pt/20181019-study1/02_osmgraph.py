@@ -246,14 +246,18 @@ def extract(region) :
 		else :
 			print("II. Making the nearest-neighbor tree for the main component...")
 
-			# Restrict to the largest weakly/strongly connected component
 			g : nx.DiGraph
-			g = nx.subgraph(G, max(nx.weakly_connected_components(G), key=len)).copy()
+			g = G.copy()
 
 			# Remove the edges corresponding to OSM's highway=service tag
 			g.remove_edges_from(
 				list((a, b) for (a, b, d) in g.edges.data('highway') if (d == "service"))
 			)
+
+			# Restrict to the largest weakly/strongly connected component
+			# Note: do not remove edges *after* extracting the connected component
+			if __name__ == '__main__':
+				g = nx.subgraph(g, max(list(nx.strongly_connected_components(g)), key=len)).copy()
 
 			# Note: Graph.copy() does not deep-copy container attributes
 			# https://networkx.github.io/documentation/latest/reference/classes/generated/networkx.Graph.copy.html

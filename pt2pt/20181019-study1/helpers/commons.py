@@ -3,10 +3,17 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+from itertools import groupby
+
 # Remove consecutive repeats
-def remove_repeats(xx):
-	xx = list(xx)
-	return [x for (x, y) in zip(xx, xx[1:]) if (x != y)] + xx[-1:]
+def remove_repeats(xx, key=None):
+	# https://stackoverflow.com/a/5738933
+	return [next(iter(a)) for a in groupby(xx, key)]
+
+	# Alternative:
+	# xx = list(xx)
+	# key = key or (lambda x : x)
+	# return [x for (x, y) in zip(xx, xx[1:]) if (key(x) != key(y))] + xx[-1:]
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -165,16 +172,16 @@ import os
 def makedirs(OFILE) :
 	if type(OFILE) is str :
 		try :
-			os.makedirs(os.path.dirname(OFILE.format()), exist_ok=True)
-		except (IndexError, KeyError) :
-			pass
-		return
+			os.makedirs(os.path.dirname(OFILE).format(), exist_ok=True)
+			return True
+		except (IndexError, KeyError) as e :
+			#print("makedirs failed ({})".format(e))
+			return False
 
 	if type(OFILE) is dict :
 		return makedirs(OFILE.values())
 
-	for f in OFILE :
-		makedirs(f)
+	return all(makedirs(f) for f in OFILE)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
