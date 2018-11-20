@@ -90,6 +90,9 @@ def compress() :
 		except EOFError :
 			# Raised by zipjson_load if a file is empty
 			continue
+		except Exception as e :
+			print("Warning: Cannot open {}/{} ({}).".format(fn1, fn2, e))
+			continue
 
 		if not J1.intersection(J2) :
 			continue
