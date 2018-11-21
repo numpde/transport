@@ -49,7 +49,21 @@ commons.makedirs(OFILE)
 
 PARAM = {
 	'regions' : ["kaohsiung"],
+
+	# Construct the road graph from these tags only
+	# https://wiki.openstreetmap.org/wiki/Key:highway
+	'osm_way_keep' : {
+		'highway' : ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"] + ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"],
+	},
+
+	# For the slimmer bus roads graph exclude those edges/ways
+	'osm_way_bus_exclude' : {
+		'highway' : ["service"],
+	},
 }
+
+## ===================== META :
+
 
 
 ## ====================== AUX :
@@ -72,16 +86,13 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		# Filter out the ways that do not have any of these tags:
 		#filter_tags = ['highway', 'bridge', 'tunnel']
 		# Note: 'tunnel' includes the MRT
-		filter_tags = ['highway']
+		filter_tags = list(PARAM['osm_way_keep'].keys())
 		if not any((t in w.tags) for t in filter_tags) : return
 
-		if 'highway' in w.tags :
-			t = w.tags['highway']
-			# https://wiki.openstreetmap.org/wiki/Key:highway
-			# Exclude "service" later
-			highway_roads = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"]
-			highway_links = ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"]
-			if not (t in (highway_roads + highway_links)) : return
+		for key in filter_tags :
+			if key in w.tags :
+				if w.tags[key] not in PARAM['osm_way_keep'][key] :
+					return
 
 		wtags = { t.k : t.v for t in w.tags }
 		self.way_tags[w.id] = wtags
@@ -172,8 +183,6 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 			self.G.add_path(wnodes_bothways[True], **pathattr)
 			self.G.add_path(wnodes_bothways[False], **pathattr) # Could be an empty path here
 
-			time.sleep(0.001)
-
 		# Set geo-coordinates of the graph nodes
 		nx.set_node_attributes(self.G, self.node_locs, 'pos')
 
@@ -249,10 +258,11 @@ def extract(region) :
 			g : nx.DiGraph
 			g = G.copy()
 
-			# Remove the edges corresponding to OSM's highway=service tag
-			g.remove_edges_from(
-				list((a, b) for (a, b, d) in g.edges.data('highway') if (d == "service"))
-			)
+			# Remove the edges where the bus is not supposed to travel
+			for (key, exclude) in PARAM['osm_way_bus_exclude'].items() :
+				g.remove_edges_from(
+					list((a, b) for (a, b, d) in g.edges.data(key) if (d in exclude))
+				)
 
 			# Restrict to the largest weakly/strongly connected component
 			# Note: do not remove edges *after* extracting the connected component

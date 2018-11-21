@@ -47,6 +47,12 @@ def p2g(x, y, zoom):
 		(x / MAPBOX_ZOOM0_SIZE * 2 / (2 ** zoom) - 1) * 180,
 	)
 
+def ax2mb(left, right, bottom, top) :
+	return (left, bottom, right, top)
+
+def mb2ax(left, bottom, right, top) :
+	return (left, right, bottom, top)
+
 # bbox = (left, bottom, right, top) in degrees
 def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 

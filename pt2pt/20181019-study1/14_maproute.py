@@ -6,8 +6,6 @@
 
 from helpers import commons, maps, graph
 
-from enum import Enum
-
 import uuid
 import time
 import json
@@ -15,12 +13,10 @@ import networkx as nx
 import glob
 import math
 import pickle
-import random
 import inspect
-import gpxpy.gpx
 import datetime as dt
 import numpy as np
-import dateutil.parser
+
 from copy import deepcopy
 from itertools import chain, product, groupby
 
@@ -57,6 +53,7 @@ OFILE = {
 
 commons.makedirs(OFILE)
 
+
 ## ================= METADATA :
 
 # Keys in a realtime JSON record
@@ -81,8 +78,10 @@ class KEYS_POS :
 	lat = 'PositionLat'
 	lon = 'PositionLon'
 
-# Helper to extract the Physical-Bus ID
+# Helpers
 BUSID_OF = (lambda b: b[KEYS.busid])
+ROUTEID_OF = (lambda r: r[KEYS.routeid])
+DIRECTION_OF = (lambda r: r[KEYS.dir])
 
 
 ## ==================== PARAM :
@@ -90,7 +89,8 @@ BUSID_OF = (lambda b: b[KEYS.busid])
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
-	'map_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
+	# Only retain routes contained in this area (left, bottom, right, top)
+	'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 }
 
 
@@ -103,8 +103,33 @@ def run_waypoints(run) :
 	return list(zip(run[KEYS_POS.lat], run[KEYS_POS.lon]))
 
 def is_in_map(lat, lon) :
-	(left, bottom, right, top) = PARAM['map_bbox']
+	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
+
+def write_track_gpx(waypoints, route, fd) :
+	fd.write(graph.simple_gpx(waypoints, [route]).to_xml())
+
+def write_track_img(waypoints, route, fd) :
+	mpl.use('Agg')
+	import matplotlib.pyplot as plt
+
+	if waypoints : raise NotImplementedError("Writing waypoints not implemented.")
+
+	ax : plt.Axes
+	fig : plt.Figure
+	(fig, ax) = plt.subplots()
+	(y, x) = zip(*route)
+	ax.plot(x, y, 'b-', linewidth=2)
+	ax.plot(x[0], y[0], 'o', c='g', markersize=3)
+	ax.plot(x[-1], y[-1], 'o', c='r', markersize=3)
+	axis = commons.niceaxis(ax.axis(), expand=1.1)
+	[i.set_fontsize(8) for i in ax.get_xticklabels() + ax.get_yticklabels()]
+	ax.axis(axis)
+	ax.imshow(maps.get_map_by_bbox(maps.ax2mb(*axis), token=PARAM['mapbox_api_token']), extent=axis, interpolation='quadric', zorder=-100)
+
+	fig.savefig(fd, dpi=180, bbox_inches='tight', pad_inches=0)
+	plt.close(fig)
+
 
 ## ===================== WORK :
 
@@ -184,7 +209,7 @@ def mapmatch_runs(runs) :
 
 		mapmatch_attempt['MapMatchUUID'] = uuid.uuid4().hex
 
-		filename = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="")
+		fn = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="{ext}")
 
 		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
 
@@ -203,34 +228,37 @@ def mapmatch_runs(runs) :
 
 		# Save the result in different formats
 
+		commons.makedirs(fn.format(ext=''))
+
 		#  o) Image
 
 		try :
 			(fig, ax) = commons.inspect({'plt': ('fig', 'ax')})(result)
-			commons.makedirs(filename)
-			fig.savefig(filename + "png", bbox_inches='tight', pad_inches=0)
+			fig.savefig(commons.logged_open(fn.format(ext="png"), 'wb'), bbox_inches='tight', pad_inches=0)
 			plt.close(fig)
 		except Exception as e :
-			print("Could not save figure {} ({})".format(filename + "png", e))
+			print("Could not save figure {} ({})".format(fn.format(ext="png"), e))
 
 		#  o) JSON
 
 		try :
-			commons.makedirs(filename)
-			with commons.logged_open(filename + "json", 'w') as fd :
+			with commons.logged_open(fn.format(ext="json"), 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
-			print("Failed to write mapmatch file {} ({})".format(filename + "json", e))
+			print("Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
 
-		#  o) GPX (TODO)
+		#  o) GPX
 
+		try :
+			with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
+				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints'], [mapmatch_attempt['geo_path']]).to_xml())
+		except Exception as e :
+			print("Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
 
 		time.sleep(1)
 
 
 def distill_shape(mapmatch_files) :
-	mpl.use('TkAgg')
-	import matplotlib.pyplot as plt
 
 	def remove_repeats(xx) :
 		xx = list(xx)
@@ -263,34 +291,12 @@ def distill_shape(mapmatch_files) :
 	# Most common label -- largest cluster
 	label1 = commonest(labels)
 
-	print("Largest cluster size:", labels.count(label1))
+	#print("Largest cluster size:", labels.count(label1))
 
 	# Get the mapmatched paths corresponding to the largest cluster
 	mms = [mm for (mm, label) in zip(mms, labels) if (label == label1)]
 
 	geopaths = [[tuple(p) for p in remove_repeats(mm['geo_path'])] for mm in mms]
-	#geo_path = [tuple(p) for p in ]
-
-	(fig, ax) = plt.subplots()
-
-	# Define start and end point for the route
-	(a, b) = (commonest([gp[0] for gp in geopaths]), commonest([gp[-1] for gp in geopaths]))
-
-	(y, x) = a
-	ax.plot(x, y, 'o', c='g')
-
-	(y, x) = b
-	ax.plot(x, y, 'o', c='b')
-
-	# pp = list(chain.from_iterable(geopaths))
-	# pp = set([p for p in pp if (pp.count(p) > len(geopaths) / 2)])
-	# geopaths = [
-	# 	[p for p in gp if (p in pp)]
-	# 	for gp in geopaths
-	# ]
-
-	plt.ion()
-	plt.show()
 
 	def get_route(geopaths) :
 		geopaths = deepcopy(geopaths)
@@ -301,12 +307,10 @@ def distill_shape(mapmatch_files) :
 			except ValueError :
 				return None
 
-		# Define start and end point for the route
+		# Define start and end point for the route through consensus
 		(p0, p1) = (commonest([gp[0] for gp in geopaths]), commonest([gp[-1] for gp in geopaths]))
 
-		p = None
 		while (len(geopaths) > 1) :
-			p_old = p
 
 			# The most frequent candidate-location
 			p = commonest(gp[0] for gp in geopaths)
@@ -322,32 +326,19 @@ def distill_shape(mapmatch_files) :
 			if (p == p0) : p0 = None # The start of the route
 
 			# Have met the start, but not past the end of route
-			# Do not trust a weak suggestion
-			if (not p0) :
+			if (not p0) : yield p
 
-				yield p
-
-				# if (p_old):
-				# 	(y, x) = zip(p, p_old)
-				# 	ax.plot(x, y, '.-')
-				# 	plt.pause(0.1)
-
+			# Endpoint
 			if (p == p1) : break
 
 	route = list(get_route(geopaths))
 
-	(y, x) = zip(*route)
-	ax.plot(x, y, 'r-')
-
-	plt.ioff()
-	plt.show()
-
 	return route
 
-def map_routes() :
-	routeid_of = (lambda r: r[KEYS.routeid])
-	direction_of = (lambda r: r[KEYS.dir])
-	run_id = (lambda r : (routeid_of(r), direction_of(r)))
+
+def map_routes(mapmatch=True, distill=True) :
+
+	run_key = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
 
 	# List of filenames, one file per physical bus, identified by plate number
 	bus_files = sorted(glob.glob(IFILE['busses'].format(busid="*")))
@@ -358,42 +349,62 @@ def map_routes() :
 		for run in commons.zipjson_load(fn)
 	)
 
-	print("Found {} runs".format(len(runs)))
+	print("Found {} runs.".format(len(runs)))
 
 	runs = [run for run in runs if all(is_in_map(*p) for p in run_waypoints(run))]
 
-	print("Found {} runs inside the map".format(len(runs)))
+	print("Found {} runs inside the map.".format(len(runs)))
 
-	runs = { k : list(g) for (k, g) in groupby(sorted(runs, key=run_id), run_id) }
-	#runs = commons.index_dicts_by_key(runs, run_id))
+	runs = { k : list(g) for (k, g) in groupby(sorted(runs, key=run_key), run_key) }
 
 	# Sort the route-directions by decreasing number of measurements
-	for (case, runs) in sorted(runs.items(), key=(lambda cr : -len(cr[1]))) :
-		print("Route {}, direction {} ({} runs)".format(*case, len(runs)))
+	for ((routeid, dir), runs) in sorted(runs.items(), key=(lambda cr : -len(cr[1]))) :
+		print("Route {}, direction {} ({} runs)...".format(routeid, dir, len(runs)))
 
-		if (len(runs) <= 4) :
-			print("Aborting: too few runs.")
-			break
+		mapmatch_files = sorted(list(glob.glob(
+			OFILE['mapmatched'].format(routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json")
+		)))
 
-		while True :
-			mapmatch_files = list(glob.glob(OFILE['mapmatched'].format(routeid=case[0], direction=case[1], mapmatch_uuid="*", ext="json")))
+		if mapmatch:
+			try :
 
-			if input("{} mapmatchings found. Proceed with mapmatching (y/n)? ".format(len(mapmatch_files))).lower().startswith("y") :
-				mapmatch_runs(runs)
-			else :
-				break
+				if (len(runs) <= 4) :
+					print("Skipping mapmatch: too few runs.")
+				elif mapmatch_files :
+					print("Skipping mapmatch: mapmatched files found.")
+				else :
+					mapmatch_runs(runs)
 
-		if not mapmatch_files :
-			continue
+			except Exception as e:
+				print("Mapmatch failed ({}).".format(e))
 
-		route = distill_shape(mapmatch_files)
+		if distill :
+			try :
 
-		basefile = OFILE['mapped_routes'].format(routeid=case[0], direction=case[1], ext="{ext}")
-		commons.makedirs(basefile)
+				if not mapmatch_files :
+					print("No mapmatch files to distill.")
+					continue
 
-		# Write a GPX file of the route
-		with commons.logged_open(basefile.format(ext="gpx"), 'w') as fd :
-			fd.write(graph.simple_gpx([], [route]).to_xml())
+				route = distill_shape(mapmatch_files)
+
+				fn = OFILE['mapped_routes'].format(routeid=routeid, direction=dir, ext="{ext}")
+				commons.makedirs(fn)
+
+				with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
+					write_track_gpx([], route, fd)
+
+				with commons.logged_open(fn.format(ext="png"), 'wb') as fd :
+					write_track_img([], route, fd)
+
+			except Exception as e :
+				print("Distill failed ({}).".format(e))
+
+
+def mapmatch_all() :
+	map_routes(mapmatch=True, distill=False)
+
+def distill_all() :
+	map_routes(mapmatch=False, distill=True)
 
 
 ## ===================== PLAY :
@@ -404,7 +415,8 @@ pass
 ## ================== OPTIONS :
 
 OPTIONS = {
-	'MAP_ROUTES' : map_routes,
+	'MAPMATCH' : mapmatch_all,
+	'DISTILL' : distill_all,
 }
 
 ## ==================== ENTRY :

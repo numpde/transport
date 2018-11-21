@@ -27,8 +27,8 @@ PARAM = {
 		#'kaohsiung_large' : [119.9377, 22.1645, 120.8084, 23.3347],
 	},
 
-	# Original API URL, has a limit on data size
-	'API-URL2' : "https://api.openstreetmap.org/api/0.6/map?bbox={bbox}",
+	# Original API URL, has a small limit on data size
+	'(API-URL)' : "https://api.openstreetmap.org/api/0.6/map?bbox={bbox}",
 	# Mirror URL
 	'API-URL' : "https://overpass-api.de/api/map?bbox={bbox}",
 }
