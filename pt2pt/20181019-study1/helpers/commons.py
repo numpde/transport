@@ -3,6 +3,24 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import math
+
+def niceaxis(axis, expand=1.1, minaspect=((1 + math.sqrt(5)) / 2)) :
+	(left, right, bottom, top) = axis
+
+	# Expand by some factor
+	(left, right) = ((left + right) / 2 + s * ((right - left) / 2 * expand) for s in (-1, +1))
+	(bottom, top) = ((bottom + top) / 2 + s * ((top - bottom) / 2 * expand) for s in (-1, +1))
+
+	# Compute a nicer aspect ratio if it is too narrow
+	(w, h) = (right - left, top - bottom)
+	if (w < h / minaspect) : (left, right) = (((left + right) / 2 + s * h / minaspect / 2) for s in (-1, +1))
+	if (h < w / minaspect) : (bottom, top) = (((bottom + top) / 2 + s * w / minaspect / 2) for s in (-1, +1))
+
+	return (left, right, bottom, top)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 from itertools import groupby
 
 # Remove consecutive repeats
@@ -306,7 +324,7 @@ class ZIPJSON :
 
 		return J
 
-def zipjson_load(fn) :
+def zipjson_load(fn, opener=open) :
 
 	assert(type(fn) is str), "This expects a file name"
 
@@ -318,9 +336,9 @@ def zipjson_load(fn) :
 		raise EOFError("File {} is empty".format(fn))
 
 	try :
-		J = json.load(open(fn, 'r'))
+		J = json.load(opener(fn, 'r'))
 	except :
-		print("Exception while loading {}".format(fn))
+		#print("Exception while loading {}".format(fn))
 		raise
 
 	try :
@@ -331,11 +349,11 @@ def zipjson_load(fn) :
 
 	return J
 
-def zipjson_dump(J, fn) :
+def zipjson_dump(J, fn, opener=open) :
 	assert(type(fn) is str)
 	E = ZIPJSON(J).enc()
 	assert(json.dumps(E))
-	return json.dump(E, open(fn, 'w'))
+	return json.dump(E, opener(fn, 'w'))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
