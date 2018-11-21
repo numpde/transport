@@ -185,13 +185,15 @@ def segment_by_route() :
 		), key=(lambda r : r[0]))
 	}
 
-	for ((routeid, dir), files) in sorted(case_directory.items(), key=(lambda cf : -len(cf[1]))) :
+	for (case, files) in sorted(case_directory.items(), key=(lambda cf : -len(cf[1]))) :
 		segments = [
 			s
 			for busfile in files
 			for s in commons.zipjson_load(busfile)
-			if (run_key(s) == (routeid, dir))
+			if (run_key(s) == case)
 		]
+
+		(routeid, dir) = case
 
 		fn = OFILE['segment_by_route'].format(routeid=routeid, dir=dir)
 
