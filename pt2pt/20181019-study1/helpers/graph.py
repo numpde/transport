@@ -137,7 +137,7 @@ def mapmatch(
 		raise RuntimeError("The graph appears not to be strongly connected.")
 
 	# Dictionary to pass to the callback function (updated below)
-	result = { 'waypoints' : waypoints, 'version' : 11111122 }
+	result = { 'waypoints' : waypoints, 'version' : 11111124 }
 
 	# Before doing anything
 	result['status'] = "zero"
@@ -252,9 +252,11 @@ def mapmatch(
 
 	assert(len(prob_clouds) >= 4)
 
-	# Optimization loop over groups of ..., 16, 8, 4 edges
-	from math import log2, floor
-	for group_size in [2**i for i in range(floor(log2(len(prob_clouds))), 1, -1)] :
+	# # Optimization loop over groups of ..., 16, 8, 4 edges
+	# from math import log2, floor
+	# for group_size in [2**i for i in range(floor(log2(len(prob_clouds))), 1, -1)] :
+	# # Or simpler:
+	for group_size in [round(len(prob_clouds) / 2)] :
 
 		# Lower the edge acceptance threshold for a smaller group of edges
 		group_acceptance_threshold = acceptance_threshold # * (group_size / len(prob_clouds))
@@ -392,6 +394,7 @@ def mapmatch(
 
 					select_new_edge = True
 
+				# TODO: fix the progess indicator
 				overall_progress = np.mean([min(1, max(pc.values()) / sum(pc.values()) / acceptance_threshold) for pc in prob_clouds])
 
 				# Normalize (not strictly necessary)
@@ -555,28 +558,15 @@ def foo() :
 			for (n, (y, x)) in enumerate(result['waypoints']):
 				ax.plot(x, y, 'bo')
 
-			# Get the dimensions of the plot (again)
-			(left, right, bottom, top) = ax.axis()
-
-			# Expand by some factor
-			(left, right) = ((left + right) / 2 + s * ((right - left) / 2 * 1.9) for s in (-1, +1))
-			(bottom, top) = ((bottom + top) / 2 + s * ((top - bottom) / 2 * 1.9) for s in (-1, +1))
-
-			# Compute a nicer aspect ratio if it is too narrow
-			(w, h, phi) = (right - left, top - bottom, (1 + math.sqrt(5)) / 2)
-			if (w < h / phi) : (left, right) = (((left + right) / 2 + s * h / phi / 2) for s in (-1, +1))
-			if (h < w / phi) : (bottom, top) = (((bottom + top) / 2 + s * w / phi / 2) for s in (-1, +1))
-
-			# Set new dimensions
-			ax.axis([left, right, bottom, top])
+			ax.axis(commons.niceaxis(ax.axis(), expand=1.9))
 			ax.autoscale(enable=False)
 
 			# Download the background map
-			mapi = maps.get_map_by_bbox((left, bottom, right, top), token=mapbox_token)
+			mapi = maps.get_map_by_bbox(maps.ax2mb(*ax.axis()), token=mapbox_token)
 
 			result['plt'] = { 'fig' : fig, 'ax' : ax, 'map' : mapi, 'bbox' : ax.axis() }
 
-			plt.ion()
+			plt.pause(0.1)
 			plt.show()
 
 		if (result['status'] in ["opti", "done"]) :
@@ -610,6 +600,8 @@ def foo() :
 
 
 	print("Calling mapmatch...")
+
+	plt.ion()
 
 	commons.seed()
 	for _ in range(10) :
