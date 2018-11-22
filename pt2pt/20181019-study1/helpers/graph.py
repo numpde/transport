@@ -270,117 +270,113 @@ def mapmatch(
 		for nc in recto :
 			prob_clouds[nc] = dist2prob(dist_clouds[nc])
 
+		select_new_edge = True
+
 		while recto :
 
-			# Choose a random edge cloud, preferably the "least solved" one
-			# nc = number of the edge cloud
-			nc = random_subset(recto, weights=[(lambda v : (1.1 - max(v) / sum(v)))(prob_clouds[nc].values()) for nc in recto], k=1).pop()
+			if select_new_edge :
+				# Choose a random edge cloud, preferably the "least solved" one
+				# nc = number of the edge cloud
+				nc = random_subset(recto, weights=[(lambda v : (1.1 - max(v) / sum(v)))(prob_clouds[nc].values()) for nc in recto], k=1).pop()
 
-			select_new_edge = True
+				# Cloud edges with weights w/o the currently selected edge
+				(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
 
-			# Spend a few rounds on the same edge cloud
-			while True :
-
-				if select_new_edge :
-					# Cloud edges with weights w/o the currently selected edge
-					(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
-
-					# Choose a candidate edge from the cloud (w/o the currently selected edge)
-					seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
-
-				# Precompute shortest path for each gap
-				try :
-					for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
-						if (a, b) not in sps_way:
-							sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='len')
-				except nx.NetworkXNoPath :
-					raise
-
-				# Non-repeating edges
-				nre = commons.remove_repeats(seledges)
-
-				#
-				path = [nre[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(nre, nre[1:]))) + [nre[-1][-1]]
-
-				# Convert node IDs to (lat, lon) coordinates
-				geo_path = commons.remove_repeats([g.nodes[n]['pos'] for n in path])
-
-				# Undo "Detailed decision node cluster"s for the user
-				origpath = commons.remove_repeats([g.nodes[n]['basenode'] for n in path])
-
-				# Previous value of the quality indicators
-				old_indi = indi.copy()
-
-				# Indicator 1: Sum of distances of the selected edges to waypoints
-				indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
-
-				# Indicator 2: The total length of the path
-				indi['dist'] = sum(g.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
-
-				# Optimization criterion (lower is better)
-				indi['crit'] = opticrit(indi)
-
-				# Re-weight the current edge in its cloud
-				if not old_indi : continue
-				rel_delta = indi['crit'] / old_indi['crit']
-				prob_clouds[nc][seledges[nc]] *= (1.3 if (rel_delta < 1) else (0.8 / rel_delta))
-
-				while True :
-					# How certain we are about about the currently selected edge
-					cloud_certainty = prob_clouds[nc][seledges[nc]] / sum(prob_clouds[nc].values())
-
-					# Avoid overconfidence
-					if (cloud_certainty > 1.1 * acceptance_threshold) :
-						prob_clouds[nc][seledges[nc]] /= 1.1
-					else :
-						break
-
-				# Consider this cloud solved?
-				if (cloud_certainty >= acceptance_threshold) :
-					# Unschedule this cloud from further optimization
-					recto.remove(nc)
-
-					# Remove implausible edges from further optimization
-					for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
-						remove = set(sorted(pc.keys(), key=(lambda e : -pc[e]))[5:])
-						remove.discard(seledges[nc])
-						prob_clouds[nc] = { e : p for (e, p) in pc.items() if not (e in remove) }
-						dist_clouds[nc] = { e : d for (e, d) in dc.items() if not (e in remove) }
-
-					break
-
-				# Randomly leave this edge cloud (more likely for nearly-solved clouds)
-				if (not (rel_delta > 1)) and (random.random() < cloud_certainty/2) :
-					break
-
-				# Introduce turn penalization
-				if (cloud_certainty >= 0.3) :
-
-					# Nodes to be replaced by "detailed decision node clusters"
-					def get_cand_ddnc() :
-						for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
-							# Check if the node is original and the turn is significant
-							if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
-								yield b
-
-					# Retain only the nodes influenced by the currently selected edge
-					cand_ddnc = set(get_cand_ddnc()) & (
-						set(chain.from_iterable(
-							sps_way[(e[1], f[0])]
-							for (e, f) in zip(nre, nre[1:]) if (seledges[nc] in [e, f])
-						))
-					)
-
-					if cand_ddnc :
-						# Introduce DDNC
-						for b in cand_ddnc : make_ddnc(b)
-						# The graph structure changed; invalidate metrics
-						indi.clear()
-						# Keep the currently selected edge
-						select_new_edge = False
-						continue
-
+				# Choose a candidate edge from the cloud (w/o the currently selected edge)
+				seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
+			else :
 				select_new_edge = True
+
+			# Precompute shortest path for each gap
+			try :
+				for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
+					if (a, b) not in sps_way :
+						sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='len')
+			except nx.NetworkXNoPath :
+				raise
+
+			# Non-repeating edges
+			nre = seledges
+
+			# Construct a path through the selected edges
+			# with annotation of "culprits" = responsible clouds
+			path_culp = [(nre[0][0], (None, 0))] + list(chain.from_iterable([(n, (ne, ne + 1)) for n in sps_way[(a, b)]] for (ne, ((_, a), (b, _))) in enumerate(zip(nre, nre[1:])))) + [(nre[-1][-1], (len(nre), None))]
+
+			# Remove culprits, just leave a sequence of node IDs
+			path = [n for (n, _) in path_culp]
+
+			# Convert node IDs to (lat, lon) coordinates
+			geo_path = commons.remove_repeats([g.nodes[n]['pos'] for n in path])
+
+			# Undo "Detailed decision node cluster"s for the user
+			origpath = commons.remove_repeats([g.nodes[n]['basenode'] for n in path])
+
+			# Previous value of the quality indicators
+			old_indi = indi.copy()
+
+			# Indicator 1: Sum of distances of the selected edges to waypoints
+			indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
+
+			# Indicator 2: The total length of the path
+			indi['dist'] = sum(g.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
+
+			# Optimization criterion (lower is better)
+			indi['crit'] = opticrit(indi)
+
+			# Re-weight the current edge in its cloud
+			if not old_indi : continue
+			rel_delta = indi['crit'] / old_indi['crit']
+			prob_clouds[nc][seledges[nc]] *= (1.3 if (rel_delta < 1) else (0.8 / rel_delta))
+
+			while True :
+				# How certain we are about about the currently selected edge
+				cloud_certainty = prob_clouds[nc][seledges[nc]] / sum(prob_clouds[nc].values())
+
+				# Avoid overconfidence
+				if (cloud_certainty > 1.1 * acceptance_threshold) :
+					prob_clouds[nc][seledges[nc]] /= 1.1
+				else :
+					break
+
+			# Consider this cloud solved?
+			if (cloud_certainty >= acceptance_threshold) :
+				# Unschedule this cloud from further optimization
+				recto.remove(nc)
+
+				# Remove implausible edges from further optimization
+				for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
+					remove = set(sorted(pc.keys(), key=(lambda e : -pc[e]))[5:])
+					remove.discard(seledges[nc])
+					prob_clouds[nc] = { e : p for (e, p) in pc.items() if not (e in remove) }
+					dist_clouds[nc] = { e : d for (e, d) in dc.items() if not (e in remove) }
+				del nc
+
+				break
+
+			# Introduce turn penalization
+			if (cloud_certainty >= 0.3) :
+
+				# Generator for "detailed decision node clusters" candidate nodes
+				def get_cand_ddnc() :
+					for (p, q, r, (b, culp)) in zip(geo_path, geo_path[1:], geo_path[2:], path_culp[1:]) :
+						# Check if the node is original and the turn is significant
+						if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
+							yield (b, culp)
+
+				# DDNC candidates with edges responsible for large turns
+				cand_ddnc = set(get_cand_ddnc())
+
+				if cand_ddnc :
+					# Introduce DDNC
+					for (b, culp) in cand_ddnc :
+						make_ddnc(b)
+						untouched_clouds.add()
+
+					# The graph structure changed; invalidate metrics
+					indi.clear()
+					# Keep the currently selected edge
+					select_new_edge = False
+					continue
 
 			# Progress indicator
 			overall_progress = (1 - len(untouched_clouds) / len(prob_clouds)) * np.mean([min(1, max(pc.values()) / sum(pc.values()) / acceptance_threshold) for pc in prob_clouds])
