@@ -17,13 +17,10 @@ import pickle
 import inspect
 import traceback
 import datetime as dt
+import sklearn.neighbors
 
 import matplotlib as mpl
-# Note: do not import pyplot here -- need to select renderer
-
-## ==================== NOTES :
-
-pass
+# Note: do not import pyplot here -- may need to select renderer
 
 
 ## ==================== INPUT :
@@ -45,6 +42,21 @@ OFILE = {
 }
 
 commons.makedirs(OFILE)
+
+
+## ==================== PARAM :
+
+PARAM = {
+	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+
+	# Only retain routes contained in this area (left, bottom, right, top)
+	'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
+
+	'min_runs_to_mapmatch' : 4,
+	'max_runs_to_mapmatch' : 18,
+
+	'waypoints_min_distance' : 60, # (meters)
+}
 
 
 ## ================= METADATA :
@@ -70,19 +82,6 @@ ROUTEID_OF = (lambda r: r[KEYS.routeid])
 DIRECTION_OF = (lambda r: r[KEYS.dir])
 
 
-## ==================== PARAM :
-
-PARAM = {
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
-
-	# Only retain routes contained in this area (left, bottom, right, top)
-	'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
-
-	'min_runs_to_mapmatch' : 4,
-	'max_runs_to_mapmatch' : 12,
-}
-
-
 ## ====================== AUX :
 
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
@@ -102,6 +101,7 @@ def mapmatch_runs(runs) :
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g: nx.DiGraph
+	knn : sklearn.neighbors.NearestNeighbors
 	(g, knn) = commons.inspect(('g', 'knn'))(
 		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
@@ -153,7 +153,7 @@ def mapmatch_runs(runs) :
 
 
 	# Keep a certain distance between waypoints (in meters)
-	def sparsify(wps, dist=60) :
+	def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
 		a = next(iter(wps))
 		yield a
 		for b in wps :
@@ -240,7 +240,7 @@ def mapmatch_all() :
 		runs = commons.zipjson_load(route_file)
 
 		# Remove trivial runs
-		runs = [run for run in runs if (len(run[KEYS.time]) > 1)]
+		runs = [run for run in runs if (len(run[KEYS.pos]) > 2)]
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]

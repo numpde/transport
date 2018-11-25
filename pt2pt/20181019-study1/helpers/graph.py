@@ -19,6 +19,27 @@ from copy import deepcopy
 from itertools import chain, groupby, product
 from sklearn.neighbors import NearestNeighbors
 
+PARAM = {
+	'speed' : {
+		# In km/h
+		'highway' : {
+			"motorway" : 50,
+			"trunk" : 40,
+			"primary" : 30,
+			"secondary" : 20,
+			"tertiary" : 18,
+			"unclassified" : 16,
+			"residential" : 12,
+			"service" : 8,
+			"motorway_link" : 30,
+			"trunk_link" : 20,
+			"primary_link" : 15,
+			"secondary_link" : 10,
+			"tertiary_link" : 9
+		}
+	}
+}
+
 def geodist(a, b) :
 	""" Metric for (lat, lon) coordinates """
 	return geopy.distance.geodesic(a, b).m
@@ -32,7 +53,12 @@ def random_subset(a, weights=None, k=None, replace=False) :
 	# It also expects the probabilities/weights to sum to one
 
 	a = list(a)
-	if weights : weights = [w / sum(weights) for w in weights]
+
+	if weights :
+		if sum(weights) :
+			weights = [w / sum(weights) for w in weights]
+		else :
+			weights = None
 
 	return list(a[i] for i in np.random.choice(len(a), size=k, p=weights, replace=replace))
 
@@ -137,39 +163,38 @@ def mapmatch(
 		raise RuntimeError("The graph appears not to be strongly connected.")
 
 	# Dictionary to pass to the callback function (updated below)
-	result = { 'waypoints' : waypoints, 'version' : 11111124 }
+	result = { 'waypoints' : waypoints, 'version' : 11111128 }
 
 	# Before doing anything
 	result['status'] = "zero"
 	if callback : callback(result)
 
 	# A turn of 90 degrees takes on average 30 seconds (wild guess)
-	# Assume an average bus speed of 5 m/s to compute equivalent distance in meters
-	# An an inconvenience factor of 2
-	# Penalize U-turns equivalently to a long run
 	# Note: could distinguish left and right turns here
-	meter_from_angle = (lambda a : (((30 * abs(a) / 90) * 5) * 2 if (abs(a) < 150) else 500))
-	# Assume an average bus speed of 5 m/s
-	crittime_from_meter_bus = (lambda d : (d / 5))
-	# Convert the distance busstop-road to bus-time equivalent
+	def time_from_angle(a) :
+		return (30 * abs(a) / 90) if (abs(a) < 150) else 120
+	# Convert the busstop-road distance to "equivalent" bus travel time
 	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
 
 	# Optimization criterion (lower is better)
 	def opticrit(indi):
-		return stubborn * crittime_from_meter_stop(indi['miss']) + crittime_from_meter_bus(indi['dist'])
+		return stubborn * crittime_from_meter_stop(indi['miss']) + indi['time']
 
 	# Threshold turn for introducing "Detailed decision node clusters"
 	ddnc_threshold = 30
 
 	# Acceptance threshold (between 0 and 1) for edge confidence in an edge cloud
-	acceptance_threshold = 0.98
+	final_acceptance_threshold = 0.98
 
 	# The graph will be modified
 	g = deepcopy(g)
 
 	# Check for the existence of those attributes
 	assert(nx.get_node_attributes(g, 'pos')) # Node (lat, lon)
-	assert(nx.get_edge_attributes(g, 'len')) # Edge lengths
+	assert(nx.get_edge_attributes(g, 'len')) # Edge lengths (meters)
+
+	for (a, b, d) in g.edges.data() :
+		g[a][b]['time'] = d['len'] / (PARAM['speed']['highway'][d['highway']] / 3.6)
 
 	# Mark the original nodes as basenodes
 	for n in g.nodes : g.nodes[n]['basenode'] = n
@@ -182,9 +207,9 @@ def mapmatch(
 		if not commons.all_distinct(dc.keys()) :
 			print("Warning: Repeated edges in cloud:", sorted(dc.keys()))
 
-	# Initial likelihood inv-prop to the regularized distance (in meters) to the waypoint
+	# Initial likelihood prop to road class and inv-prop to the regularized distance (in meters) to the waypoint
 	def dist2prob(dc) :
-		return { e : (1 / (10 + d)) for (e, d) in dc.items() }
+		return { e : (PARAM['speed']['highway'][g[e[0]][e[1]]['highway']] / (1 + d)) for (e, d) in dc.items() }
 
 	# Edge clouds containing relative suitability of edges for the optimal solution
 	prob_clouds = [ dist2prob(dc) for dc in dist_clouds ]
@@ -198,7 +223,7 @@ def mapmatch(
 	# Route quality indicators
 	indi = dict()
 
-	# Replace node by "Detailed decision node clusters"
+	# Replace node by a "Detailed decision node cluster"
 	def make_ddnc(nb) :
 
 		# Incoming and outgoing edges
@@ -208,7 +233,7 @@ def mapmatch(
 		# Make the cluster
 		for (ie, oe) in product(iedges, oedges):
 			# New hyperedge between (new) hypernodes
-			g.add_edge(ie, oe, len=meter_from_angle(angle(*(g.nodes[n]['pos'] for n in (ie[0], nb, oe[1])))))
+			g.add_edge(ie, oe, len=0, time=time_from_angle(angle(*(g.nodes[n]['pos'] for n in (ie[0], nb, oe[1])))))
 
 		# Interface edges (old, new)
 		e2E = dict([(ie, (ie[0], ie)) for ie in iedges] + [(oe, (oe, oe[1])) for oe in oedges])
@@ -218,8 +243,8 @@ def mapmatch(
 			g.nodes[e]['basenode'] = g.nodes[nb]['basenode']
 			# Geolocation of the hypernodes
 			g.nodes[e]['pos'] = g.nodes[nb]['pos']
-			# Replace the interface edges, keeping the edge length
-			g.add_edge(*E, len=g.get_edge_data(*e)['len'])
+			# Replace the interface edges, keeping the edge data
+			g.add_edge(*E, **g.get_edge_data(*e))
 
 		# Remove old node and incident edges
 		g.remove_node(nb)
@@ -250,39 +275,29 @@ def mapmatch(
 	result['status'] = "init"
 	if callback : callback(result)
 
-	assert(len(prob_clouds) >= 4)
+	# Collect the best solution variants here
+	elite = []
 
-	# Select random subgroups of edge clouds of this size
-	group_size = round(len(prob_clouds) / 2)
+	resets = [[]]
+	resets += [range(n, n + 2) for n in range(len(prob_clouds) - 1)]
+	resets += [range(n, n + 2) for n in range(len(prob_clouds) - 1)]
 
-	# Edge clouds that have not been optimized
-	untouched_clouds = set(range(len(prob_clouds)))
+	for reset in resets :
 
-	while untouched_clouds :
-
-		# Remaining edge clouds to optimize (index into prob_clouds)
-		# Just a random selection of "group_size" edge clouds
-		recto = random_subset(list(range(len(prob_clouds))), k=group_size)
-
-		untouched_clouds -= set(recto)
-
-		# Reset confidences in this cloud group
-		for nc in recto :
+		for nc in reset :
 			prob_clouds[nc] = dist2prob(dist_clouds[nc])
 
 		select_new_edge = True
-
-		while recto :
-
+		while True :
+			# Note: the variable nc is reserved throughout this loop for "the number of the currently selected edge cloud"
 			if select_new_edge :
 				# Choose a random edge cloud, preferably the "least solved" one
-				# nc = number of the edge cloud
-				nc = random_subset(recto, weights=[(lambda v : (1.1 - max(v) / sum(v)))(prob_clouds[nc].values()) for nc in recto], k=1).pop()
+				nc = random_subset(range(len(prob_clouds)), weights=[(sum(pc.values()) - pc[e]) for (e, pc) in zip(seledges, prob_clouds)], k=1).pop()
 
-				# Cloud edges with weights w/o the currently selected edge
+				# Cloud edges with weights
 				(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
 
-				# Choose a candidate edge from the cloud (w/o the currently selected edge)
+				# Choose a candidate edge from the cloud
 				seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
 			else :
 				select_new_edge = True
@@ -291,25 +306,44 @@ def mapmatch(
 			try :
 				for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
 					if (a, b) not in sps_way :
-						sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='len')
+						sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='time')
 			except nx.NetworkXNoPath :
 				raise
 
 			# Non-repeating edges
-			nre = seledges
+			nre = commons.remove_repeats(seledges)
 
 			# Construct a path through the selected edges
-			# with annotation of "culprits" = responsible clouds
-			path_culp = [(nre[0][0], (None, 0))] + list(chain.from_iterable([(n, (ne, ne + 1)) for n in sps_way[(a, b)]] for (ne, ((_, a), (b, _))) in enumerate(zip(nre, nre[1:])))) + [(nre[-1][-1], (len(nre), None))]
-
-			# Remove culprits, just leave a sequence of node IDs
-			path = [n for (n, _) in path_culp]
+			path = [nre[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(nre, nre[1:]))) + [nre[-1][-1]]
 
 			# Convert node IDs to (lat, lon) coordinates
-			geo_path = commons.remove_repeats([g.nodes[n]['pos'] for n in path])
+			# Note: must allow possible repeats (deal later)
+			geo_path = [g.nodes[n]['pos'] for n in path]
 
 			# Undo "Detailed decision node cluster"s for the user
-			origpath = commons.remove_repeats([g.nodes[n]['basenode'] for n in path])
+			# Note: must allow possible repeats (deal later)
+			origpath = [g.nodes[n]['basenode'] for n in path]
+
+			# Introduce turn penalization
+			if True :
+
+				# Generator for "detailed decision node clusters" candidate nodes
+				def get_cand_ddnc() :
+					for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
+						# Check if the node is original and the turn is significant
+						if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
+							yield b
+
+				cand_ddnc = set(get_cand_ddnc())
+
+				if cand_ddnc :
+					for b in cand_ddnc :
+						make_ddnc(b)
+
+					elite.clear()
+					select_new_edge = False
+
+					continue
 
 			# Previous value of the quality indicators
 			old_indi = indi.copy()
@@ -317,8 +351,8 @@ def mapmatch(
 			# Indicator 1: Sum of distances of the selected edges to waypoints
 			indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
 
-			# Indicator 2: The total length of the path
-			indi['dist'] = sum(g.get_edge_data(*e)['len'] for e in zip(path, path[1:]))
+			# Indicator 2: The total travel time for the path
+			indi['time'] = sum(g.get_edge_data(*e)['time'] for e in zip(path, path[1:]))
 
 			# Optimization criterion (lower is better)
 			indi['crit'] = opticrit(indi)
@@ -326,76 +360,32 @@ def mapmatch(
 			# Re-weight the current edge in its cloud
 			if not old_indi : continue
 			rel_delta = indi['crit'] / old_indi['crit']
-			prob_clouds[nc][seledges[nc]] *= (1.3 if (rel_delta < 1) else (0.8 / rel_delta))
+			prob_clouds[nc][seledges[nc]] *= (1.8 if (rel_delta < 1) else (0.7 / rel_delta))
 
-			while True :
-				# How certain we are about about the currently selected edge
-				cloud_certainty = prob_clouds[nc][seledges[nc]] / sum(prob_clouds[nc].values())
-
-				# Avoid overconfidence
-				if (cloud_certainty > 1.1 * acceptance_threshold) :
-					prob_clouds[nc][seledges[nc]] /= 1.1
-				else :
-					break
-
-			# Consider this cloud solved?
-			if (cloud_certainty >= acceptance_threshold) :
-				# Unschedule this cloud from further optimization
-				recto.remove(nc)
-
-				# Remove implausible edges from further optimization
-				for (nc, (pc, dc)) in enumerate(zip(prob_clouds, dist_clouds)) :
-					remove = set(sorted(pc.keys(), key=(lambda e : -pc[e]))[5:])
-					remove.discard(seledges[nc])
-					prob_clouds[nc] = { e : p for (e, p) in pc.items() if not (e in remove) }
-					dist_clouds[nc] = { e : d for (e, d) in dc.items() if not (e in remove) }
-				del nc
-
-				break
-
-			# Introduce turn penalization
-			if (cloud_certainty >= 0.3) :
-
-				# Generator for "detailed decision node clusters" candidate nodes
-				def get_cand_ddnc() :
-					for (p, q, r, (b, culp)) in zip(geo_path, geo_path[1:], geo_path[2:], path_culp[1:]) :
-						# Check if the node is original and the turn is significant
-						if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
-							yield (b, culp)
-
-				# DDNC candidates with edges responsible for large turns
-				cand_ddnc = set(get_cand_ddnc())
-
-				if cand_ddnc :
-					# Introduce DDNC
-					for (b, culp) in cand_ddnc :
-						make_ddnc(b)
-						untouched_clouds.add()
-
-					# The graph structure changed; invalidate metrics
-					indi.clear()
-					# Keep the currently selected edge
-					select_new_edge = False
-					continue
-
-			# Progress indicator
-			overall_progress = (1 - len(untouched_clouds) / len(prob_clouds)) * np.mean([min(1, max(pc.values()) / sum(pc.values()) / acceptance_threshold) for pc in prob_clouds])
+			# Update the "elite" solution variants
+			elite = sorted(set(elite + [(indi['crit'], tuple(seledges))]), key=(lambda se : se[0]))[0:5]
 
 			# Normalize (not strictly necessary)
 			prob_clouds = [{ e : (p / sum(pc.values())) for (e, p) in pc.items() } for pc in prob_clouds]
 
+			# Status and possible termination
 
-			# Callback
+			# Progress indicator
+			overall_progress = np.mean([min(1, max(pc.values()) / sum(pc.values()) / final_acceptance_threshold) for pc in prob_clouds])
 
 			to_basenodes = (lambda edges : [tuple(g.nodes[n]['basenode'] for n in e) for e in edges])
 
 			result['status'] = "opti"
 			result['indicators'] = deepcopy(indi['crit'])
-			result['path'] = origpath
-			result['geo_path'] = geo_path
+			(result['path'], result['geo_path']) = map(list, zip(*commons.remove_repeats(zip(origpath, geo_path))))
 			result['progress'] = overall_progress
 			result['edge_clouds'] = [ dict(zip(to_basenodes(pc.keys()), pc.values())) for pc in prob_clouds ]
 			result['active_edges'] = to_basenodes(seledges)
+
+			# Optimization loop termination
+			if all((pc[e] / sum(pc.values()) >= final_acceptance_threshold) for (e, pc) in zip(seledges, prob_clouds)) :
+				if (indi['crit'] == min(crit for (crit, _) in elite)) :
+					break
 
 			if callback: callback(result)
 
@@ -503,6 +493,10 @@ def foo() :
 	#waypoints = [(22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60651, 120.338188), (22.606119, 120.338569), (22.606109, 120.33834), (22.605649, 120.333862), (22.60655, 120.33345), (22.60831, 120.333213), (22.617879, 120.332069), (22.619409, 120.331848), (22.61968, 120.33184), (22.622409, 120.331458), (22.622329, 120.329803), (22.622289, 120.329437), (22.62141, 120.327056), (22.62124, 120.326507), (22.62095, 120.325752), (22.62008, 120.323219), (22.618999, 120.319877), (22.61882, 120.319168), (22.61853, 120.318038), (22.617969, 120.316169), (22.617969, 120.316169), (22.617319, 120.314498), (22.61683, 120.313072), (22.616478999999998, 120.31208), (22.616478999999998, 120.31208), (22.615419, 120.308982), (22.615159, 120.30812), (22.61498, 120.307182), (22.61498, 120.307182), (22.614429, 120.305999), (22.614429, 120.305999), (22.614099, 120.305229), (22.61411, 120.30516), (22.61375, 120.303573), (22.61359, 120.303199), (22.61359, 120.303199), (22.613389, 120.302856), (22.613109, 120.301681), (22.612779, 120.301078), (22.61264, 120.300666), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62136, 120.296142), (22.62174, 120.296768), (22.622539, 120.29956), (22.622659, 120.299919), (22.62294, 120.300529), (22.62302, 120.300811), (22.62351, 120.301116), (22.624648, 120.301299), (22.6268, 120.301521)]
 
 	waypoints = [(22.60642, 120.338256), (22.605649, 120.333862), (22.60655, 120.33345), (22.60831, 120.333213), (22.617879, 120.332069), (22.619409, 120.331848), (22.622409, 120.331458), (22.622329, 120.329803), (22.62141, 120.327056), (22.62095, 120.325752), (22.62008, 120.323219), (22.618999, 120.319877), (22.61882, 120.319168), (22.61853, 120.318038), (22.617969, 120.316169), (22.617319, 120.314498), (22.61683, 120.313072), (22.616478999999998, 120.31208), (22.615419, 120.308982), (22.615159, 120.30812), (22.61498, 120.307182), (22.614429, 120.305999), (22.614099, 120.305229), (22.61375, 120.303573), (22.613389, 120.302856), (22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956), (22.62294, 120.300529), (22.62351, 120.301116), (22.624648, 120.301299), (22.6268, 120.301521)]
+	# wp1 = (22.61313, 120.29811) # lower
+	# wp2 = (22.621259, 120.295913) # upper
+	# print(waypoints.index(wp1), waypoints.index(wp2)) # 29 30
+
 	# waypoints = [(22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956)]
 
 	# commons.seed()
@@ -542,7 +536,7 @@ def foo() :
 			for (n, (y, x)) in enumerate(result['waypoints']):
 				ax.plot(x, y, 'bo')
 
-			ax.axis(commons.niceaxis(ax.axis(), expand=1.9))
+			ax.axis(commons.niceaxis(ax.axis(), expand=1.1))
 			ax.autoscale(enable=False)
 
 			# Download the background map
@@ -550,10 +544,7 @@ def foo() :
 
 			result['plt'] = { 'fig' : fig, 'ax' : ax, 'map' : mapi, 'bbox' : ax.axis() }
 
-			plt.pause(0.1)
-			plt.show()
-
-		if (result['status'] in ["opti", "done"]) :
+		if (result['status'] in ["zero", "opti", "done"]) :
 
 			(fig, ax, mapi, bbox) = commons.inspect({'plt': ('fig', 'ax', 'map', 'bbox')})(result)
 
@@ -566,30 +557,38 @@ def foo() :
 			for (n, (y, x)) in enumerate(result['waypoints']) :
 				ax.plot(x, y, 'o', c='m', markersize=4)
 
-			(y, x) = zip(*result['geo_path'])
-			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
+			if ('geo_path' in result) :
+				(y, x) = zip(*result['geo_path'])
+				ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-			for (nc, pc) in enumerate(result['edge_clouds']) :
-				for (e, p) in pc.items() :
-					(y, x) = zip(*[g.nodes[i]['pos'] for i in e])
-					c = ('g' if (result['active_edges'][nc] == e) else 'r')
-					ax.plot(x, y, '-', c=c, linewidth=2, alpha=(p / max(pc.values())), zorder=150)
+			if ('edge_clouds' in result) :
+				for (nc, pc) in enumerate(result['edge_clouds']) :
+					for (e, p) in pc.items() :
+						(y, x) = zip(*[g.nodes[i]['pos'] for i in e])
+						c = ('g' if (result['active_edges'][nc] == e) else 'r')
+						ax.plot(x, y, '-', c=c, linewidth=2, alpha=(p / max(pc.values())), zorder=150)
 
 			ax.axis(bbox)
 
 			plt.pause(0.1)
 
+		if (result['status'] == "opti") :
 			# Next figure update
-			result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
+			result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=4)
 
+		if (result['status'] == "done") :
+			open("result.gpx", 'w').write(simple_gpx(result['waypoints'], [result['geo_path']]).to_xml())
 
 	print("Calling mapmatch...")
 
 	plt.ion()
 
 	commons.seed()
-	for _ in range(10) :
+	result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
+
+	for _ in range(20) :
 		result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
+		print(result['path'])
 		plt.pause(5)
 
 	plt.ioff()
