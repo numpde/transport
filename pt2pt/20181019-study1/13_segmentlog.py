@@ -78,7 +78,7 @@ PARAM = {
 
 	'datetime_filter' : (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
 
-	'listify-keys' : ['pos', 'speed', 'azimuth', 'time'],
+	'listify-keys' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time']],
 }
 
 
@@ -177,7 +177,7 @@ def segment_by_route() :
 
 	# Associate to each case a list of files that contain instances of it
 	case_directory = {
-		case : [ r[1] for r in g ]
+		case : set( r[1] for r in g )
 		for (case, g) in groupby(sorted(
 			(run_key(s), busfile)
 			for busfile in sorted(glob.glob(IFILE['segment_by_bus'].format(busid="*")))
@@ -205,15 +205,13 @@ def segment_logs() :
 	segment_by_bus()
 	segment_by_route()
 
-## ===================== PLAY :
-
-pass
-
 
 ## ================== OPTIONS :
 
 OPTIONS = {
 	'SEGMENT' : segment_logs,
+	'SEGMENT_BY_BUS' : segment_by_bus,
+	'SEGMENT_BY_ROUTE' : segment_by_route,
 }
 
 
