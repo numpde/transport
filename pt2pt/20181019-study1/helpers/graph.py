@@ -37,7 +37,10 @@ PARAM = {
 			"secondary_link" : 10,
 			"tertiary_link" : 9
 		}
-	}
+	},
+
+	# Edge attribute for shortest path computation
+	'weight' : 'time',
 }
 
 def geodist(a, b) :
@@ -150,6 +153,7 @@ def mapmatch(
 ):
 	""" Find a plausible bus route that visits the waypoints.
 
+	(TODO)
 	Returns:
 		A dictionary with the following keys
 			- 'path' is a list of nodes of the graph g, as an estimate of the route
@@ -163,7 +167,7 @@ def mapmatch(
 		raise RuntimeError("The graph appears not to be strongly connected.")
 
 	# Dictionary to pass to the callback function (updated below)
-	result = { 'waypoints' : waypoints, 'version' : 11111128 }
+	result = { 'waypoints' : waypoints, 'mapmatcher_version' : 11111128 }
 
 	# Before doing anything
 	result['status'] = "zero"
@@ -174,7 +178,7 @@ def mapmatch(
 	def time_from_angle(a) :
 		return (30 * abs(a) / 90) if (abs(a) < 150) else 120
 	# Convert the busstop-road distance to "equivalent" bus travel time
-	crittime_from_meter_stop = (lambda d : (5 * d / 1.5))
+	crittime_from_meter_stop = (lambda d : (d / 1.5) * 5)
 
 	# Optimization criterion (lower is better)
 	def opticrit(indi):
@@ -194,10 +198,12 @@ def mapmatch(
 	assert(nx.get_edge_attributes(g, 'len')) # Edge lengths (meters)
 
 	for (a, b, d) in g.edges.data() :
-		g[a][b]['time'] = d['len'] / (PARAM['speed']['highway'][d['highway']] / 3.6)
+		g[a][b][PARAM['weight']] = d['len'] / (PARAM['speed']['highway'][d['highway']] / 3.6)
 
 	# Mark the original nodes as basenodes
 	for n in g.nodes : g.nodes[n]['basenode'] = n
+	# Function to express edges in terms of the basenodes
+	to_basenodes = (lambda edges : [tuple(g.nodes[n]['basenode'] for n in e) for e in edges])
 
 	# A cloud of candidate edges for each waypoint
 	dist_clouds = [dict(kne(wp)) for wp in waypoints]
@@ -217,9 +223,6 @@ def mapmatch(
 	# Intermediate edges -- random initial condition
 	seledges = [random_subset(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
 
-	# Partial shortest path cache, keyed by tuples (start-node, end-node)
-	sps_way = dict()
-
 	# Route quality indicators
 	indi = dict()
 
@@ -227,22 +230,20 @@ def mapmatch(
 	def make_ddnc(nb) :
 
 		# Incoming and outgoing edges
-		iedges = list(g.in_edges(nbunch=nb))
-		oedges = list(g.out_edges(nbunch=nb))
+		(iedges, oedges) = (list(f(nbunch=nb)) for f in [g.in_edges, g.out_edges])
 
 		# Make the cluster
 		for (ie, oe) in product(iedges, oedges):
 			# New hyperedge between (new) hypernodes
-			g.add_edge(ie, oe, len=0, time=time_from_angle(angle(*(g.nodes[n]['pos'] for n in (ie[0], nb, oe[1])))))
+			g.add_edge(ie, oe, len=0, time=time_from_angle(angle(*(g.nodes[n]['pos'] for n in [ie[0], nb, oe[1]]))))
 
 		# Interface edges (old, new)
 		e2E = dict([(ie, (ie[0], ie)) for ie in iedges] + [(oe, (oe, oe[1])) for oe in oedges])
 
 		for (e, E) in e2E.items():
-			# Refer new nodes to the basenode
-			g.nodes[e]['basenode'] = g.nodes[nb]['basenode']
-			# Geolocation of the hypernodes
-			g.nodes[e]['pos'] = g.nodes[nb]['pos']
+			# Refer new nodes to the basenode, and copy the geolocation
+			for attr in ['basenode', 'pos'] :
+				g.nodes[e][attr] = g.nodes[nb][attr]
 			# Replace the interface edges, keeping the edge data
 			g.add_edge(*E, **g.get_edge_data(*e))
 
@@ -271,6 +272,36 @@ def mapmatch(
 					pass
 
 
+	# Partial shortest path cache, keyed by tuples (start-node, end-node)
+	sps_way = dict()
+
+	def get_current_path(seledges) :
+
+		# Precompute shortest path for each gap
+		try:
+			for ((_, a), (b, _)) in zip(seledges, seledges[1:]):
+				if (a, b) not in sps_way:
+					sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight=PARAM['weight'])
+		except nx.NetworkXNoPath:
+			raise
+
+		# Non-repeating edges
+		nre = commons.remove_repeats(seledges)
+
+		# Construct a path through the selected edges
+		path = [nre[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(nre, nre[1:]))) + [nre[-1][-1]]
+
+		# Convert node IDs to (lat, lon) coordinates
+		# Note: must allow possible repeats (deal later)
+		geo_path = [g.nodes[n]['pos'] for n in path]
+
+		# Undo "Detailed decision node cluster"s for the user
+		# Note: must allow possible repeats (deal later)
+		origpath = [g.nodes[n]['basenode'] for n in path]
+
+		return (geo_path, origpath, path)
+
+
 	# Intialized
 	result['status'] = "init"
 	if callback : callback(result)
@@ -278,70 +309,50 @@ def mapmatch(
 	# Collect the best solution variants here
 	elite = []
 
+	# Optimization rounds: first global then local
 	resets = [[]]
 	resets += [range(n, n + 2) for n in range(len(prob_clouds) - 1)]
 	resets += [range(n, n + 2) for n in range(len(prob_clouds) - 1)]
 
-	for reset in resets :
+	for (progress_reset, reset) in enumerate(resets) :
+		progress_reset = progress_reset / len(resets)
 
 		for nc in reset :
 			prob_clouds[nc] = dist2prob(dist_clouds[nc])
 
-		select_new_edge = True
 		while True :
 			# Note: the variable nc is reserved throughout this loop for "the number of the currently selected edge cloud"
-			if select_new_edge :
-				# Choose a random edge cloud, preferably the "least solved" one
-				nc = random_subset(range(len(prob_clouds)), weights=[(sum(pc.values()) - pc[e]) for (e, pc) in zip(seledges, prob_clouds)], k=1).pop()
 
-				# Cloud edges with weights
-				(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
+			# Choose a random edge cloud, preferably the "least solved" one
+			nc = random_subset(range(len(prob_clouds)), weights=[(sum(pc.values()) - pc[e]) for (e, pc) in zip(seledges, prob_clouds)], k=1).pop()
 
-				# Choose a candidate edge from the cloud
-				seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
-			else :
-				select_new_edge = True
+			# Cloud edges with weights
+			(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
 
-			# Precompute shortest path for each gap
-			try :
-				for ((_, a), (b, _)) in zip(seledges, seledges[1:]) :
-					if (a, b) not in sps_way :
-						sps_way[(a, b)] = nx.shortest_path(g, source=a, target=b, weight='time')
-			except nx.NetworkXNoPath :
-				raise
+			# Choose a candidate edge from the cloud
+			seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
 
-			# Non-repeating edges
-			nre = commons.remove_repeats(seledges)
-
-			# Construct a path through the selected edges
-			path = [nre[0][0]] + list(chain.from_iterable(sps_way[(a, b)] for ((_, a), (b, _)) in zip(nre, nre[1:]))) + [nre[-1][-1]]
-
-			# Convert node IDs to (lat, lon) coordinates
-			# Note: must allow possible repeats (deal later)
-			geo_path = [g.nodes[n]['pos'] for n in path]
-
-			# Undo "Detailed decision node cluster"s for the user
-			# Note: must allow possible repeats (deal later)
-			origpath = [g.nodes[n]['basenode'] for n in path]
+			# Reconstruct the route from intermediate edges
+			(geo_path, origpath, path) = get_current_path(seledges)
 
 			# Introduce turn penalization
 			if True :
 
-				# Generator for "detailed decision node clusters" candidate nodes
-				def get_cand_ddnc() :
-					for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:]) :
-						# Check if the node is original and the turn is significant
-						if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold) :
-							yield b
-
-				cand_ddnc = set(get_cand_ddnc())
+				# Candidates for "detail decision node clusters"
+				cand_ddnc = set(
+					b
+					for (p, q, r, b) in zip(geo_path, geo_path[1:], geo_path[2:], path[1:])
+					# Check if the node is original and the turn is significant
+					if (g.nodes[b]['basenode'] == b) and (abs(angle(p, q, r)) >= ddnc_threshold)
+				)
 
 				if cand_ddnc :
-					for b in cand_ddnc :
-						make_ddnc(b)
+					for nb in cand_ddnc :
+						make_ddnc(nb)
 
+					# Changes in the graph invalidate previous solutions/metrics
 					elite.clear()
-					select_new_edge = False
+					indi.clear()
 
 					continue
 
@@ -352,7 +363,7 @@ def mapmatch(
 			indi['miss'] = sum(dc[e] for (e, dc) in zip(seledges, dist_clouds))
 
 			# Indicator 2: The total travel time for the path
-			indi['time'] = sum(g.get_edge_data(*e)['time'] for e in zip(path, path[1:]))
+			indi['time'] = sum(g.get_edge_data(*e)[PARAM['weight']] for e in zip(path, path[1:]))
 
 			# Optimization criterion (lower is better)
 			indi['crit'] = opticrit(indi)
@@ -365,32 +376,39 @@ def mapmatch(
 			# Update the "elite" solution variants
 			elite = sorted(set(elite + [(indi['crit'], tuple(seledges))]), key=(lambda se : se[0]))[0:5]
 
-			# Normalize (not strictly necessary)
+			# Normalize to avoid flop errors
 			prob_clouds = [{ e : (p / sum(pc.values())) for (e, p) in pc.items() } for pc in prob_clouds]
 
-			# Status and possible termination
+			# Status
+			if callback:
+				result['status'] = "opti"
+				result['progress'] = progress_reset * np.mean([min(1, max(pc.values()) / sum(pc.values()) / final_acceptance_threshold) for pc in prob_clouds])
+				(result['geo_path'], result['path'], _) = map(list, zip(*commons.remove_repeats(zip(*get_current_path(seledges)))))
 
-			# Progress indicator
-			overall_progress = np.mean([min(1, max(pc.values()) / sum(pc.values()) / final_acceptance_threshold) for pc in prob_clouds])
+				result['(indicators)'] = deepcopy(indi['crit'])
+				result['(edge_clouds)'] = [ dict(zip(to_basenodes(pc.keys()), pc.values())) for pc in prob_clouds ]
+				result['(active_edges)'] = to_basenodes(seledges)
 
-			to_basenodes = (lambda edges : [tuple(g.nodes[n]['basenode'] for n in e) for e in edges])
+				callback(result)
 
-			result['status'] = "opti"
-			result['indicators'] = deepcopy(indi['crit'])
-			(result['path'], result['geo_path']) = map(list, zip(*commons.remove_repeats(zip(origpath, geo_path))))
-			result['progress'] = overall_progress
-			result['edge_clouds'] = [ dict(zip(to_basenodes(pc.keys()), pc.values())) for pc in prob_clouds ]
-			result['active_edges'] = to_basenodes(seledges)
-
-			# Optimization loop termination
+			# Optimization loop termination attempt
 			if all((pc[e] / sum(pc.values()) >= final_acceptance_threshold) for (e, pc) in zip(seledges, prob_clouds)) :
-				if (indi['crit'] == min(crit for (crit, _) in elite)) :
-					break
 
-			if callback: callback(result)
+				# Revert to the best solution seen so far
+				seledges = list(elite[0][1])
 
+				# Remove transient indicators
+				for k in result.keys() :
+					if (k[0] == "(") and (k[-1] == ")") :
+						del result[k]
+
+				break
+
+	# Reconstruct the route from the selected edges
 	result['status'] = "done"
 	result['progress'] = 1
+	(result['geo_path'], result['path'], _) = map(list, zip(*commons.remove_repeats(zip(*get_current_path(seledges)))))
+
 	if callback: callback(result)
 
 	return result
@@ -492,10 +510,12 @@ def foo() :
 	#waypoints = [(22.666556, 120.358786), (22.66751, 120.35836), (22.668576, 120.357613), (22.672313, 120.356319), (22.673593, 120.356906), (22.665803, 120.361893), (22.663703, 120.362239), (22.662706, 120.362399), (22.659723, 120.363933), (22.658963, 120.363186), (22.658523, 120.360759), (22.6508, 120.357293), (22.65096, 120.356733), (22.650733, 120.355213), (22.650686, 120.352519), (22.652966, 120.34976), (22.645576, 120.346626), (22.643599, 120.346106), (22.641999, 120.345106), (22.642226, 120.343879), (22.642373, 120.343119), (22.642366, 120.341933), (22.640166, 120.341533), (22.639253, 120.341279), (22.639373, 120.34028), (22.639679, 120.338506), (22.640713, 120.332719), (22.63971, 120.33216), (22.638663, 120.332093), (22.638593, 120.331199), (22.638933, 120.32952), (22.639263, 120.326546), (22.63934, 120.325826), (22.639453, 120.324773), (22.639633, 120.323279), (22.63988, 120.320959), (22.640173, 120.317826), (22.637606, 120.3048), (22.637653, 120.304106), (22.637756, 120.302306), (22.636829, 120.302213), (22.636233, 120.302199)]
 	#waypoints = [(22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60642, 120.338256), (22.60651, 120.338188), (22.606119, 120.338569), (22.606109, 120.33834), (22.605649, 120.333862), (22.60655, 120.33345), (22.60831, 120.333213), (22.617879, 120.332069), (22.619409, 120.331848), (22.61968, 120.33184), (22.622409, 120.331458), (22.622329, 120.329803), (22.622289, 120.329437), (22.62141, 120.327056), (22.62124, 120.326507), (22.62095, 120.325752), (22.62008, 120.323219), (22.618999, 120.319877), (22.61882, 120.319168), (22.61853, 120.318038), (22.617969, 120.316169), (22.617969, 120.316169), (22.617319, 120.314498), (22.61683, 120.313072), (22.616478999999998, 120.31208), (22.616478999999998, 120.31208), (22.615419, 120.308982), (22.615159, 120.30812), (22.61498, 120.307182), (22.61498, 120.307182), (22.614429, 120.305999), (22.614429, 120.305999), (22.614099, 120.305229), (22.61411, 120.30516), (22.61375, 120.303573), (22.61359, 120.303199), (22.61359, 120.303199), (22.613389, 120.302856), (22.613109, 120.301681), (22.612779, 120.301078), (22.61264, 120.300666), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62136, 120.296142), (22.62174, 120.296768), (22.622539, 120.29956), (22.622659, 120.299919), (22.62294, 120.300529), (22.62302, 120.300811), (22.62351, 120.301116), (22.624648, 120.301299), (22.6268, 120.301521)]
 
-	waypoints = [(22.60642, 120.338256), (22.605649, 120.333862), (22.60655, 120.33345), (22.60831, 120.333213), (22.617879, 120.332069), (22.619409, 120.331848), (22.622409, 120.331458), (22.622329, 120.329803), (22.62141, 120.327056), (22.62095, 120.325752), (22.62008, 120.323219), (22.618999, 120.319877), (22.61882, 120.319168), (22.61853, 120.318038), (22.617969, 120.316169), (22.617319, 120.314498), (22.61683, 120.313072), (22.616478999999998, 120.31208), (22.615419, 120.308982), (22.615159, 120.30812), (22.61498, 120.307182), (22.614429, 120.305999), (22.614099, 120.305229), (22.61375, 120.303573), (22.613389, 120.302856), (22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956), (22.62294, 120.300529), (22.62351, 120.301116), (22.624648, 120.301299), (22.6268, 120.301521)]
+	# waypoints = [(22.60642, 120.338256), (22.605649, 120.333862), (22.60655, 120.33345), (22.60831, 120.333213), (22.617879, 120.332069), (22.619409, 120.331848), (22.622409, 120.331458), (22.622329, 120.329803), (22.62141, 120.327056), (22.62095, 120.325752), (22.62008, 120.323219), (22.618999, 120.319877), (22.61882, 120.319168), (22.61853, 120.318038), (22.617969, 120.316169), (22.617319, 120.314498), (22.61683, 120.313072), (22.616478999999998, 120.31208), (22.615419, 120.308982), (22.615159, 120.30812), (22.61498, 120.307182), (22.614429, 120.305999), (22.614099, 120.305229), (22.61375, 120.303573), (22.613389, 120.302856), (22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956), (22.62294, 120.300529), (22.62351, 120.301116), (22.624648, 120.301299), (22.6268, 120.301521)]
 	# wp1 = (22.61313, 120.29811) # lower
 	# wp2 = (22.621259, 120.295913) # upper
 	# print(waypoints.index(wp1), waypoints.index(wp2)) # 29 30
+	
+	waypoints = [(22.591286, 120.305706), (22.593253, 120.305906), (22.59474, 120.305306), (22.597746, 120.304186), (22.596886, 120.305133)]
 
 	# waypoints = [(22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956)]
 
@@ -510,7 +530,7 @@ def foo() :
 	# TODO: abort if nearest edges are too far
 	# TODO: no path to node issue
 
-	# Do not import this above due to possible renderer selection
+	# Includes renderer selection:
 	import matplotlib.pyplot as plt
 
 	def mm_callback(result) :
@@ -546,6 +566,8 @@ def foo() :
 
 		if (result['status'] in ["zero", "opti", "done"]) :
 
+			fig : plt.Figure
+			ax : plt.Axes
 			(fig, ax, mapi, bbox) = commons.inspect({'plt': ('fig', 'ax', 'map', 'bbox')})(result)
 
 			# Clear the axes
@@ -561,11 +583,11 @@ def foo() :
 				(y, x) = zip(*result['geo_path'])
 				ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
-			if ('edge_clouds' in result) :
-				for (nc, pc) in enumerate(result['edge_clouds']) :
+			if ('(edge_clouds)' in result) :
+				for (nc, pc) in enumerate(result['(edge_clouds)']) :
 					for (e, p) in pc.items() :
 						(y, x) = zip(*[g.nodes[i]['pos'] for i in e])
-						c = ('g' if (result['active_edges'][nc] == e) else 'r')
+						c = ('g' if (result['(active_edges)'][nc] == e) else 'r')
 						ax.plot(x, y, '-', c=c, linewidth=2, alpha=(p / max(pc.values())), zorder=150)
 
 			ax.axis(bbox)
