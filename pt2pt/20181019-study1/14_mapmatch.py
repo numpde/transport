@@ -52,8 +52,8 @@ PARAM = {
 	# Only retain routes contained in this area (left, bottom, right, top)
 	'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
-	'min_runs_to_mapmatch' : 4,
-	'max_runs_to_mapmatch' : 18,
+	'min_runs_to_mapmatch' : 24,
+	'max_runs_to_mapmatch' : 24,
 
 	'waypoints_min_distance' : 60, # (meters)
 }
@@ -161,12 +161,16 @@ def mapmatch_runs(runs) :
 				a = b
 				yield a
 
+
 	for run in runs :
 
 		waypoints = list(sparsify(run_waypoints(run)))
-		if (len(waypoints) < 5) : continue
 
-		print("waypoints:", waypoints)
+		if (len(waypoints) < 4) :
+			print("Warning: too few waypoints -- skipping.")
+			continue
+
+		print("Waypoints:", waypoints)
 
 		mapmatch_attempt = {
 			k: run[k] for k in [KEYS.routeid, KEYS.dir, KEYS.runid, KEYS.busid]
@@ -182,7 +186,7 @@ def mapmatch_runs(runs) :
 			commons.seed()
 			result = graph.mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
 		except Exception as e :
-			print("Mapmatch failed on run {} ({})".format(run[KEYS.runid], e))
+			print("Warning: Mapmatch failed on run {} ({})".format(run[KEYS.runid], e))
 			print(traceback.format_exc())
 			time.sleep(2)
 			continue
@@ -190,7 +194,7 @@ def mapmatch_runs(runs) :
 		# Note: because figure is not jsonable cannot do
 		# mapmatch_attempt['mapmatch_result'] = result
 
-		for k in ['waypoints', 'path', 'geo_path'] : mapmatch_attempt[k] = result[k]
+		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] : mapmatch_attempt[k] = result[k]
 
 		# Save the result in different formats
 
@@ -203,7 +207,7 @@ def mapmatch_runs(runs) :
 			fig.savefig(commons.logged_open(fn.format(ext="png"), 'wb'), bbox_inches='tight', pad_inches=0)
 			plt.close(fig)
 		except Exception as e :
-			print("Could not save figure {} ({})".format(fn.format(ext="png"), e))
+			print("Warning: Could not save figure {} ({})".format(fn.format(ext="png"), e))
 
 		#  o) JSON
 
@@ -211,7 +215,7 @@ def mapmatch_runs(runs) :
 			with commons.logged_open(fn.format(ext="json"), 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
-			print("Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
+			print("Warning: Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
 
 		#  o) GPX
 
@@ -219,7 +223,7 @@ def mapmatch_runs(runs) :
 			with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
 				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints'], [mapmatch_attempt['geo_path']]).to_xml())
 		except Exception as e :
-			print("Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
+			print("Warning: Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
 
 		time.sleep(1)
 
@@ -235,12 +239,13 @@ def mapmatch_all() :
 	print("Found {} route files.".format(len(route_files)))
 
 	for route_file in route_files :
+		print("===")
 		print("Analyzing route file {}.".format(route_file))
 
 		runs = commons.zipjson_load(route_file)
 
 		# Remove trivial runs
-		runs = [run for run in runs if (len(run[KEYS.pos]) > 2)]
+		runs = [run for run in runs if (len(run[KEYS.pos]) >= 4)]
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]

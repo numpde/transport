@@ -6,7 +6,6 @@
 
 from helpers import commons
 
-import numpy as np
 import uuid
 import json
 import glob
@@ -18,7 +17,53 @@ from itertools import chain, groupby
 
 ## ==================== NOTES :
 
-pass
+# Use the same keys in KEYS and in IFILE/OFILE
+
+
+## ================= METADATA :
+
+# Keys of interest in the realtime bus network snapshot JSON record
+KEYS = {
+	'busid': 'PlateNumb',
+
+	'routeid': 'SubRouteUID',
+	'dir': 'Direction',
+
+	'speed': 'Speed',
+	'azimuth': 'Azimuth',
+
+	'time': 'GPSTime',
+	'pos': 'BusPosition',
+
+	#'bus_stat' : 'BusStatus', # Not all records have this
+	'duty_stat' : 'DutyStatus',
+}
+
+# The subkeys of KEYS['pos']
+KEYS_POS = {
+	'Lat': 'PositionLat',
+	'Lon': 'PositionLon',
+}
+
+# Helpers
+BUSID_OF = (lambda b: b[KEYS['busid']])
+ROUTEID_OF = (lambda r: r[KEYS['routeid']])
+DIRECTION_OF = (lambda r: r[KEYS['dir']])
+
+# What finally identifies a one-way route
+RUN_KEY = (lambda r: (ROUTEID_OF(r), DIRECTION_OF(r)))
+
+
+## ==================== PARAM :
+
+PARAM = {
+	'datetime_filter' : (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
+
+	# Segment runs whenever the timegap between measurements is large
+	'segment_timegap_minutes': 5,
+
+	'listify-keys' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time']],
+}
 
 
 ## ==================== INPUT :
@@ -40,47 +85,6 @@ OFILE = {
 
 commons.makedirs(OFILE)
 
-## ================= METADATA :
-
-# Keys of interest in the realtime bus network snapshot JSON record
-KEYS = {
-	'busid': 'PlateNumb',
-
-	'routeid': 'SubRouteUID',
-	'dir': 'Direction',
-
-	'speed': 'Speed',
-	'azimuth': 'Azimuth',
-
-	'time': 'GPSTime',
-	'pos': 'BusPosition',
-
-	#'bus_stat' : 'BusStatus', # Not all records have this
-	#'duty_stat' : 'DutyStatus',
-}
-
-# The subkeys of KEYS['pos']
-KEYS_POS = {
-	'Lat': 'PositionLat',
-	'Lon': 'PositionLon',
-}
-
-# Helpers
-BUSID_OF = (lambda b: b[KEYS['busid']])
-ROUTEID_OF = (lambda r: r[KEYS['routeid']])
-DIRECTION_OF = (lambda r: r[KEYS['dir']])
-
-
-## ==================== PARAM :
-
-PARAM = {
-	'segment_timegap_minutes' : 5,
-
-	'datetime_filter' : (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
-
-	'listify-keys' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time']],
-}
-
 
 ## ====================== AUX :
 
@@ -88,13 +92,15 @@ PARAM = {
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 def drop_fields(b) :
+	# Simplify the geo-position field
 	b[KEYS['pos']] = (b[KEYS['pos']][KEYS_POS['Lat']], b[KEYS['pos']][KEYS_POS['Lon']])
+	# Keep only the registered fields
 	return { k : b[k] for k in KEYS.values() }
 
 # Segment a list-like bb of bus records by route/direction
 def segments(bb):
-	# Put segment boundary when any of these keys change
-	indicators = [KEYS['routeid'], KEYS['dir']]
+	# Put segment boundary when any of these fields change
+	indicators = list(RUN_KEY({v : v for v in KEYS.values()}))
 
 	# Reverse list for easy pop-ing
 	bb = list(reversed(list(bb)))
@@ -108,13 +114,23 @@ def segments(bb):
 
 			# None of the indicators have changed: continue the segment record
 
-			# Unless there is a large time gap
-			(t0, t1) = (dateutil.parser.parse(b[KEYS['time']]) for b in [bb[-1], s[-1]])
-			if ((t1 - t0) > dt.timedelta(minutes=PARAM['segment_timegap_minutes'])) : break
+			(t0, t1) = (dateutil.parser.parse(b[KEYS['time']]) for b in [s[-1], bb[-1]])
+
+			# ... unless there is a large time gap
+			if ((t1 - t0) > dt.timedelta(minutes=PARAM['segment_timegap_minutes'])) :
+				break
+
+			# ... or the timestamps appear messed up
+			if (t0 > t1) :
+				print("Warning: Segmenting due to unordered timestamps ({})--({}) at {}".format(t0, t1, indicators))
+				break
 
 			b = bb.pop()
 
 			# If the timestamp is the same ignore this record
+			# Note: sometimes the rest of the fields may change,
+			# in particular the location (even over 100m),
+			# possibly due to the GPS-time field precision of 1 sec
 			if (t0 == t1): continue
 
 			s.append(b)
@@ -125,12 +141,10 @@ def segments(bb):
 		# Collapse into one record
 		run = next(iter(commons.index_dicts_by_key(s, BUSID_OF, preserve_singletons=PARAM['listify-keys']).values()))
 
-		# Attach a tag
+		# Attach an ad-hoc ID tag
 		run['RunUUID'] = uuid.uuid4().hex
 
 		yield run
-
-	return
 
 
 ## ===================== WORK :
@@ -171,15 +185,14 @@ def segment_by_bus() :
 
 
 def segment_by_route() :
-	run_key = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
 
-	# A "case" is the result of "run_key", i.e. a pair (routeid, direction)
+	# A "case" is the result of "RUN_KEY", i.e. a pair (routeid, direction)
 
 	# Associate to each case a list of files that contain instances of it
 	case_directory = {
 		case : set( r[1] for r in g )
 		for (case, g) in groupby(sorted(
-			(run_key(s), busfile)
+			(RUN_KEY(s), busfile)
 			for busfile in sorted(glob.glob(IFILE['segment_by_bus'].format(busid="*")))
 			for s in commons.zipjson_load(busfile)
 		), key=(lambda r : r[0]))
@@ -190,12 +203,12 @@ def segment_by_route() :
 			s
 			for busfile in files
 			for s in commons.zipjson_load(busfile)
-			if (run_key(s) == case)
+			if (RUN_KEY(s) == case)
 		]
 
-		(routeid, dir) = case
+		assert(segments), "No case found for {}".format(case)
 
-		fn = OFILE['segment_by_route'].format(routeid=routeid, dir=dir)
+		fn = OFILE['segment_by_route'].format(**{k : segments[0][K] for (k, K) in KEYS.items()})
 
 		with commons.logged_open(fn, 'w') as fd :
 			json.dump(segments, fd)

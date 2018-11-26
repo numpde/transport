@@ -12,6 +12,7 @@ import glob
 import inspect
 import traceback
 import numpy as np
+import datetime as dt
 
 from itertools import chain, product, groupby
 
@@ -47,6 +48,9 @@ commons.makedirs(OFILE)
 
 PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+
+	'quality_min_src/route' : 3,
+	'quality_min_wp/src' : 4,
 }
 
 
@@ -60,10 +64,10 @@ def pathsim(a, b) :
 	return SequenceMatcher(None, a, b).ratio()
 
 
-def write_track_gpx(waypoints, route, fd) :
-	fd.write(graph.simple_gpx(waypoints, [route]).to_xml())
+def write_track_gpx(waypoints, routes, fd) :
+	fd.write(graph.simple_gpx(waypoints, routes).to_xml())
 
-def write_track_img(waypoints, route, fd) :
+def write_track_img(waypoints, routes, fd) :
 	mpl.use('Agg')
 	import matplotlib.pyplot as plt
 
@@ -72,10 +76,19 @@ def write_track_img(waypoints, route, fd) :
 	ax : plt.Axes
 	fig : plt.Figure
 	(fig, ax) = plt.subplots()
-	(y, x) = zip(*route)
-	ax.plot(x, y, 'b-', linewidth=2)
-	ax.plot(x[0], y[0], 'o', c='g', markersize=3)
-	ax.plot(x[-1], y[-1], 'o', c='r', markersize=3)
+
+	if (len(routes) == 1) :
+		(y, x) = zip(*routes[0])
+		ax.plot(x, y, 'b-', linewidth=2)
+		ax.plot(x[0], y[0], 'o', c='g', markersize=3)
+		ax.plot(x[-1], y[-1], 'o', c='r', markersize=3)
+	else :
+		for route in routes :
+			(y, x) = zip(*route)
+			ax.plot(x, y, '.-', linewidth=1, alpha=0.3, markersize=1.5)
+			ax.plot(x[0], y[0], 'o', c='g', markersize=1)
+			ax.plot(x[-1], y[-1], 'o', c='r', markersize=1)
+
 	axis = commons.niceaxis(ax.axis(), expand=1.1)
 	[i.set_fontsize(8) for i in ax.get_xticklabels() + ax.get_yticklabels()]
 	ax.axis(axis)
@@ -98,6 +111,9 @@ def distill_geopath(geopaths) :
 
 	# Number of map-matched variants
 	ngp = len(geopaths)
+
+	if (ngp < 2) :
+		raise ValueError("At least two paths are required")
 
 	# Affinity matrix
 	M = np.zeros((ngp, ngp))
@@ -167,28 +183,55 @@ def map_routes() :
 		try :
 
 			if not files :
-				print("No mapmatch files to distill.")
+				print("Warning: No mapmatch files to distill.")
+				continue
+
+			# Load map-matched variants
+			sources = { fn : commons.zipjson_load(fn) for fn in files }
+
+			print("Number of sources before quality filter: {}".format(len(sources)))
+
+			# Quality filter
+			def is_qualified(src) :
+				if (len(src['waypoints']) < PARAM['quality_min_wp/src']) : return False
+				return True
+
+			# Filter quality
+			sources = { fn : src for (fn, src) in sources.items() if is_qualified(src) }
+
+			print("Number of sources: {}".format(len(sources)))
+
+			if (len(sources) < PARAM['quality_min_src/route']) :
+				print("Warning: too few sources -- skipping.")
 				continue
 
 			# Combine map-matched variants
-			route = distill_geopath(commons.zipjson_load(fn).get('geo_path') for fn in files)
+			route = distill_geopath(list(src['geo_path'] for src in sources.values()))
 
 			fn = OFILE['mapped_routes'].format(routeid=routeid, direction=dir, ext="{ext}")
 			commons.makedirs(fn)
 
 			with commons.logged_open(fn.format(ext="json"), 'w') as fd :
-				json.dump({ 'geo-path' : route }, fd)
+				json.dump({
+					'geo-path' : route,
+					'sources' : sources,
+					'datetime' : str(dt.datetime.now().astimezone(tz=None)),
+				}, fd)
 
 			with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
-				write_track_gpx([], route, fd)
+				write_track_gpx([], [route], fd)
 
 			with commons.logged_open(fn.format(ext="png"), 'wb') as fd :
-				write_track_img([], route, fd)
+				write_track_img([], [route], fd)
+
+			with commons.logged_open(fn.format(ext="src.png"), 'wb') as fd :
+				write_track_img([], [src['geo_path'] for src in sources.values()], fd)
 
 		except Exception as e :
-			print("Mapping failed ({}).".format(e))
+			print("Warning: Mapping failed ({}).".format(e))
 			print(traceback.format_exc())
 
+	print("Done.")
 
 ## ==================== ENTRY :
 
