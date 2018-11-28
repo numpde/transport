@@ -48,24 +48,6 @@ def geodist(a, b) :
 	return geopy.distance.geodesic(a, b).m
 
 
-# Random subset of a list (without replacement by default)
-def random_subset(a, weights=None, k=None, replace=False) :
-
-	# Note:
-	# Use indices b/c numpy.random.choice yields "ValueError: a must be 1-dimensional" for a list of tuples
-	# It also expects the probabilities/weights to sum to one
-
-	a = list(a)
-
-	if weights :
-		if sum(weights) :
-			weights = [w / sum(weights) for w in weights]
-		else :
-			weights = None
-
-	return list(a[i] for i in np.random.choice(len(a), size=k, p=weights, replace=replace))
-
-
 # Signed "turning" angle (p, q) to (q, r) in degrees,
 # where p, q, r are (lat, lon) coordinates
 # https://stackoverflow.com/a/16180796/3609568
@@ -221,10 +203,13 @@ def mapmatch(
 	prob_clouds = [ dist2prob(dc) for dc in dist_clouds ]
 
 	# Intermediate edges -- random initial condition
-	seledges = [random_subset(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
+	seledges = [commons.random_subset(list(pc.keys()), weights=list(pc.values()), k=1).pop() for pc in prob_clouds]
 
 	# Route quality indicators
 	indi = dict()
+
+	# Partial shortest path cache, keyed by tuples (start-node, end-node)
+	sps_way = dict()
 
 	# Replace node by a "Detailed decision node cluster"
 	def make_ddnc(nb) :
@@ -254,7 +239,7 @@ def mapmatch(
 
 		# Remove invalidated shortest paths
 		for (ab, way) in list(sps_way.items()) :
-			if b in way :
+			if nb in way :
 				sps_way.pop(ab)
 
 		for (e, E) in e2E.items():
@@ -271,9 +256,6 @@ def mapmatch(
 				except KeyError:
 					pass
 
-
-	# Partial shortest path cache, keyed by tuples (start-node, end-node)
-	sps_way = dict()
 
 	def get_current_path(seledges) :
 
@@ -324,13 +306,13 @@ def mapmatch(
 			# Note: the variable nc is reserved throughout this loop for "the number of the currently selected edge cloud"
 
 			# Choose a random edge cloud, preferably the "least solved" one
-			nc = random_subset(range(len(prob_clouds)), weights=[(sum(pc.values()) - pc[e]) for (e, pc) in zip(seledges, prob_clouds)], k=1).pop()
+			nc = commons.random_subset(range(len(prob_clouds)), weights=[(sum(pc.values()) - pc[e]) for (e, pc) in zip(seledges, prob_clouds)], k=1).pop()
 
 			# Cloud edges with weights
 			(ce, cw) = zip(*[(e, p) for (e, p) in prob_clouds[nc].items() if (e != seledges[nc])])
 
 			# Choose a candidate edge from the cloud
-			seledges[nc] = random_subset(ce, weights=cw, k=1).pop()
+			seledges[nc] = commons.random_subset(ce, weights=cw, k=1).pop()
 
 			# Reconstruct the route from intermediate edges
 			(geo_path, origpath, path) = get_current_path(seledges)
@@ -398,9 +380,7 @@ def mapmatch(
 				seledges = list(elite[0][1])
 
 				# Remove transient indicators
-				for k in result.keys() :
-					if (k[0] == "(") and (k[-1] == ")") :
-						del result[k]
+				result = { k : v for (k, v) in result.items() if not ((k[0] == "(") and (k[-1] == ")")) }
 
 				break
 

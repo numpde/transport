@@ -47,7 +47,7 @@ commons.makedirs(OFILE)
 ## ==================== PARAM :
 
 PARAM = {
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+	'mapbox_api_token' : commons.logged_open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	'quality_min_src/route' : 3,
 	'quality_min_wp/src' : 4,
@@ -62,40 +62,6 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 # Similarity index of two paths
 def pathsim(a, b) :
 	return SequenceMatcher(None, a, b).ratio()
-
-
-def write_track_gpx(waypoints, routes, fd) :
-	fd.write(graph.simple_gpx(waypoints, routes).to_xml())
-
-def write_track_img(waypoints, routes, fd) :
-	mpl.use('Agg')
-	import matplotlib.pyplot as plt
-
-	if waypoints : raise NotImplementedError("Writing waypoints not implemented.")
-
-	ax : plt.Axes
-	fig : plt.Figure
-	(fig, ax) = plt.subplots()
-
-	if (len(routes) == 1) :
-		(y, x) = zip(*routes[0])
-		ax.plot(x, y, 'b-', linewidth=2)
-		ax.plot(x[0], y[0], 'o', c='g', markersize=3)
-		ax.plot(x[-1], y[-1], 'o', c='r', markersize=3)
-	else :
-		for route in routes :
-			(y, x) = zip(*route)
-			ax.plot(x, y, '.-', linewidth=1, alpha=0.3, markersize=1.5)
-			ax.plot(x[0], y[0], 'o', c='g', markersize=1)
-			ax.plot(x[-1], y[-1], 'o', c='r', markersize=1)
-
-	axis = commons.niceaxis(ax.axis(), expand=1.1)
-	[i.set_fontsize(8) for i in ax.get_xticklabels() + ax.get_yticklabels()]
-	ax.axis(axis)
-	ax.imshow(maps.get_map_by_bbox(maps.ax2mb(*axis), token=PARAM['mapbox_api_token']), extent=axis, interpolation='quadric', zorder=-100)
-
-	fig.savefig(fd, dpi=180, bbox_inches='tight', pad_inches=0)
-	plt.close(fig)
 
 
 ## ===================== WORK :
@@ -219,13 +185,13 @@ def map_routes() :
 				}, fd)
 
 			with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
-				write_track_gpx([], [route], fd)
+				fd.write(graph.simple_gpx([], [route]).to_xml())
 
 			with commons.logged_open(fn.format(ext="png"), 'wb') as fd :
-				write_track_img([], [route], fd)
+				maps.write_track_img([], [route], fd, PARAM['mapbox_api_token'])
 
 			with commons.logged_open(fn.format(ext="src.png"), 'wb') as fd :
-				write_track_img([], [src['geo_path'] for src in sources.values()], fd)
+				maps.write_track_img([], [src['geo_path'] for src in sources.values()], fd, PARAM['mapbox_api_token'])
 
 		except Exception as e :
 			print("Warning: Mapping failed ({}).".format(e))

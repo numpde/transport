@@ -4,7 +4,7 @@
 
 ## ================== IMPORTS :
 
-from helpers import commons
+from helpers import commons, maps
 
 import uuid
 import json
@@ -36,7 +36,7 @@ KEYS = {
 	'pos': 'BusPosition',
 
 	#'bus_stat' : 'BusStatus', # Not all records have this
-	'duty_stat' : 'DutyStatus',
+	'duty_stat' : 'DutyStatus', # Or this
 }
 
 # The subkeys of KEYS['pos']
@@ -59,10 +59,12 @@ RUN_KEY = (lambda r: (ROUTEID_OF(r), DIRECTION_OF(r)))
 PARAM = {
 	'datetime_filter' : (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
 
+	'mapbox_api_token' : commons.logged_open(".credentials/UV/mapbox-token.txt", 'r').read(),
+
 	# Segment runs whenever the timegap between measurements is large
 	'segment_timegap_minutes': 5,
 
-	'listify-keys' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time']],
+	'listify-keys' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time', 'duty_stat']],
 }
 
 
@@ -80,7 +82,7 @@ IFILE = {
 OFILE = {
 	'segment_by_bus' : IFILE['segment_by_bus'],
 
-	'segment_by_route' : "OUTPUT/13/Kaohsiung/byroute/UV/{routeid}-{dir}.json",
+	'segment_by_route' : "OUTPUT/13/Kaohsiung/byroute/UV/{routeid}-{dir}.{{ext}}",
 }
 
 commons.makedirs(OFILE)
@@ -141,6 +143,8 @@ def segments(bb):
 		# Collapse into one record
 		run = next(iter(commons.index_dicts_by_key(s, BUSID_OF, preserve_singletons=PARAM['listify-keys']).values()))
 
+		# TODO: check listify
+
 		# Attach an ad-hoc ID tag
 		run['RunUUID'] = uuid.uuid4().hex
 
@@ -188,14 +192,19 @@ def segment_by_route() :
 
 	# A "case" is the result of "RUN_KEY", i.e. a pair (routeid, direction)
 
+	print("Collecting cases...")
+
 	# Associate to each case a list of files that contain instances of it
 	case_directory = {
 		case : set( r[1] for r in g )
-		for (case, g) in groupby(sorted(
-			(RUN_KEY(s), busfile)
-			for busfile in sorted(glob.glob(IFILE['segment_by_bus'].format(busid="*")))
-			for s in commons.zipjson_load(busfile)
-		), key=(lambda r : r[0]))
+		for (case, g) in groupby(
+			sorted(
+				(RUN_KEY(s), busfile)
+				for busfile in sorted(glob.glob(IFILE['segment_by_bus'].format(busid="*")))
+				for s in commons.zipjson_load(busfile)
+			),
+			key=(lambda r : r[0])
+		)
 	}
 
 	for (case, files) in sorted(case_directory.items(), key=(lambda cf : -len(cf[1]))) :
@@ -208,10 +217,15 @@ def segment_by_route() :
 
 		assert(segments), "No case found for {}".format(case)
 
-		fn = OFILE['segment_by_route'].format(**{k : segments[0][K] for (k, K) in KEYS.items()})
+		fn = OFILE['segment_by_route'].format(**{k : segments[0].get(K) for (k, K) in KEYS.items()})
 
-		with commons.logged_open(fn, 'w') as fd :
+		with commons.logged_open(fn.format(ext="json"), 'w') as fd :
 			json.dump(segments, fd)
+
+		with commons.logged_open(fn.format(ext="png"), 'wb') as fd :
+			maps.write_track_img([], [s[KEYS['pos']] for s in segments], fd, PARAM['mapbox_api_token'])
+
+
 
 
 def segment_logs() :

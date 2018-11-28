@@ -75,6 +75,9 @@ class KEYS :
 	time = 'GPSTime'
 	pos = 'BusPosition'
 
+	dutystatus = 'DutyStatus'
+	busstatus = 'BusStatus'
+
 
 # Helpers
 BUSID_OF = (lambda b: b[KEYS.busid])
@@ -93,6 +96,12 @@ def run_waypoints(run) :
 def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
+
+def is_normal_status(run) :
+	OK = True
+	for S in (run.get(k, 0) for k in [KEYS.dutystatus, KEYS.busstatus]) :
+		OK = OK and (all((int(s) == 0) for s in S) if (type(S) is list) else (int(S) == 0))
+	return OK
 
 
 ## ===================== WORK :
@@ -244,11 +253,16 @@ def mapmatch_all() :
 
 		runs = commons.zipjson_load(route_file)
 
+		# Retain only the runs that are consistently of "Normal" status
+		runs = [run for run in runs if is_normal_status(run)]
+
 		# Remove trivial runs
 		runs = [run for run in runs if (len(run[KEYS.pos]) >= 4)]
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
+
+		# TODO: clustering here?
 
 		if not runs :
 			print("File does not contain usable runs.")
@@ -258,7 +272,7 @@ def mapmatch_all() :
 		assert (1 == len(set(run_key(r) for r in runs)))
 		(routeid, dir) = set(run_key(r) for r in runs).pop()
 
-		print("Route {}, direction {}: {} nontrivial runs within the map.".format(routeid, dir, len(runs)))
+		print("Route {}, direction {}: {} usable runs.".format(routeid, dir, len(runs)))
 
 		# Existing mapmatch records for this route
 		def get_mapmatched_files() :
@@ -274,10 +288,9 @@ def mapmatch_all() :
 
 			if (len(runs) > PARAM['max_runs_to_mapmatch']) :
 				print("Out of {} available runs, will mapmatch only random {}.".format(len(runs), PARAM['max_runs_to_mapmatch']))
-				random.shuffle(runs)
-				runs = runs[0:PARAM['max_runs_to_mapmatch']]
+				runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
 
-			if (len(runs) <= PARAM['min_runs_to_mapmatch']) :
+			if (len(runs) < PARAM['min_runs_to_mapmatch']) :
 				print("Skipping mapmatch: too few runs.")
 				continue
 

@@ -3,6 +3,27 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import numpy as np
+
+# Random subset of a list (without replacement by default)
+def random_subset(a, weights=None, k=None, replace=False) :
+
+	# Note:
+	# Use indices b/c numpy.random.choice yields "ValueError: a must be 1-dimensional" for a list of tuples
+	# It also expects the probabilities/weights to sum to one
+
+	a = list(a)
+
+	if weights :
+		if sum(weights) :
+			weights = [w / sum(weights) for w in weights]
+		else :
+			weights = None
+
+	return list(a[i] for i in np.random.choice(len(a), size=k, p=weights, replace=replace))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import math
 
 def niceaxis(axis, expand=1.1, minaspect=((1 + math.sqrt(5)) / 2)) :
