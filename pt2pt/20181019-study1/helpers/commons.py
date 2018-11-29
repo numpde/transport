@@ -143,7 +143,8 @@ class inspect :
 import numpy as np
 
 # Find a way through matrix M bottom-to-top with right-to-left drift
-# that minimizes the sum of entries (using dynamic programming)
+# that minimizes the sum of entries (using dynamic programming).
+# Returns a list 'match' such that row i is matched with column match[i].
 #
 # Recursion template:
 #

@@ -50,7 +50,8 @@ PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	# Only retain routes contained in this area (left, bottom, right, top)
-	'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
+	'graph_bbox' : None, # Will be filled based on the graph
+	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
 	'min_runs_to_mapmatch' : 24,
 	'max_runs_to_mapmatch' : 24,
@@ -93,6 +94,16 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 def run_waypoints(run) :
 	return list(map(tuple, run[KEYS.pos]))
 
+def compute_graph_bbox() :
+	g: nx.DiGraph = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g']
+	(left, bottom, right, top) = [
+		min(lon for (n, (lat, lon)) in g.nodes.data('pos')),
+		min(lat for (n, (lat, lon)) in g.nodes.data('pos')),
+		max(lon for (n, (lat, lon)) in g.nodes.data('pos')),
+		max(lat for (n, (lat, lon)) in g.nodes.data('pos'))
+	]
+	return (left, bottom, right, top)
+
 def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
@@ -104,7 +115,7 @@ def is_normal_status(run) :
 	return OK
 
 
-## ===================== WORK :
+## ==================== SLAVE :
 
 def mapmatch_runs(runs) :
 
@@ -237,11 +248,15 @@ def mapmatch_runs(runs) :
 		time.sleep(1)
 
 
+## =================== MASTER :
+
 def mapmatch_all() :
 
 	commons.seed()
 
 	run_key = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
+
+	PARAM['graph_bbox'] = compute_graph_bbox()
 
 	route_files = sorted(glob.glob(IFILE['segment_by_route'].format(routeid="*", dir="*")))
 
