@@ -218,9 +218,17 @@ def distill_geopath_ver2(sources) :
 	for gp in geopaths :
 		# Append sequential-counter-tag to nodes
 		gp = list(zip(gp, count_so_far(gp)))
+		# print(gp)
 		for (a, b) in zip(gp, gp[1:]) :
 			node_next[a] = node_next.get(a, []) + [b]
 			node_prev[b] = node_prev.get(b, []) + [a]
+
+	# print("1-next:", node_next[((22.6211862, 120.3456268), 1)])
+	# print("1-prev:", node_prev[((22.6211862, 120.3456268), 1)])
+	# print("2-next:", node_next[((22.6211862, 120.3456268), 2)])
+	# print("2-prev:", node_prev[((22.6211862, 120.3456268), 2)])
+	#
+	# exit(30)
 
 	prev_freq = dict()
 	for prev in node_prev.values() :
@@ -232,6 +240,8 @@ def distill_geopath_ver2(sources) :
 			if (len(node_next[a]) < 2) : return
 			a = random.choice(node_next[a])
 			if a : yield a
+
+	print("Computing candidates...")
 
 	# Collect distinct route candidates, some of them multiple times
 	routes = []
@@ -317,7 +327,8 @@ def map_routes() :
 	# case = ('KHH100', '0')
 	# case = ('KHH11', '1')
 	# case = ('KHH116', '0')
-	case = ('KHH1221', '0')
+	# case = ('KHH1221', '0')
+	case = ('KHH1221', '1')
 	case_files = { case : case_files[case] }
 
 	for ((routeid, dir), files) in case_files.items() :
