@@ -113,13 +113,15 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 	return i
 
 
-def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None) :
+def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, dpi=180) :
 	mpl.use('Agg')
 	import matplotlib.pyplot as plt
 
 	ax : plt.Axes
 	fig : plt.Figure
 	(fig, ax) = plt.subplots()
+
+	ax.tick_params(axis='both', which='both', labelsize='xx-small')
 
 	def default_plotter(fig, ax) :
 		if (len(tracks) == 1) :
@@ -149,5 +151,5 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None) 
 	if mapbox_api_token :
 		ax.imshow(get_map_by_bbox(ax2mb(*axis), token=mapbox_api_token), extent=axis, interpolation='quadric', zorder=-100)
 
-	fig.savefig(fd, dpi=180, bbox_inches='tight', pad_inches=0)
+	fig.savefig(fd, dpi=dpi, bbox_inches='tight', pad_inches=0)
 	plt.close(fig)
