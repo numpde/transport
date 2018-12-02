@@ -47,7 +47,7 @@ from itertools import groupby
 # Remove consecutive repeats
 def remove_repeats(xx, key=None):
 	# https://stackoverflow.com/a/5738933
-	return [next(iter(a)) for a in groupby(xx, key)]
+	return [next(iter(g)) for (k, g) in groupby(xx, key)]
 
 	# Alternative:
 	# xx = list(xx)
