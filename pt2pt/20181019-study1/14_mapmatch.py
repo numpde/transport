@@ -6,6 +6,7 @@
 
 from helpers import commons, maps, graph
 
+import re
 import uuid
 import time
 import json
@@ -23,11 +24,17 @@ import matplotlib as mpl
 # Note: do not import pyplot here -- may need to select renderer
 
 
+## ================= FILE I/O :
+
+open = commons.logged_open
+
+
 ## ==================== INPUT :
 
 IFILE = {
 	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
-	'segment_by_route' : "OUTPUT/13/Kaohsiung/byroute/UV/{routeid}-{dir}.json",
+
+	'segment_by_route' : "OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
 }
 
 
@@ -38,7 +45,7 @@ OFILE = {
 	'progress_txt': "OUTPUT/14/progress/UV/current_route.txt",
 	'progress_gpx': "OUTPUT/14/progress/UV/current_route.gpx",
 
-	'mapmatched': "OUTPUT/14/mapmatched/{routeid}/{direction}/UV/{mapmatch_uuid}.{ext}",
+	'mapmatched': "OUTPUT/14/mapmatched/{scenario}/{routeid}-{direction}/UV/{mapmatch_uuid}.{ext}",
 }
 
 commons.makedirs(OFILE)
@@ -50,7 +57,9 @@ PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	# Only retain routes contained in this area (left, bottom, right, top)
-	'graph_bbox' : None, # Will be filled based on the graph
+	# Will be filled based on the graph if 'None'
+	'graph_bbox' : None,
+	# Example:
 	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
 	'min_runs_to_mapmatch' : 24,
@@ -85,6 +94,9 @@ BUSID_OF = (lambda b: b[KEYS.busid])
 ROUTEID_OF = (lambda r: r[KEYS.routeid])
 DIRECTION_OF = (lambda r: r[KEYS.dir])
 
+# What finally identifies a one-way route
+RUN_KEY = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
+
 
 ## ====================== AUX :
 
@@ -93,6 +105,15 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 def run_waypoints(run) :
 	return list(map(tuple, run[KEYS.pos]))
+
+# Keep a certain distance between waypoints (in meters)
+def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
+	a = next(iter(wps))
+	yield a
+	for b in wps :
+		if (graph.geodist(a, b) >= dist) :
+			a = b
+			yield a
 
 def compute_graph_bbox() :
 	g: nx.DiGraph = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g']
@@ -117,13 +138,13 @@ def is_normal_status(run) :
 
 ## ==================== SLAVE :
 
-def mapmatch_runs(runs) :
+def mapmatch_runs(scenario, runs) :
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g: nx.DiGraph
 	knn : sklearn.neighbors.NearestNeighbors
-	(g, knn) = commons.inspect(('g', 'knn'))(
-		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
+	(g, knn) = commons.inspect({'main_component_with_knn': ('g', 'knn')})(
+		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))
 	)
 
 	# Nearest edges
@@ -160,7 +181,8 @@ def mapmatch_runs(runs) :
 
 		# Display/save figure here
 		commons.makedirs(OFILE['progress_img'])
-		fig.savefig(OFILE['progress_img'], bbox_inches='tight', pad_inches=0)
+		with open(OFILE['progress_img'], 'wb') as fd :
+			fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 
 		# Next figure update
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
@@ -170,16 +192,6 @@ def mapmatch_runs(runs) :
 			fd.write(graph.simple_gpx(result['waypoints'], [result.get('geo_path', [])]).to_xml())
 
 		# Note: need to close figure
-
-
-	# Keep a certain distance between waypoints (in meters)
-	def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
-		a = next(iter(wps))
-		yield a
-		for b in wps :
-			if (graph.geodist(a, b) >= dist) :
-				a = b
-				yield a
 
 
 	for run in runs :
@@ -198,7 +210,7 @@ def mapmatch_runs(runs) :
 
 		mapmatch_attempt['MapMatchUUID'] = uuid.uuid4().hex
 
-		fn = OFILE['mapmatched'].format(routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="{ext}")
+		fn = OFILE['mapmatched'].format(scenario=scenario, routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="{ext}")
 
 		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
 
@@ -211,20 +223,21 @@ def mapmatch_runs(runs) :
 			time.sleep(2)
 			continue
 
-		# Note: because figure is not jsonable cannot do
+		# Note: because figure is not json-able cannot do
 		# mapmatch_attempt['mapmatch_result'] = result
 
-		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] : mapmatch_attempt[k] = result[k]
+		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] :
+			mapmatch_attempt[k] = result[k]
 
-		# Save the result in different formats
-
+		# Save the result in different formats, in this directory
 		commons.makedirs(fn.format(ext=''))
 
 		#  o) Image
 
 		try :
-			(fig, ax) = commons.inspect({'plt': ('fig', 'ax')})(result)
-			fig.savefig(commons.logged_open(fn.format(ext="png"), 'wb'), bbox_inches='tight', pad_inches=0)
+			fig = result['plt']['fig']
+			with open(fn.format(ext="png"), 'wb') as fd :
+				fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 			plt.close(fig)
 		except Exception as e :
 			print("Warning: Could not save figure {} ({})".format(fn.format(ext="png"), e))
@@ -232,7 +245,7 @@ def mapmatch_runs(runs) :
 		#  o) JSON
 
 		try :
-			with commons.logged_open(fn.format(ext="json"), 'w') as fd :
+			with open(fn.format(ext="json"), 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
 			print("Warning: Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
@@ -240,7 +253,7 @@ def mapmatch_runs(runs) :
 		#  o) GPX
 
 		try :
-			with commons.logged_open(fn.format(ext="gpx"), 'w') as fd :
+			with open(fn.format(ext="gpx"), 'w') as fd :
 				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints'], [mapmatch_attempt['geo_path']]).to_xml())
 		except Exception as e :
 			print("Warning: Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
@@ -254,11 +267,9 @@ def mapmatch_all() :
 
 	commons.seed()
 
-	run_key = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
-
 	PARAM['graph_bbox'] = compute_graph_bbox()
 
-	route_files = sorted(glob.glob(IFILE['segment_by_route'].format(routeid="*", dir="*")))
+	route_files = sorted(glob.glob(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"), recursive=True))
 
 	print("Found {} route files.".format(len(route_files)))
 
@@ -267,6 +278,9 @@ def mapmatch_all() :
 		print("Analyzing route file {}.".format(route_file))
 
 		runs = commons.zipjson_load(route_file)
+
+		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
+		print("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
 
 		# Retain only the runs that are consistently of "Normal" status
 		runs = [run for run in runs if is_normal_status(run)]
@@ -277,22 +291,22 @@ def mapmatch_all() :
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
 
-		# TODO: clustering here?
+		# Q: clustering here?
 
 		if not runs :
 			print("File does not contain usable runs.")
 			continue
 
 		# Check that the file contains only one type of route
-		assert (1 == len(set(run_key(r) for r in runs)))
-		(routeid, dir) = set(run_key(r) for r in runs).pop()
+		assert (1 == len(set(RUN_KEY(r) for r in runs)))
+		(routeid, dir) = set(RUN_KEY(r) for r in runs).pop()
 
 		print("Route {}, direction {}: {} usable runs.".format(routeid, dir, len(runs)))
 
 		# Existing mapmatch records for this route
 		def get_mapmatched_files() :
 			return sorted(list(glob.glob(
-				OFILE['mapmatched'].format(routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json")
+				OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json")
 			)))
 
 		try :
@@ -309,7 +323,7 @@ def mapmatch_all() :
 				print("Skipping mapmatch: too few runs.")
 				continue
 
-			mapmatch_runs(runs)
+			mapmatch_runs(scenario, runs)
 
 		except Exception as e:
 			print("Mapmatch failed ({}).".format(e))
