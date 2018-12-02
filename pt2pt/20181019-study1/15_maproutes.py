@@ -14,6 +14,7 @@ import glob
 import random
 import inspect
 import traceback
+import networkx as nx
 import numpy as np
 import datetime as dt
 
@@ -62,8 +63,9 @@ PARAM = {
 	'quality_min_src/route' : 12,
 	'quality_min_wp/src' : 4,
 
-	'candidates_oversampling' : 2/3,
+	'candidates_oversampling' : 1/2,
 	'candidates_min#' : 24,
+	'candidates_max#' : 100,
 }
 
 
@@ -181,31 +183,27 @@ def distill_geopath_ver2(sources) :
 	geopaths = [src['geo_path'] for src in sources]
 
 	all_waypoints = set(map(tuple, (chain.from_iterable(src['waypoints'] for src in sources))))
-	all_nodes_pos = set(map(tuple, (chain.from_iterable(src['geo_path'] for src in sources))))
 
 	if (len(geopaths) < 2) : raise ValueError("At least two paths are required")
 
 	# Image of provided route variants and the original waypoints
 	maps.write_track_img(all_waypoints, geopaths, OFILE['progress'].format(stage='templates', ext='png'), PARAM['mapbox_api_token'])
 
-	def dist(p, knn: NearestNeighbors) :
-		return np.min(knn.query(np.asarray(p).reshape(1, -1), k=1)[0])
-
 	def dist2closest(pp: list, cloud: set) :
 		knn = graph.compute_geo_knn(dict(enumerate(cloud)), leaf_size=3)['knn_tree']
-		return [dist(p, knn) for p in pp]
+		return [np.min(knn.query(np.asarray(p).reshape(1, -1), k=1)[0]) for p in pp]
 
-	edge_freq = dict()
-	for gp in geopaths :
-		for e in zip(gp, gp[1:]) :
-			edge_freq[e] = edge_freq.get(e, 0) + 1
+	# edge_freq = dict()
+	# for gp in geopaths :
+	# 	for e in zip(gp, gp[1:]) :
+	# 		edge_freq[e] = edge_freq.get(e, 0) + 1
 
-	def plotter(fig, ax) :
-		for (e, f) in edge_freq.items() :
-			(y, x) = zip(*e)
-			ax.plot(x, y, 'b-', linewidth=1, c="C{}".format(min(f, 9)))
+	# def plotter(fig, ax) :
+	# 	for (e, f) in edge_freq.items() :
+	# 		(y, x) = zip(*e)
+	# 		ax.plot(x, y, 'b-', linewidth=1, c="C{}".format(min(f, 9)))
 
-	maps.write_track_img([], [], OFILE['progress'].format(stage='edge-frequencies', ext='png'), PARAM['mapbox_api_token'], plotter=plotter)
+	# maps.write_track_img([], [], OFILE['progress'].format(stage='edge-frequencies', ext='png'), PARAM['mapbox_api_token'], plotter=plotter)
 
 	def count_so_far(lst) :
 		counts = dict()
@@ -213,32 +211,69 @@ def distill_geopath_ver2(sources) :
 			counts[i] = counts.get(i, 0) + 1
 			yield counts[i]
 
-	node_next = dict()
-	node_prev = dict()
-	for gp in geopaths :
-		# Append sequential-counter-tag to nodes
-		gp = list(zip(gp, count_so_far(gp)))
-		# print(gp)
-		for (a, b) in zip(gp, gp[1:]) :
-			node_next[a] = node_next.get(a, []) + [b]
-			node_prev[b] = node_prev.get(b, []) + [a]
+	def max_so_far(lst) :
+		m = None
+		for i in lst :
+			m = max(i, m or i)
+			yield m
 
-	# print("1-next:", node_next[((22.6211862, 120.3456268), 1)])
+	node_forw = dict()
+	for gp in geopaths :
+		gp = gp + [None]
+		for (e, c) in zip(zip(gp, gp[1:]), gp[2:]) :
+			node_forw[e] = node_forw.get(e, []) + [c]
+	node_back = dict()
+	for gp in geopaths :
+		gp = [None] + gp
+		for (a, f) in zip(gp, zip(gp[2:], gp[1:])) :
+			node_back[f] = node_back.get(f, []) + [a]
+
+
+	# g = nx.DiGraph()
+	# p = (22.6211862, 120.3456268)
+	# #
+	# def populate_from(P, depth) :
+	# 	g.add_node(P)
+	# 	g.nodes[P]['pos'] = (P[0][1], P[0][0]) # Geo-location
+	# 	g.nodes[P]['win'] = P[1] # Winding
+	#
+	# 	if (depth <= 0) : return
+	#
+	# 	target = list(node_forw.get(P, []))
+	# 	for Q in set(target) :
+	# 		g.add_edge(P, Q, flow=(target.count(Q) / len(target)))
+	# 		populate_from(Q, depth - 1)
+	# #
+	# populate_from((p, 1), depth=15)
+	#
+	# import matplotlib.pyplot as plt
+	# def plotter(fig, ax: plt.Axes) :
+	# 	ax.tick_params(axis='both', which='both', labelsize='xx-small')
+	# 	# Removing axis: https://stackoverflow.com/a/26610602/3609568
+	# 	ax.axis('off')
+	# 	ax.get_xaxis().set_visible(False)
+	# 	ax.get_yaxis().set_visible(False)
+	# 	#nx.draw_networkx_nodes(g, dict(g.nodes.data('pos')), ax=ax, node_size=0.1, node_shape='x')
+	# 	for (a, b, flow) in g.edges.data('flow') :
+	# 		nx.draw_networkx_edges(g, dict(g.nodes.data('pos')), edgelist=[(a, b)], ax=ax, node_size=0, width=0.3, edge_color='r', alpha=flow, arrowsize=1)
+	# 	#ax.scatter(*zip(*dict(g.nodes.data('pos')).values()), s=0.01, c='r', marker='.', zorder=100)
+	# 	ax.scatter(p[1], p[0], s=0.1, c='g', marker='.', zorder=1000)
+	#
+	# maps.write_track_img([], [], OFILE['progress'].format(stage='debug', ext='png'), PARAM['mapbox_api_token'], plotter=plotter, dpi=1200)
+	# exit(39)
+
+
+	# print("1-next:", node_forw[((22.6211862, 120.3456268), 1)])
 	# print("1-prev:", node_prev[((22.6211862, 120.3456268), 1)])
-	# print("2-next:", node_next[((22.6211862, 120.3456268), 2)])
+	# print("2-next:", node_forw[((22.6211862, 120.3456268), 2)])
 	# print("2-prev:", node_prev[((22.6211862, 120.3456268), 2)])
 	#
 	# exit(30)
 
-	prev_freq = dict()
-	for prev in node_prev.values() :
-		for p in prev :
-			prev_freq[p] = prev_freq.get(p, 0) + 1
-
-	def complete(a, node_next) :
-		while node_next.get(a) :
-			if (len(node_next[a]) < 2) : return
-			a = random.choice(node_next[a])
+	def complete(e, node_next) :
+		while node_next.get(e) :
+			a = random.choice(node_next[e])
+			e = (e[1], a)
 			if a : yield a
 
 	print("Computing candidates...")
@@ -246,17 +281,17 @@ def distill_geopath_ver2(sources) :
 	# Collect distinct route candidates, some of them multiple times
 	routes = []
 	while (len(routes) < PARAM['candidates_min#']) or (len(routes) <= len(set(routes)) * (1 + PARAM['candidates_oversampling'])) :
-		# Pick a node to extend a route in both directions
-		root_node = commons.random_subset(prev_freq.keys(), weights=prev_freq.values(), k=1).pop()
+		# Pick an edge to extend a route in both directions
+		root_edge = tuple(random.choice(list(chain.from_iterable(zip(gp, gp[1:]) for gp in geopaths))))
 		# Extended route
-		candidate = tuple(reversed(list(complete(root_node, node_prev)))) + tuple([root_node]) + tuple(complete(root_node, node_next))
-		# Strip sequential-counter-tag from nodes
-		candidate = tuple(n for (n, _) in candidate)
+		candidate = tuple(reversed(list(complete(tuple(reversed(root_edge)), node_back)))) + root_edge + tuple(complete(root_edge, node_forw))
 		if (len(candidate) < 2) : continue
 		# Record candidate
 		routes.append(candidate)
 		# #
-		# print("Progress: {}%".format(min(100, floor(100 * (len(routes) / len(set(routes)) / (1 + oversampling))))))
+		# print("Progress: {}%".format(min(100, floor(100 * (len(routes) / len(set(routes)) / (1 + PARAM['candidates_oversampling']))))))
+		#
+		if (len(routes) >= PARAM['candidates_max#']) : break
 
 	assert(len(routes)), "No route candidates!"
 
@@ -271,7 +306,9 @@ def distill_geopath_ver2(sources) :
 
 	# Final score
 	def route_fitness(metrics) :
-		return metrics['covr'] + sqrt(metrics['dist']) + (metrics['turn'] / metrics['dist'])
+		return metrics['covr'] + metrics['miss'] + sqrt(metrics['dist']) + (metrics['turn'] / metrics['dist'])
+
+	# TODO: individual coverage for each set of waypoints
 
 	# Additional metrics
 	for (n, route) in enumerate(sorted(route_metrics, key=(lambda r : -route_metrics[r]))) :
@@ -328,8 +365,8 @@ def map_routes() :
 	# case = ('KHH11', '1')
 	# case = ('KHH116', '0')
 	# case = ('KHH1221', '0')
-	case = ('KHH1221', '1')
-	case_files = { case : case_files[case] }
+	# case = ('KHH1221', '1')
+	# case_files = { case : case_files[case] }
 
 	for ((routeid, dir), files) in case_files.items() :
 
