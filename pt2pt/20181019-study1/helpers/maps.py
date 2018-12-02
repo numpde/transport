@@ -132,7 +132,7 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 		else :
 			for track in tracks :
 				(y, x) = zip(*track)
-				ax.plot(x, y, '.-', linewidth=1, alpha=0.3, markersize=1.5)
+				ax.plot(x, y, '-', linewidth=1, alpha=0.3, markersize=1.5)
 			for track in tracks :
 				(y, x) = zip(*track)
 				ax.plot(x[0], y[0], 'o', c='g', markersize=1)
