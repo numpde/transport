@@ -10,7 +10,6 @@ from math import sqrt, floor
 
 import re
 import json
-import glob
 import random
 import inspect
 import traceback
@@ -306,10 +305,7 @@ def map_routes() :
 	case_files = {
 		case : list(g)
 		for (case, g) in groupby(
-			sorted(list(glob.glob(
-				IFILE['mapmatched'].format(scenario="**", routeid="*", direction="*", mapmatch_uuid="*", ext="json"),
-				recursive=True
-			))),
+			commons.ls(IFILE['mapmatched'].format(scenario="**", routeid="*", direction="*", mapmatch_uuid="*", ext="json")),
 			key=(lambda s : re.fullmatch(IFILE['mapmatched'].format(scenario="(.*)", routeid="([A-Z0-9]+)", direction="([01])", mapmatch_uuid=".*", ext="json"), s).groups())
 		)
 	}

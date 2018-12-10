@@ -8,7 +8,6 @@ from helpers import commons
 
 import time
 import json
-import glob
 import inspect
 from collections import defaultdict
 
@@ -56,7 +55,7 @@ def download() :
 
 
 def compress() :
-	realtime_files = sorted(glob.glob(IFILE['realtime'].format(d="*", t="*")))
+	realtime_files = commons.ls(IFILE['realtime'].format(d="*", t="*"))
 	#print(realtime_files)
 
 	# Allow for pending write operations

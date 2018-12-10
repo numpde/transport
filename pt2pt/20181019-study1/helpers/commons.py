@@ -1,6 +1,23 @@
 
 # RA, 2018-11-01
 
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import json
+
+# Format JSON structure nicely
+def pretty_json(J) :
+	return json.dumps(J, indent=2, ensure_ascii=False)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import glob
+
+# List files
+def ls(pattern) :
+	return sorted(list(glob.glob(pattern, recursive=True)))
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import numpy as np
@@ -271,7 +288,7 @@ import sys
 def parse_options(OPTIONS) :
 
 	if not OPTIONS :
-		raise RuntimeError("No options to choose from")
+		raise ValueError("No options to choose from")
 
 	if (1 == len(sys.argv)) :
 
@@ -286,10 +303,11 @@ def parse_options(OPTIONS) :
 		(opt, args) = (sys.argv[1], sys.argv[2:])
 
 		if opt in OPTIONS :
-			OPTIONS[opt](*args)
+			(OPTIONS[opt])(*args)
 			return True
 
 	print("Invalid or no option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
+	return False
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -358,7 +376,7 @@ def zipjson_load(fn, opener=open) :
 		raise EOFError("File {} is empty".format(fn))
 
 	try :
-		J = json.load(opener(fn, 'r'))
+		J = json.loads(opener(fn, 'rb').read())
 	except :
 		#print("Exception while loading {}".format(fn))
 		raise

@@ -49,10 +49,7 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-# Log which files are opened
-def logged_open(filename, mode='r', *argv, **kwargs) :
-	print("({}):\t{}".format(mode, filename))
-	return open(filename, mode, *argv, **kwargs)
+open = commons.logged_open
 
 
 ## ===================== WORK :
@@ -60,7 +57,7 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 def download() :
 
 	# Load the route meta-info
-	with logged_open(IFILE['routes-meta-js'], 'r') as f :
+	with open(IFILE['routes-meta-js'], 'r') as f :
 		routes = [ (route['Id'], route) for route in json.load(f)['data']['zh']['route'] ]
 
 	# Check that route IDs are unique
@@ -108,7 +105,7 @@ def download() :
 
 			J[lang] = j
 
-		with logged_open(out, 'w') as f :
+		with open(out, 'w') as f :
 			json.dump(J, f)
 
 	print("DONE")

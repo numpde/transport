@@ -8,7 +8,6 @@ from helpers import commons, maps
 
 import uuid
 import json
-import glob
 import inspect
 import datetime as dt
 import dateutil.parser
@@ -183,7 +182,7 @@ def segment_by_bus() :
 	# Collect realtime log filenames
 	logs = [
 		fn
-		for fn in sorted(glob.glob(IFILE['realtime_log_file'].format(d="*", t="*")))
+		for fn in commons.ls(IFILE['realtime_log_file'].format(d="*", t="*"))
 		if PARAM['datetime_filter']['func'](dt.datetime.strptime(fn, IFILE['realtime_log_file'].format(d="%Y%m%d", t="%H%M%S")))
 	]
 
@@ -216,7 +215,7 @@ def segment_by_route() :
 		for (case, g) in groupby(
 			sorted(
 				(RUN_KEY(s), busfile)
-				for busfile in sorted(glob.glob(IFILE['segment_by_bus'].format(busid="*")))
+				for busfile in commons.ls(IFILE['segment_by_bus'].format(busid="*"))
 				for s in commons.zipjson_load(busfile)
 			),
 			key=(lambda r : r[0])

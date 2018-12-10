@@ -47,9 +47,6 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-# Print a JSON nicely
-def pretty_print(J) :
-	print(json.dumps(J, indent=2, ensure_ascii=False))
 
 ## ===================== WORK :
 

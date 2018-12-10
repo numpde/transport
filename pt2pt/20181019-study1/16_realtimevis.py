@@ -11,7 +11,6 @@ from helpers.graph import dist_to_segment
 import numpy as np
 import dateutil
 import datetime as dt
-import glob
 import inspect
 import geopy.distance
 from collections import defaultdict
@@ -149,7 +148,7 @@ def vis1() :
 	routeid_of = (lambda r: r['SubRouteUID'])
 
 	# List of filenames, one file per physical bus, identified by plate number
-	bus_files = sorted(glob.glob(IFILE['busses'].format(busid="*")))
+	bus_files = commons.ls(IFILE['busses'].format(busid="*"))
 
 	# Refile bus runs by their route ID
 	runs_by_route = defaultdict(list)

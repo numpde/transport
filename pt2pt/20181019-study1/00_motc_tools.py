@@ -68,13 +68,10 @@ commons.makedirs(OFILE)
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-# For printing a JSON nicely
-def pretty(J):
-	return json.dumps(J, indent=2, ensure_ascii=False)
-
 # Parse a string like
 # LINESTRING(lon1 lat1, lon2 lat2, ...)
-# into ([lon1, ..], [lat1, ..])
+# into the dictionary
+# {'Lon': [lon1, ..], 'Lat': [lat1, ..]}
 def parse_linestring(linestring) :
 	return dict(zip(
 		['Lon', 'Lat'],
@@ -328,6 +325,7 @@ def write_route_gpx() :
 		with open(outfile, 'w') as f :
 			f.write(gpx.to_xml())
 
+
 # Look for bus stops or bus routes based on user input
 def interactive_search() :
 
@@ -343,7 +341,7 @@ def interactive_search() :
 		}
 
 	def strip_brackets(s):
-		return re.match(r'(?P<name>[^\(]+)[ ]*(?P<extra>\(\w+\))*', s).group('name').strip()
+		return re.match(r'(?P<name>[^(]+)[ ]*(?P<extra>\(\w+\))*', s).group('name').strip()
 
 	def matchratio_names(name1, name2):
 		return difflib.SequenceMatcher(None, name1, name2).ratio()
@@ -381,16 +379,14 @@ def interactive_search() :
 	# Interaction
 	while True :
 
-		q = input("Enter command (s, S, r, R):\n").strip().split(' ')
+		command = input("Enter command ([s]top, [S]top, [r]oute, [R]oute): ").strip()[0:1]
+		if not command : break
+		if not command in ['s', 'S', 'r', 'R'] : continue
 
-		# No input
-		if not q[0] : break
+		query = input("Enter search string: ").strip()
+		if not query : continue
 
-		# No arguments
-		if (len(q) < 2) : continue
-
-		(command, query) = (q[0], " ".join(q[1:]))
-
+		# Collect search results here
 		result = []
 
 		# Search for bus stops
@@ -410,7 +406,7 @@ def interactive_search() :
 			else :
 
 				(_, stop) = top_match_motc[0]
-				result.append(pretty(stop))
+				result.append(commons.pretty_json(stop))
 
 		# Search for bus routes
 		if (command.lower() == "r"):
@@ -433,11 +429,11 @@ def interactive_search() :
 				stops = route['Stops']
 				route['Stops'] = '[see below]'
 
-				result.append(pretty(route))
+				result.append(commons.pretty_json(route))
 
 				for (dir, stops) in zip(route['Direction'], stops) :
 					result.append("Route-Direction {}-{}:".format(route_id, dir))
-					result.append(pretty(stops))
+					result.append(commons.pretty_json(stops))
 
 		try :
 			subprocess.run(["less"], input='\n'.join(result).encode('utf-8'))
@@ -446,9 +442,6 @@ def interactive_search() :
 			print("(Could not open 'less' as subprocess)")
 
 		continue
-
-
-## ===================== PLAY :
 
 
 ## ================== OPTIONS :

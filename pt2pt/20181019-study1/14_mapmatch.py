@@ -11,7 +11,6 @@ import uuid
 import time
 import json
 import networkx as nx
-import glob
 import math
 import random
 import pickle
@@ -61,6 +60,8 @@ PARAM = {
 	'graph_bbox' : None,
 	# Example:
 	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
+
+	'min_run_waypoints' : 4,
 
 	'min_runs_to_mapmatch' : 24,
 	'max_runs_to_mapmatch' : 24,
@@ -198,7 +199,7 @@ def mapmatch_runs(scenario, runs) :
 
 		waypoints = list(sparsify(run_waypoints(run)))
 
-		if (len(waypoints) < 4) :
+		if (len(waypoints) < PARAM['min_run_waypoints']) :
 			print("Warning: too few waypoints -- skipping.")
 			continue
 
@@ -223,14 +224,12 @@ def mapmatch_runs(scenario, runs) :
 			time.sleep(2)
 			continue
 
-		# Note: because figure is not json-able cannot do
-		# mapmatch_attempt['mapmatch_result'] = result
-
+		# Copy relevant fields from the mapmatcher result
 		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] :
 			mapmatch_attempt[k] = result[k]
 
 		# Save the result in different formats, in this directory
-		commons.makedirs(fn.format(ext=''))
+		commons.makedirs(fn.format(ext='~~~'))
 
 		#  o) Image
 
@@ -269,7 +268,7 @@ def mapmatch_all() :
 
 	PARAM['graph_bbox'] = compute_graph_bbox()
 
-	route_files = sorted(glob.glob(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"), recursive=True))
+	route_files = commons.ls(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"))
 
 	print("Found {} route files.".format(len(route_files)))
 
@@ -277,19 +276,27 @@ def mapmatch_all() :
 		print("===")
 		print("Analyzing route file {}.".format(route_file))
 
-		runs = commons.zipjson_load(route_file)
-
 		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
 		print("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
 
-		# Retain only the runs that are consistently of "Normal" status
-		runs = [run for run in runs if is_normal_status(run)]
+		# Load all bus run segments for this case
+		runs = commons.zipjson_load(route_file)
+		print("Number of runs: {} ({})".format(len(runs), "total"))
+
+		# Check that the file indeed contains only one type of route
+		assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
 
 		# Remove trivial runs
-		runs = [run for run in runs if (len(run[KEYS.pos]) >= 4)]
+		runs = [run for run in runs if (len(run[KEYS.pos]) >= PARAM['min_run_waypoints'])]
+		print("Number of runs: {} ({})".format(len(runs), "nontrivial"))
+
+		# Retain only the runs that are consistently of "Normal" status
+		runs = [run for run in runs if is_normal_status(run)]
+		print("Number of runs: {} ({})".format(len(runs), "with status 'normal'"))
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
+		print("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
 
 		# Q: clustering here?
 
@@ -297,17 +304,9 @@ def mapmatch_all() :
 			print("File does not contain usable runs.")
 			continue
 
-		# Check that the file contains only one type of route
-		assert (1 == len(set(RUN_KEY(r) for r in runs)))
-		(routeid, dir) = set(RUN_KEY(r) for r in runs).pop()
-
-		print("Route {}, direction {}: {} usable runs.".format(routeid, dir, len(runs)))
-
-		# Existing mapmatch records for this route
+		# Existing mapmatched runs for this route
 		def get_mapmatched_files() :
-			return sorted(list(glob.glob(
-				OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json")
-			)))
+			return commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
 
 		try :
 
