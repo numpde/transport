@@ -104,11 +104,7 @@ def get_routes() :
 		pass
 
 	# Reindex routes by route ID
-	motc_routes = commons.index_dicts_by_key(
-		motc_routes,
-		routeid_of,
-		preserve_singletons=['Direction', 'Stops']
-	)
+	motc_routes = commons.index_dicts_by_key(motc_routes, routeid_of, keys_singletons_ok=['Direction', 'Stops'])
 
 	try :
 		# As of 2018-11-11, there may be up to 12 subroutes in a route in Taipei
@@ -138,11 +134,7 @@ def get_routes() :
 		pass
 
 	# Index shapes by route ID
-	motc_shapes = commons.index_dicts_by_key(
-		motc_shapes,
-		routeid_of,
-		preserve_singletons=['Direction', 'Geometry']
-	)
+	motc_shapes = commons.index_dicts_by_key(motc_shapes, routeid_of, keys_singletons_ok=['Direction', 'Geometry'])
 
 	try :
 		# As of 2018-11-11:
@@ -330,7 +322,8 @@ def write_route_gpx() :
 def interactive_search() :
 
 	motc_stops = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_stops']), (lambda r: r['StopUID']))
-	motc_routes = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_routes']), (lambda r: r['SubRouteUID']), preserve_singletons=['Direction', 'Stops'])
+	motc_routes = commons.index_dicts_by_key(commons.zipjson_load(IFILE['MOTC_routes']), (lambda r: r['SubRouteUID']),
+											 keys_singletons_ok=['Direction', 'Stops'])
 
 	# Only keep essential info about a stop or a route
 	def slim(D):

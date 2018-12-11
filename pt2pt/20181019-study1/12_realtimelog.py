@@ -23,9 +23,9 @@ pass
 ## ==================== INPUT :
 
 IFILE = {
-	'realtime' : "OUTPUT/12/Kaohsiung/UV/{d}/{t}.json",
+	'realtime' : "OUTPUT/12/{city}/UV/{date}/{time}.json",
 
-	'routes' : "OUTPUT/00/ORIGINAL_MOTC/Kaohsiung/CityBusApi_Route.json",
+	'routes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Route.json",
 }
 
 
@@ -39,7 +39,17 @@ OFILE = {
 ## ==================== PARAM :
 
 PARAM = {
+	'city' : "Kaohsiung",
+
+	'uploads' : [
+		{
+			'whatisit' : "Kaohsiung_20181105-20181111",
+			'basepath' : IFILE['realtime'].format(city="Kaohsiung", date="?", time="?").split('?')[0],
+			'repo_url' : "https://osf.io/bwcyv/download",
+		},
+	]
 }
+
 
 ## ====================== AUX :
 
@@ -49,13 +59,16 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 ## ===================== WORK :
 
-def download() :
-
+def make_log() :
 	print("Hello! Run the bash script instead!")
 
 
+def download() :
+	raise NotImplemented("Retrieving uploads not implemented")
+
+
 def compress() :
-	realtime_files = commons.ls(IFILE['realtime'].format(d="*", t="*"))
+	realtime_files = commons.ls(IFILE['realtime'].format(city=PARAM['city'], date="*", time="*"))
 	#print(realtime_files)
 
 	# Allow for pending write operations
@@ -108,7 +121,7 @@ def compress() :
 	print("COMPRESSION II: Remove redundancies from individual records")
 
 	# Route meta
-	R = commons.zipjson_load(IFILE['routes'])
+	R = commons.zipjson_load(IFILE['routes'].format(city=PARAM['city']))
 
 	# Reindex by subroute-direction
 	S = defaultdict(dict)
@@ -210,7 +223,8 @@ def compress() :
 ## ================== OPTIONS :
 
 OPTIONS = {
-	# 'DOWNLOAD' : download,
+	'MAKE_LOG' : make_log,
+	'DOWNLOAD' : download,
 	'COMPRESS' : compress,
 }
 
@@ -218,5 +232,4 @@ OPTIONS = {
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-
-	assert(commons.parse_options(OPTIONS))
+	commons.parse_options(OPTIONS)

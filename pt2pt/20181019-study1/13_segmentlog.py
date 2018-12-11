@@ -39,7 +39,7 @@ KEYS = {
 	'time': 'GPSTime',
 	'pos': 'BusPosition',
 
-	#'bus_stat' : 'BusStatus', # Not all records have this
+	'bus_stat' : 'BusStatus', # Not all records have this
 	'duty_stat' : 'DutyStatus', # Or this
 }
 
@@ -80,8 +80,17 @@ PARAM = {
 	# Segment runs whenever the timegap between measurements is large
 	'segment_timegap_minutes': 5,
 
+	# Segment runs whenever any of these fields change
+	'segment_indicators' : set(RUN_KEY({v : v for v in KEYS.values()})) | {KEYS['bus_stat'], KEYS['duty_stat']},
+
+	# Drop records without movement
+	'drop_stationary' : True,
+
+	# Do not replace monotonous lists with singletons, or with the value
+	'keys_dont_collapse' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time']],
+
 	# Leave those fields as singletons
-	'keep_singletons' : [KEYS[k] for k in ['pos', 'speed', 'azimuth', 'time', 'duty_stat']],
+	'keys_singletons_ok' : [],
 }
 
 
@@ -109,17 +118,22 @@ IFILE.update({
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 
+# GPS timestamp reader
+gpstime = (lambda b: dateutil.parser.parse(b[KEYS['time']]))
+
+
+# Retain only the known fields and simplify structure
 def drop_fields(b) :
 	# Simplify the geo-position field
 	b[KEYS['pos']] = (b[KEYS['pos']][KEYS_POS['Lat']], b[KEYS['pos']][KEYS_POS['Lon']])
 	# Keep only the registered fields
-	return { k : b[k] for k in KEYS.values() }
+	return { k : b[k] for k in KEYS.values() if k in b }
 
 
 # Segment a list-like bb of bus records by route/direction
 def segments(bb):
-	# Put segment boundary when any of these fields change
-	indicators = list(RUN_KEY({v : v for v in KEYS.values()}))
+	# Sort records by GPS time
+	bb = sorted(bb, key=gpstime)
 
 	# Reverse list for easy pop-ing
 	bb = list(reversed(list(bb)))
@@ -129,19 +143,15 @@ def segments(bb):
 		s = [bb.pop()]
 
 		# Build segment while no indicators change
-		while bb and all((bb[-1][k] == s[-1][k]) for k in indicators) :
+		while bb and all((bb[-1].get(k, '?') == s[-1].get(k, '?')) for k in PARAM['segment_indicators']) :
 
 			# None of the indicators have changed: continue the segment record
 
-			(t0, t1) = (dateutil.parser.parse(b[KEYS['time']]) for b in [s[-1], bb[-1]])
+			(t0, t1) = (gpstime(b) for b in [s[-1], bb[-1]])
+			assert(t0 <= t1), "The records should be sorted by GPS time"
 
 			# ... unless there is a large time gap
 			if ((t1 - t0) > dt.timedelta(minutes=PARAM['segment_timegap_minutes'])) :
-				break
-
-			# ... or the timestamps appear messed up
-			if (t0 > t1) :
-				print("Warning: Segmenting due to unordered timestamps ({})--({}) at {}".format(t0, t1, indicators))
 				break
 
 			b = bb.pop()
@@ -158,10 +168,18 @@ def segments(bb):
 		assert(1 == len(set(map(BUSID_OF, s))))
 
 		# Collapse into one record
-		run = next(iter(commons.index_dicts_by_key(s, BUSID_OF, preserve_singletons=PARAM['keep_singletons']).values()))
+		run = next(iter(
+			commons.index_dicts_by_key(
+				s, BUSID_OF, keys_dont_collapse=PARAM['keys_dont_collapse'], keys_singletons_ok=PARAM['keys_singletons_ok']
+			).values()
+		))
 
 		# Attach an ad-hoc ID tag
 		run['RunUUID'] = uuid.uuid4().hex
+
+		if PARAM['drop_stationary'] :
+			if (1 == len(set(run[KEYS['pos']]))) :
+				continue
 
 		yield run
 
@@ -191,7 +209,7 @@ def segment_by_bus() :
 	busids = set(map(BUSID_OF, read_realtime_logs(logs)))
 	print("{} buses: {}".format(len(busids), busids))
 
-	for busid in busids :
+	for busid in sorted(busids) :
 		print("Collecting runs of bus {} ({})".format(busid, str(dt.datetime.now())[11:19]))
 
 		J = list(segments(drop_fields(r) for r in read_realtime_logs(logs) if (BUSID_OF(r) == busid)))

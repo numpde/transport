@@ -252,7 +252,7 @@ def logged_open(filename, mode='r', *argv, **kwargs) :
 from collections import defaultdict
 
 # Index an iterable _I_ of dict's by the return value of key_func
-def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singletons=[]) :
+def index_dicts_by_key(I, key_func, collapse_repetitive=True, keys_dont_collapse=[], keys_singletons_ok=[]):
 	J = defaultdict(lambda: defaultdict(list))
 
 	for i in I :
@@ -262,9 +262,10 @@ def index_dicts_by_key(I, key_func, collapse_repetitive=True, preserve_singleton
 	if collapse_repetitive :
 		for (j, i) in J.items() :
 			for (k, V) in i.items() :
+				if k in keys_dont_collapse : continue
 				V = [json.loads(v) for v in set(json.dumps(v) for v in V)]
 				if (1 == len(V)) :
-					if k in preserve_singletons :
+					if k in keys_singletons_ok :
 						J[j][k] = V
 					else :
 						J[j][k] = V.pop()
@@ -285,12 +286,12 @@ def all_distinct(L) :
 
 import sys
 
-def parse_options(OPTIONS) :
+def parse_options(OPTIONS, commands=sys.argv[1:]) :
 
 	if not OPTIONS :
 		raise ValueError("No options to choose from")
 
-	if (1 == len(sys.argv)) :
+	if not commands :
 
 		if (1 == len(OPTIONS)) :
 
@@ -300,14 +301,16 @@ def parse_options(OPTIONS) :
 
 	else :
 
-		(opt, args) = (sys.argv[1], sys.argv[2:])
+		(opt, args) = (commands[0], commands[1:])
 
 		if opt in OPTIONS :
 			(OPTIONS[opt])(*args)
 			return True
 
 	print("Invalid or no option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
-	return False
+	commands = [c for c in input("Select option: ").strip().split(' ') if c]
+
+	return (commands and parse_options(OPTIONS, commands))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
