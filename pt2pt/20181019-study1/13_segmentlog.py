@@ -78,6 +78,9 @@ PARAM = {
 
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
+	# Sort snapshots by GPS time
+	'segment_sort_by_gpstime' : True,
+
 	# Execute run segmentation in parallel
 	'segment_parallel_jobs' : 4,
 
@@ -137,7 +140,8 @@ def drop_fields(b) :
 # Segment a list-like bb of bus records by route/direction
 def segments(bb):
 	# Sort records by GPS time
-	bb = sorted(bb, key=gpstime)
+	if PARAM['segment_sort_by_gpstime'] :
+		bb = sorted(bb, key=gpstime)
 
 	# Reverse list for easy pop-ing
 	bb = list(reversed(list(bb)))
