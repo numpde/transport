@@ -57,6 +57,15 @@ def ax2mb(left, right, bottom, top) :
 def mb2ax(left, bottom, right, top) :
 	return (left, right, bottom, top)
 
+def bbox_for_points(pp) :
+	(left, bottom, right, top) = [
+		min(lon for (lat, lon) in pp),
+		min(lat for (lat, lon) in pp),
+		max(lon for (lat, lon) in pp),
+		max(lat for (lat, lon) in pp)
+	]
+	return (left, bottom, right, top)
+
 # bbox = (left, bottom, right, top) in degrees
 def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 

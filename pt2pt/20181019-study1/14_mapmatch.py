@@ -118,13 +118,7 @@ def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
 
 def compute_graph_bbox() :
 	g: nx.DiGraph = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g']
-	(left, bottom, right, top) = [
-		min(lon for (n, (lat, lon)) in g.nodes.data('pos')),
-		min(lat for (n, (lat, lon)) in g.nodes.data('pos')),
-		max(lon for (n, (lat, lon)) in g.nodes.data('pos')),
-		max(lat for (n, (lat, lon)) in g.nodes.data('pos'))
-	]
-	return (left, bottom, right, top)
+	return maps.bbox_for_points([(lat, lon) for (_, (lat, lon)) in g.nodes.data('pos')])
 
 def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
