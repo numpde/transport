@@ -209,7 +209,7 @@ def is_normal_status(values, normal_values=[0, '0']) :
 
 def diameter(pp) :
 	(left, bottom, right, top) = maps.bbox_for_points(pp)
-	return max(commons.geodesic((left, bottom), (right, top)), commons.geodesic((left, top), (right, bottom)))
+	return max(commons.geodesic((bottom, left), (top, right)), commons.geodesic((top, left), (bottom, right)))
 
 def is_run_acceptable(run) :
 	# Trivial or too-short run
