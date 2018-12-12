@@ -201,9 +201,12 @@ def align(M) :
 	# Retrace the optimal way
 	match = [None] * M.shape[0]
 	while (i >= 0) :
-		M[i, j] = max(M.flatten()) # For visualization below
 		match[i] = j
 		(i, j) = (I[i, j], J[i, j])
+
+	# For visualization
+	for (i, j) in enumerate(match) :
+		M[i, j] = -max(M.flatten()) / 5
 
 	# # For visualization:
 	# import matplotlib.pyplot as plt
