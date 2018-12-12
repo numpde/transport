@@ -238,7 +238,7 @@ def makedirs(OFILE) :
 	if type(OFILE) is str :
 		try :
 			os.makedirs(os.path.dirname(OFILE).format(), exist_ok=True)
-			return True
+			return OFILE
 		except (IndexError, KeyError) as e :
 			#print("makedirs failed ({})".format(e))
 			return False
