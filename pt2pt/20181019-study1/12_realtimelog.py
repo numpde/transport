@@ -64,7 +64,7 @@ def make_log() :
 
 
 def download() :
-	raise NotImplemented("Retrieving uploads not implemented")
+	raise NotImplementedError("Retrieving uploads not implemented")
 
 
 def compress() :
