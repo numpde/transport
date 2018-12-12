@@ -132,6 +132,16 @@ IFILE.update({
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
+# Collect realtime log filenames
+def get_all_logs() :
+	return [
+		fn
+		for fn in commons.ls(IFILE['realtime_log_file'].format(d="*", t="*"))
+		if PARAM['datetime_filter']['func'](
+			dt.datetime.strptime(fn, IFILE['realtime_log_file'].format(d="%Y%m%d", t="%H%M%S"))
+		)
+	]
+
 
 # GPS timestamp reader
 gpstime = (lambda b: dateutil.parser.parse(b[KEYS['time']]))
@@ -239,11 +249,7 @@ def segment_by_bus() :
 				print("Warning: could not read {} ({})".format(fn, e))
 
 	# Collect realtime log filenames
-	logs = [
-		fn
-		for fn in commons.ls(IFILE['realtime_log_file'].format(d="*", t="*"))
-		if PARAM['datetime_filter']['func'](dt.datetime.strptime(fn, IFILE['realtime_log_file'].format(d="%Y%m%d", t="%H%M%S")))
-	]
+	logs = get_all_logs()
 
 	print("Collecting bus ids...")
 
@@ -307,6 +313,21 @@ def segment_by_route() :
 			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 
+def make_archives() :
+	a_logs = get_all_logs()
+	b_by_bus = commons.ls(OFILE['segment_by_bus'].format(busid="*"))
+	c_by_route = commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*").format(ext="*"))
+
+	import zipstream
+	z = zipstream.ZipFile()
+	for f in a_logs[0:10] :
+		z.write(f)
+
+	import requests
+	requests.put(PARAM['archive_osf_url '])
+
+	print(len(a_logs), len(b_by_bus), len(c_by_route))
+
 ## =================== MASTER :
 
 def segment_logs() :
@@ -320,6 +341,8 @@ OPTIONS = {
 	'SEGMENT' : segment_logs,
 	'SEGMENT_BY_BUS' : segment_by_bus,
 	'SEGMENT_BY_ROUTE' : segment_by_route,
+
+	'ARCHIVE' : make_archives,
 }
 
 
