@@ -1,6 +1,11 @@
 
 # RA, 2018-11-01
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# https://stackoverflow.com/a/50983362
+def identity(x, *args) :
+	return (x,) + args if args else x
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
