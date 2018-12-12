@@ -11,9 +11,10 @@ import json
 import inspect
 import datetime as dt
 import dateutil.parser
+import requests, io, zipfile
 from itertools import chain, groupby, product
 from joblib import Parallel, delayed
-
+from progressbar import progressbar
 
 ## ==================== NOTES :
 
@@ -77,6 +78,14 @@ PARAM = {
 	},
 
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+
+	'osf_dump' : {
+		'base_url' : "https://files.osf.io/v1/resources/nr2yz/providers/osfstorage/",
+		'token' : open(".credentials/UV/osf-token.txt", 'r').read(),
+		'a' : "a_realtime-logs.zip",
+		'b' : "b_segmented-by-bus.zip",
+		'c' : "c_segmented-by-route.zip",
+	},
 
 	# Sort snapshots by GPS time
 	'segment_sort_by_gpstime' : True,
@@ -313,20 +322,57 @@ def segment_by_route() :
 			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 
-def make_archives() :
-	a_logs = get_all_logs()
-	b_by_bus = commons.ls(OFILE['segment_by_bus'].format(busid="*"))
-	c_by_route = commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*").format(ext="*"))
+def osf_upload() :
+	file_lists = {
+		'a' : get_all_logs(),
+		'b' : commons.ls(OFILE['segment_by_bus'].format(busid="*")),
+		'c' : commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*").format(ext="*")),
+	}
 
-	import zipstream
-	z = zipstream.ZipFile()
-	for f in a_logs[0:10] :
-		z.write(f)
+	# 1. Create new folder in the OSF repo
 
-	import requests
-	requests.put(PARAM['archive_osf_url '])
+	# https://files.osf.io/v1/resources/nr2yz/providers/osfstorage/?meta=
+	# https://developer.osf.io/#operation/files_detail
 
-	print(len(a_logs), len(b_by_bus), len(c_by_route))
+	headers = {
+		'Authorization' : "Bearer {}".format(PARAM['osf_dump']['token']),
+	}
+
+	params = {
+		'kind' : "folder",
+		'name' : "{}__{}".format(PARAM['datetime_filter']['path'].replace("/", "_"), dt.datetime.utcnow().strftime('%Y%m%d-%H%M%S')),
+	}
+
+	response = requests.put(PARAM['osf_dump']['base_url'], headers=headers, params=params)
+
+	#print(commons.pretty_json(response.json()))
+
+	# https://waterbutler.readthedocs.io/en/latest/api.html#actions
+	upload_url = response.json()['data']['links']['upload']
+
+	# 2. Upload zipfiles
+
+	for (k, file_list) in file_lists.items() :
+
+		print("Step {}".format(k).upper())
+
+		params = {
+			'name' : PARAM['osf_dump'][k],
+		}
+
+		print("Archiving...")
+
+		s = io.BytesIO()
+		with zipfile.ZipFile(file=s, mode='a', compression=zipfile.ZIP_DEFLATED) as z :
+			for f in progressbar(file_list) :
+				z.write(f)
+
+		print("Uploading...")
+
+		response = requests.put(upload_url, data=s.getvalue(), headers=headers, params=params)
+
+		print("Response:", response.json())
+
 
 ## =================== MASTER :
 
@@ -342,7 +388,8 @@ OPTIONS = {
 	'SEGMENT_BY_BUS' : segment_by_bus,
 	'SEGMENT_BY_ROUTE' : segment_by_route,
 
-	'ARCHIVE' : make_archives,
+	'OSF_UPLOAD' : osf_upload,
+	'OSF_DOWNLOAD' : osf_download,
 }
 
 
