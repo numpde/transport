@@ -84,6 +84,7 @@ IFILE = {
 ## =================== OUTPUT :
 
 OFILE = {
+	'timetable' : "OUTPUT/17/timetable/{scenario}/{routeid}-{dir}.{ext}",
 }
 
 commons.makedirs(OFILE)
@@ -221,7 +222,7 @@ def bus_at_stops(run, stops) :
 
 		plt.close(fig)
 
-	# Final sanity check
+	# Sanity check
 	assert(len(ref_guess_tdt) == len(stops)), "Stop and ETA vector length mismatch"
 
 	return ref_guess_tdt
@@ -241,8 +242,8 @@ def generate_timetables() :
 		print("Analyzing route file {}.".format(run_file))
 
 		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), run_file).groups()
-		dir = int(dir)
-		print("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
+		case = {'scenario': scenario, 'routeid': routeid, 'dir': int(dir)}
+		print("Route: {routeid}, direction: {dir} (from scenario: {scenario})".format(**case))
 
 		# Load all bus run segments for this case
 		runs = commons.zipjson_load(run_file)
@@ -251,21 +252,32 @@ def generate_timetables() :
 		runs = [run for run in runs if (run.get('quality') == "+")]
 
 		try :
-			stops = motc_routes[(routeid, dir)]['Stops']
+			route = motc_routes[(case['routeid'], case['dir'])]
 		except KeyError :
-			print("Warning: No stops info for route {}, direction {}".format(routeid, dir))
+			print("Warning: No stops info for route {routeid}, direction {dir}".format(**case))
 			continue
 
-		# Table of ETA x Stop
+		stops = route['Stops']
+
+		# ETA table of Busrun x Stop
 		ETA = np.vstack(bus_at_stops(run, stops) for run in runs)
 
 		# pandas does not digest dt.datetime
 		# https://github.com/pandas-dev/pandas/issues/13287
 		ETA = ETA.astype(np.datetime64)
 
+		# Timetable as DataFrame
 		df = pd.DataFrame(data=ETA, columns=[s['StopUID'] for s in stops])
-		print(df)
-		exit(39)
+
+		J = {
+			**case,
+			'route' : route,
+			'run_file' : run_file,
+			'timetable_df' : df.to_json(),
+		}
+
+		with open(commons.makedirs(OFILE['timetable'].format(ext="json", **case)), 'w') as fd :
+			json.dump(J, fd)
 
 
 ## ==================== ENTRY :
