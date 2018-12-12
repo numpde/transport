@@ -16,6 +16,7 @@ import inspect
 import traceback
 import networkx as nx
 import numpy as np
+import pandas as pd
 import datetime as dt
 import dateutil.parser
 from sklearn.neighbors import NearestNeighbors
@@ -27,6 +28,8 @@ from sklearn.cluster import AgglomerativeClustering
 
 import matplotlib as mpl
 
+import pint
+Units = pint.UnitRegistry()
 
 ## ==================== NOTES :
 
@@ -91,6 +94,8 @@ commons.makedirs(OFILE)
 PARAM = {
 	#'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
+	# When is the bus run too short at the tails?
+	'tail_eta_patch_dist' : 50 * Units.meters,
 }
 
 
@@ -108,8 +113,6 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 def bus_at_stops(run, stops) :
 	mpl.use('GTK3Agg')
 	import matplotlib.pyplot as plt
-
-	# TODO: some candidate_tdt have large time-gaps
 
 	# These are sparse samples of a bus trajectory
 	candidate_gps = list(map(tuple, run['BusPosition']))
@@ -139,15 +142,17 @@ def bus_at_stops(run, stops) :
 	# unless the bus is idling
 
 	# Penalty rate
-	p = 0.1 # m/s
+	p = -0.1 # m/s
 	# Penalty matrix
-	P = -np.vstack(len(reference_gps) * [np.cumsum([p * (t1 - t0).seconds for (t0, t1) in segm_tdt])])
+	P = np.vstack(len(reference_gps) * [np.cumsum([p * (t1 - t0).seconds for (t0, t1) in segm_tdt])])
 
 	# Add idling penalty
 	M += P
 
-	match = commons.align(M)
-	print(match)
+	# Make a copy for imshow
+	M_image = M.copy()
+
+	match = commons.align(M_image)
 
 	segments = [segments[j] for j in match]
 	segm_tdt = [segm_tdt[j] for j in match]
@@ -158,31 +163,68 @@ def bus_at_stops(run, stops) :
 		for ((d, q), (t0, t1)) in zip(seg_dist, segm_tdt)
 	]
 
-	#for t in ref_guess_tdt : print(t)
+	try :
+		# Patch ETA at the tails
+		typical_speed = np.median([s for s in run['Speed'] if s]) * (Units.km / Units.hour)
+		# Look at front and back tails
+		for (direction, traversal) in [(+1, commons.identity), (-1, reversed)] :
+			# Indices and distances
+			tail = [(n, d * Units.meter) for (n, (d, q)) in traversal(list(enumerate(seg_dist)))]
+			# Tail characterized by large distances
+			tail = tail[0:(1 + min(i for (i, (n, d)) in enumerate(tail) if (d <= PARAM['tail_eta_patch_dist'])))]
+			# Indices of the tail
+			tail = [n for (n, d) in tail]
+			if not tail : continue
+			# First visited waypoint
+			first = tail.pop()
+			# Patch ETA for prior waypoints
+			for n in tail :
+				td = dt.timedelta(seconds=(commons.geodesic(reference_gps[n], reference_gps[first]) * Units.meter / typical_speed).to(Units.second).magnitude)
+				ref_guess_tdt[n] = ref_guess_tdt[first] - direction * td
+	except :
+		print("Warning: Patching tail ETA failed")
+		print(traceback.format_exc())
 
-	print("ETA (min):", [round((t - ref_guess_tdt[0]).seconds/60) for t in ref_guess_tdt])
-
-	is_monotone = all((s <= t) for (s, t) in zip(ref_guess_tdt, ref_guess_tdt[1:]))
+	is_monotone = all((s < t) for (s, t) in zip(ref_guess_tdt, ref_guess_tdt[1:]))
 	#assert(is_monotone), "Time stamps not monotone"
-	print("Monotonicity of ETA:", is_monotone)
 
-	(fig, ax_array) = plt.subplots(nrows=1, ncols=2)
-	(ax1, ax2) = ax_array
+	# Diagnostics
+	if False :
+		print("Match:", match)
 
-	ax1.imshow(M)
+		print("Dist wpt to closest seg:", seg_dist)
 
-	(y, x) = zip(*candidate_gps)
-	ax2.plot(x, y, '-')
-	(y, x) = zip(*reference_gps)
-	ax2.plot(x, y, 'bo')
+		print("ETA (sec):", [round((t - ref_guess_tdt[0]).total_seconds()) for t in ref_guess_tdt])
+		print("Strict monotonicity of ETA:", is_monotone)
 
-	while plt.fignum_exists(fig.number) :
-		try :
-			plt.pause(0.1)
-		except :
-			break
+		(fig, ax_array) = plt.subplots(nrows=1, ncols=2)
+		(ax1, ax2) = ax_array
 
-	plt.close(fig)
+		ax1.imshow(M_image)
+
+		(y, x) = zip(*candidate_gps)
+		ax2.plot(x, y, '-')
+
+		(y, x) = zip(*reference_gps)
+		ax2.plot(x, y, 'bo')
+
+		for ((wy, wx), ((ay, ax), (by, bx)), (d, q)) in zip(reference_gps, segments, seg_dist) :
+			x = (wx, ax + q * (bx - ax))
+			y = (wy, ay + q * (by - ay))
+			ax2.plot(x, y, 'r-')
+
+		while plt.fignum_exists(fig.number) :
+			try :
+				plt.pause(0.1)
+			except :
+				break
+
+		plt.close(fig)
+
+	# Final sanity check
+	assert(len(ref_guess_tdt) == len(stops)), "Stop and ETA vector length mismatch"
+
+	return ref_guess_tdt
 
 
 ## =================== MASTER :
@@ -214,13 +256,16 @@ def generate_timetables() :
 			print("Warning: No stops info for route {}, direction {}".format(routeid, dir))
 			continue
 
-		for run in runs :
-			bus_at_stops(run, stops)
+		# Table of ETA x Stop
+		ETA = np.vstack(bus_at_stops(run, stops) for run in runs)
 
-		# import matplotlib.pyplot as plt
-		# plt.ioff()
-		# plt.show()
-		#exit(39)
+		# pandas does not digest dt.datetime
+		# https://github.com/pandas-dev/pandas/issues/13287
+		ETA = ETA.astype(np.datetime64)
+
+		df = pd.DataFrame(data=ETA, columns=[s['StopUID'] for s in stops])
+		print(df)
+		exit(39)
 
 
 ## ==================== ENTRY :
