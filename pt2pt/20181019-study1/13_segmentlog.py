@@ -77,12 +77,12 @@ PARAM = {
 		'func': (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
 	},
 
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').readline().strip(),
 
 	'osf_dump' : {
 		'web' : "https://osf.io/nr2yz/",
 		'base_url' : "https://files.osf.io/v1/resources/nr2yz/providers/osfstorage/",
-		'token' : open(".credentials/UV/osf-token.txt", 'r').read(),
+		'token' : open(".credentials/UV/osf-token.txt", 'r').readline().strip(),
 		'a' : "a_realtime-logs.zip",
 		'b' : "b_segmented-by-bus.zip",
 		'c' : "c_segmented-by-route.zip",
