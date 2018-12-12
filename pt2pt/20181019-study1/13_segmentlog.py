@@ -80,6 +80,7 @@ PARAM = {
 	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	'osf_dump' : {
+		'web' : "https://osf.io/nr2yz/",
 		'base_url' : "https://files.osf.io/v1/resources/nr2yz/providers/osfstorage/",
 		'token' : open(".credentials/UV/osf-token.txt", 'r').read(),
 		'a' : "a_realtime-logs.zip",
@@ -372,6 +373,10 @@ def osf_upload() :
 		response = requests.put(upload_url, data=s.getvalue(), headers=headers, params=params)
 
 		print("Response:", response.json())
+
+
+def osf_download() :
+	raise NotImplementedError("OSF download not implemented. Download manually from {}".format(PARAM['osf_dump']['web']))
 
 
 ## =================== MASTER :
