@@ -86,8 +86,8 @@ class KEYS :
 	time = 'GPSTime'
 	pos = 'BusPosition'
 
-	dutystatus = 'DutyStatus'
 	busstatus = 'BusStatus'
+	dutystatus = 'DutyStatus'
 
 
 # Helpers
@@ -130,11 +130,6 @@ def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
 
-def is_normal_status(run) :
-	OK = True
-	for S in (run.get(k, 0) for k in [KEYS.dutystatus, KEYS.busstatus]) :
-		OK = OK and (all((int(s) == 0) for s in S) if (type(S) is list) else (int(S) == 0))
-	return OK
 
 
 ## ==================== SLAVE :
@@ -269,7 +264,6 @@ def mapmatch_all() :
 	PARAM['graph_bbox'] = compute_graph_bbox()
 
 	route_files = commons.ls(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"))
-
 	print("Found {} route files.".format(len(route_files)))
 
 	for route_file in route_files :
@@ -277,6 +271,7 @@ def mapmatch_all() :
 		print("Analyzing route file {}.".format(route_file))
 
 		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
+		dir = int(dir)
 		print("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
 
 		# Load all bus run segments for this case
@@ -285,14 +280,6 @@ def mapmatch_all() :
 
 		# Check that the file indeed contains only one type of route
 		assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
-
-		# Remove trivial runs
-		runs = [run for run in runs if (len(run[KEYS.pos]) >= PARAM['min_run_waypoints'])]
-		print("Number of runs: {} ({})".format(len(runs), "nontrivial"))
-
-		# Retain only the runs that are consistently of "Normal" status
-		runs = [run for run in runs if is_normal_status(run)]
-		print("Number of runs: {} ({})".format(len(runs), "with status 'normal'"))
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]

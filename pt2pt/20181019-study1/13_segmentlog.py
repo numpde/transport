@@ -11,7 +11,7 @@ import json
 import inspect
 import datetime as dt
 import dateutil.parser
-from itertools import chain, groupby
+from itertools import chain, groupby, product
 from joblib import Parallel, delayed
 
 
@@ -40,8 +40,8 @@ KEYS = {
 	'time': 'GPSTime',
 	'pos': 'BusPosition',
 
-	'bus_stat' : 'BusStatus', # Not all records have this
-	'duty_stat' : 'DutyStatus', # Or this
+	'busstatus' : 'BusStatus', # Not all records have this
+	'dutystatus' : 'DutyStatus', # Or this
 }
 
 # The subkeys of KEYS['pos']
@@ -70,7 +70,7 @@ IFILE = {
 
 PARAM = {
 	'datetime_filter' : {
-		# "Scenario"
+		# "Scenario" -- output subdirectory
 		'path': "Kaohsiung/20181105-20181111",
 		# datetime filter
 		'func': (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
@@ -88,7 +88,7 @@ PARAM = {
 	'segment_timegap_minutes': 5,
 
 	# Segment runs whenever any of these fields change
-	'segment_indicators' : set(RUN_KEY({v : v for v in KEYS.values()})) | {KEYS['bus_stat'], KEYS['duty_stat']},
+	'segment_indicators' : set(RUN_KEY({v : v for v in KEYS.values()})) | {KEYS['busstatus'], KEYS['dutystatus']},
 
 	# Drop records without movement
 	'drop_stationary' : True,
@@ -98,6 +98,14 @@ PARAM = {
 
 	# Leave those fields as singletons
 	'keys_singletons_ok' : [],
+
+	# Quality filters for run-by-route
+	'quality_min_run_waypoints' : 4,
+	'quality_min_diameter' : 300, # (meters)
+	'quality_only_normal_status' : True,
+
+	# Attach a quality indicator for each run
+	'quality_key' : 'quality', # Note: run['quality'] in ['+', '-']
 }
 
 
@@ -192,6 +200,30 @@ def segments(bb):
 		yield run
 
 
+# Check if 'values' only contains "normal" values
+def is_normal_status(values, normal_values=[0, '0']) :
+	if type(values) in [list, set] :
+		return all(is_normal_status(v) for v in values)
+	else :
+		return (values in normal_values)
+
+def diameter(pp) :
+	return max(commons.geodesic(p, q) for (p, q) in product(pp, repeat=2))
+
+def is_run_acceptable(run) :
+	# Trivial or too-short run
+	if (len(run[KEYS['pos']]) < PARAM['quality_min_run_waypoints']) : return False
+
+	# Consistently of "Normal" status?
+	if not is_normal_status(run.get(KEYS['busstatus'], 0)) : return False
+	if not is_normal_status(run.get(KEYS['dutystatus'], 0)) : return False
+
+	# Is there sufficient movement?
+	if (diameter(run[KEYS['pos']]) < PARAM['quality_min_diameter']) : return False
+
+	return True
+
+
 ## =================== SLAVES :
 
 def segment_by_bus() :
@@ -251,13 +283,18 @@ def segment_by_route() :
 
 	for (case, files) in sorted(case_directory.items(), key=(lambda cf : -len(cf[1]))) :
 		segments = [
-			s
+			{
+				**s,
+				PARAM['quality_key'] : ("+" if is_run_acceptable(s) else "-")
+			}
 			for busfile in files
 			for s in commons.zipjson_load(busfile)
 			if (RUN_KEY(s) == case)
 		]
 
-		assert(segments), "No case found for {}".format(case)
+		if not segments :
+			print("Warning: No valid bus runs found for {}".format(case))
+			continue
 
 		fn = OFILE['segment_by_route'].format(**{k : segments[0].get(K) for (k, K) in KEYS.items()})
 
@@ -265,7 +302,8 @@ def segment_by_route() :
 			json.dump(segments, fd)
 
 		with open(fn.format(ext="png"), 'wb') as fd :
-			maps.write_track_img(waypoints=[], tracks=[s[KEYS['pos']] for s in segments], fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
+			waypoints_by_quality = { q : list(s[KEYS['pos']] for s in g) for (q, g) in groupby(segments, key=(lambda s : s[PARAM['quality_key']])) }
+			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 
 ## =================== MASTER :
