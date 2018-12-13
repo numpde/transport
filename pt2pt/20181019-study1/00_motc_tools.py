@@ -37,7 +37,7 @@ PARAM = {
 
 	'City' : "Kaohsiung",
 
-	# Need a font for traditional Chinese
+	# Need a font for traditional Chinese on images
 	'font' : "ORIGINALS/fonts/UV/NotoSerifTC/NotoSerifTC-Light.otf",
 }
 
