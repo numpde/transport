@@ -84,7 +84,7 @@ IFILE = {
 ## =================== OUTPUT :
 
 OFILE = {
-	'timetable' : "OUTPUT/17/timetable/{scenario}/{routeid}-{dir}.{ext}",
+	'timetable_json' : "OUTPUT/17/timetable/{scenario}/json/{routeid}-{dir}.json",
 }
 
 commons.makedirs(OFILE)
@@ -134,8 +134,8 @@ def bus_at_stops(run, stops) :
 	#print(candidate_tdt)
 	#print(reference_gps)
 
-	segments = list(zip(candidate_gps[:-1], candidate_gps[1:]))
-	segm_tdt = list(zip(candidate_tdt[:-1], candidate_tdt[1:]))
+	segments = list(zip(candidate_gps, candidate_gps[1:]))
+	segm_tdt = list(zip(candidate_tdt, candidate_tdt[1:]))
 
 	M = np.vstack([graph.dist_to_segment(r, s)[0] for s in segments] for r in reference_gps)
 
@@ -177,11 +177,12 @@ def bus_at_stops(run, stops) :
 		# Look at front and back tails
 		for (direction, traversal) in [(+1, commons.identity), (-1, reversed)] :
 			# Indices and distances
-			tail = [(n, d) for (n, (d, q)) in traversal(list(enumerate(seg_dist)))]
+			tail = [(n, d, d <= PARAM['tail_eta_patch_dist']) for (n, (d, q)) in traversal(list(enumerate(seg_dist)))]
 			# Tail characterized by large distances
-			tail = tail[0:(1 + min(i for (i, (n, d)) in enumerate(tail) if (d <= PARAM['tail_eta_patch_dist'])))]
+			tail = tail[0:([is_close for (n, d, is_close) in tail].index(True) + 1)]
 			# Indices of the tail
-			tail = [n for (n, d) in tail]
+			tail = [n for (n, d, is_close) in tail]
+			# No tail means there is nothing to patch
 			if not tail : continue
 			# First visited waypoint
 			first = tail.pop()
@@ -273,7 +274,7 @@ def generate_timetables() :
 		# ETA table of Busrun x Stop
 		ETA = np.vstack(Parallel(n_jobs=PARAM['n_parallel_jobs'])(delayed(bus_at_stops)(run, stops) for run in progressbar(runs)))
 
-		# pandas does not digest dt.datetime
+		# 2018-12-12: pandas does not digest dt.datetime
 		# https://github.com/pandas-dev/pandas/issues/13287
 		ETA = ETA.astype(np.datetime64)
 
@@ -287,7 +288,7 @@ def generate_timetables() :
 			'timetable_df' : df.to_json(),
 		}
 
-		with open(commons.makedirs(OFILE['timetable'].format(ext="json", **case)), 'w') as fd :
+		with open(commons.makedirs(OFILE['timetable_json'].format(**case)), 'w') as fd :
 			json.dump(J, fd)
 
 
