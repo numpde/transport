@@ -7,7 +7,7 @@
 
 from helpers import commons, graph
 
-from math import sqrt, floor
+from math import sqrt, floor, ceil
 
 import re
 import json
@@ -21,19 +21,19 @@ import datetime as dt
 import dateutil.parser
 from sklearn.neighbors import NearestNeighbors
 
+from multiprocessing import cpu_count
+from joblib import Parallel, delayed
+
+from progressbar import progressbar
+
+import pint
+
 from itertools import chain, product, groupby
 
 from difflib import SequenceMatcher
 from sklearn.cluster import AgglomerativeClustering
 
 import matplotlib as mpl
-
-import pint
-Units = pint.UnitRegistry()
-
-## ==================== NOTES :
-
-pass
 
 
 ## =============== DIAGNOSTIC :
@@ -96,7 +96,11 @@ PARAM = {
 	#'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
 
 	# When is the bus run too short at the tails?
-	'tail_eta_patch_dist' : 50 * Units.meters,
+	'tail_eta_patch_dist' : 50, # meters
+	# Have at least those many waypoints close to the run
+	'min_near_run' : 3,
+
+	'n_parallel_jobs' : min(12, ceil(cpu_count() / 1.5)),
 }
 
 
@@ -112,8 +116,8 @@ THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 # At what time does a given bus visit the bus stops?
 def bus_at_stops(run, stops) :
-	mpl.use('GTK3Agg')
-	import matplotlib.pyplot as plt
+	# Note: pint does not serialize well
+	Units = pint.UnitRegistry()
 
 	# These are sparse samples of a bus trajectory
 	candidate_gps = list(map(tuple, run['BusPosition']))
@@ -135,7 +139,7 @@ def bus_at_stops(run, stops) :
 
 	M = np.vstack([graph.dist_to_segment(r, s)[0] for s in segments] for r in reference_gps)
 
-	if not M.size : return
+	assert(M.size), "Undefined behavior for missing data"
 
 	# M contains distances in meters
 	# We expect the bus to travel about 17km/h on average, say 5m/s
@@ -164,13 +168,16 @@ def bus_at_stops(run, stops) :
 		for ((d, q), (t0, t1)) in zip(seg_dist, segm_tdt)
 	]
 
+	if not (PARAM['min_near_run'] <= sum((d <= PARAM['tail_eta_patch_dist']) for (d, q) in seg_dist)) :
+		return [None] * len(stops)
+
 	try :
 		# Patch ETA at the tails
 		typical_speed = np.median([s for s in run['Speed'] if s]) * (Units.km / Units.hour)
 		# Look at front and back tails
 		for (direction, traversal) in [(+1, commons.identity), (-1, reversed)] :
 			# Indices and distances
-			tail = [(n, d * Units.meter) for (n, (d, q)) in traversal(list(enumerate(seg_dist)))]
+			tail = [(n, d) for (n, (d, q)) in traversal(list(enumerate(seg_dist)))]
 			# Tail characterized by large distances
 			tail = tail[0:(1 + min(i for (i, (n, d)) in enumerate(tail) if (d <= PARAM['tail_eta_patch_dist'])))]
 			# Indices of the tail
@@ -191,6 +198,9 @@ def bus_at_stops(run, stops) :
 
 	# Diagnostics
 	if False :
+		mpl.use('GTK3Agg')
+		import matplotlib.pyplot as plt
+
 		print("Match:", match)
 
 		print("Dist wpt to closest seg:", seg_dist)
@@ -251,16 +261,17 @@ def generate_timetables() :
 
 		runs = [run for run in runs if (run.get('quality') == "+")]
 
+		print("Number of runs: {} ({})".format(len(runs), "quality"))
+
 		try :
 			route = motc_routes[(case['routeid'], case['dir'])]
+			stops = route['Stops']
 		except KeyError :
 			print("Warning: No stops info for route {routeid}, direction {dir}".format(**case))
 			continue
 
-		stops = route['Stops']
-
 		# ETA table of Busrun x Stop
-		ETA = np.vstack(bus_at_stops(run, stops) for run in runs)
+		ETA = np.vstack(Parallel(n_jobs=PARAM['n_parallel_jobs'])(delayed(bus_at_stops)(run, stops) for run in progressbar(runs)))
 
 		# pandas does not digest dt.datetime
 		# https://github.com/pandas-dev/pandas/issues/13287
