@@ -236,6 +236,9 @@ def bus_at_stops(run, stops) :
 	# Sanity check
 	assert(len(ref_guess_tdt) == len(stops)), "Stop and ETA vector length mismatch"
 
+	# Convert times to UTC timezone
+	ref_guess_tdt = [t.astimezone(dt.timezone.utc) for t in ref_guess_tdt]
+
 	return ref_guess_tdt
 
 
@@ -274,9 +277,10 @@ def generate_timetables() :
 		# ETA table of Busrun x Stop
 		ETA = np.vstack(Parallel(n_jobs=PARAM['n_parallel_jobs'])(delayed(bus_at_stops)(run, stops) for run in progressbar(runs)))
 
-		# 2018-12-12: pandas does not digest dt.datetime
+		# 2018-12-12: pandas does not digest dt.datetime with timezones
 		# https://github.com/pandas-dev/pandas/issues/13287
-		ETA = ETA.astype(np.datetime64)
+		# Note: datetime64 automatically converts to UTC
+		ETA = ETA.astype('datetime64[ms]')
 
 		# Timetable as DataFrame
 		df = pd.DataFrame(data=ETA, columns=[s['StopUID'] for s in stops])
