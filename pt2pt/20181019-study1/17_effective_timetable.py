@@ -10,6 +10,7 @@ from helpers import commons, graph
 from math import sqrt, floor, ceil
 
 import re
+import os
 import json
 import random
 import inspect
@@ -259,6 +260,15 @@ def generate_timetables() :
 		case = {'scenario': scenario, 'routeid': routeid, 'dir': int(dir)}
 		print("Route: {routeid}, direction: {dir} (from scenario: {scenario})".format(**case))
 
+		# # DEBUG: trouble case
+		# if not ((routeid, int(dir)) == ('KHH116', 1)) : continue
+
+		fn_output = commons.makedirs(OFILE['timetable_json'].format(**case))
+
+		if os.path.isfile(fn_output) :
+			print("Output file exists ({}) -- skipping".format(fn_output))
+			continue
+
 		# Load all bus run segments for this case
 		runs = commons.zipjson_load(run_file)
 		print("Number of runs: {} ({})".format(len(runs), "total"))
@@ -275,7 +285,10 @@ def generate_timetables() :
 			continue
 
 		# ETA table of Busrun x Stop
-		ETA = np.vstack(Parallel(n_jobs=PARAM['n_parallel_jobs'])(delayed(bus_at_stops)(run, stops) for run in progressbar(runs)))
+		ETA = np.vstack(
+			Parallel(n_jobs=PARAM['n_parallel_jobs'])(delayed(bus_at_stops)(run, stops) for run in progressbar(runs))
+			# bus_at_stops(run, stops) for run in progressbar(runs)
+		)
 
 		# 2018-12-12: pandas does not digest dt.datetime with timezones
 		# https://github.com/pandas-dev/pandas/issues/13287
@@ -286,13 +299,13 @@ def generate_timetables() :
 		df = pd.DataFrame(data=ETA, columns=[s['StopUID'] for s in stops])
 
 		J = {
-			**case,
+			'case' : case,
 			'route' : route,
 			'run_file' : run_file,
 			'timetable_df' : df.to_json(),
 		}
 
-		with open(commons.makedirs(OFILE['timetable_json'].format(**case)), 'w') as fd :
+		with open(fn_output, 'w') as fd :
 			json.dump(J, fd)
 
 
