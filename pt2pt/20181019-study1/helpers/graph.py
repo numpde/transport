@@ -58,7 +58,7 @@ def angle(p, q, r) :
 	return (((angles.r2d(pq - qr) + 540) % 360) - 180)
 
 
-def dist_to_segment(x, ab, rel_acc=0.05) :
+def dist_to_segment(x, ab, rel_acc=0.05, abs_acc=1) :
 	""" Compute the geo-distance of a point to a segment.
 	
 	Args:
@@ -81,7 +81,7 @@ def dist_to_segment(x, ab, rel_acc=0.05) :
 	# Distances to the endpoints
 	(da, db) = (geodist(x, a), geodist(x, b))
 
-	while (geodist(a, b) > rel_acc * min(da, db)) :
+	while (abs_acc < min(da, db) < geodist(a, b) / rel_acc) :
 
 		# Note: problematic at lon~180
 		# Approximation of the midpoint (m is not necessarily on a geodesic)
