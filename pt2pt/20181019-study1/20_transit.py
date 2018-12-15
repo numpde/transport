@@ -49,9 +49,11 @@ PARAM = {
 IFILE = {
 	#'OSM-pickled' : "OUTPUT/02/UV/kaohsiung.pkl",
 
-	'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_StopOfRoute.json",
+	# Will be loaded from timetable files:
+	#'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_StopOfRoute.json",
+	#'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Stop.json",
+
 	'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Shape.json",
-	'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Stop.json",
 
 	'timetable_json' : "OUTPUT/17/timetable/{scenario}/json/{{routeid}}-{{dir}}.json",
 }
@@ -101,7 +103,7 @@ class BusstopWalker :
 				'B' : B,
 				'b' : self.stop_pos[B],
 				't0' : t0,
-				't1' : t0 + dt.timedelta(seconds=commons.geodesic(self.stop_pos[A], self.stop_pos[B]) / PARAM['walker_speed']),
+				't1' : t0 + dt.timedelta(seconds=(5 + commons.geodesic(self.stop_pos[A], self.stop_pos[B]) / PARAM['walker_speed'])),
 				'transit' : {'mode': "walk"},
 			}
 			for B in self.get_neighbors(A)
@@ -127,7 +129,7 @@ class BusstopBusser :
 		dest = dict()
 
 		if A not in self.routes_from :
-			print("Warning: No routes from bus stop {}".format(A))
+			# print("Warning: No routes from bus stop {}".format(A))
 			return dest
 		else :
 			routes = self.routes_from[A]
@@ -140,6 +142,7 @@ class BusstopBusser :
 			if not os.path.isfile(fn) :
 				print("Warning: No timetable for route {}".format(route_key))
 				continue
+
 			# Note: 'datetime64[ms]' appears necessary here to properly parse the JSON
 			#       but the resulting datatype is '...[ns]'
 			tt : pd.DataFrame # Timetable
@@ -154,7 +157,9 @@ class BusstopBusser :
 
 			B = tt.columns[1]
 
+			fastest: pd.Series
 			fastest = tt.ix[tt[B].idxmin()]
+
 			transit_info = {
 				't0' : fastest[A].to_pydatetime(), #, tzinfo=dt.timezone.utc),
 				't1' : fastest[B].to_pydatetime(), #, tzinfo=dt.timezone.utc),
@@ -162,8 +167,9 @@ class BusstopBusser :
 				'b' : None, # Stop location unknown here
 				'A' : A,
 				'B' : B,
-				'transit' : {'mode': "bus", 'id': route_key},
+				'transit' : {'mode': "bus", 'route': route_key, 'bus_id': fastest.name},
 			}
+
 			if B in dest :
 				dest[B] = min(dest[B], transit_info, key=commons.inspect('t1'))
 			else :
@@ -177,18 +183,24 @@ def test1() :
 	t0 = dt.datetime(year=2018, month=11, day=6, hour=13, minute=15, tzinfo=PARAM['TZ'])
 	print(t0)
 
-	# Initial openset -- start locations
-	AA = { 'KHH4560' } #'KHH308', 'KHH12822'
-	# Target locations
-	ZZ = { 'KHH4391' }
-
 	#
 	t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
 
 	def ll2xy(latlon) :
 		return (latlon[1], latlon[0])
 
-	routes = commons.zipjson_load(IFILE['MOTC_routes'])
+	routes = [
+		commons.zipjson_load(fn)['route']
+		for fn in commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))
+	]
+
+	stop_pos = {
+		stop['StopUID'] : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
+		for route in routes
+		for stop in route['Stops']
+	}
+
+
 	bb = BusstopBusser(routes)
 
 	# print(bb.where_can_i_go('KHH308', t))
@@ -198,22 +210,32 @@ def test1() :
 	# print(bb.routes[('KHH100', 0)]['Stops'])
 	# exit(39)
 
-
-	stops = commons.zipjson_load(IFILE['MOTC_stops'])
-
-	stop_pos = {
-		stop['StopUID'] : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
-		for stop in stops
-	}
-
 	bw = BusstopWalker(stop_pos)
 	# print(bw.where_can_i_go('KHH308', t))
 	# bw.where_can_i_go('KHH380', t)
 
 
+	(A, Z) = commons.random_subset(stop_pos.keys(), k=2)
+
+	# Initial openset -- start locations
+	AA = { A } # 'KHH4560', 'KHH308', 'KHH12822'
+	# Target locations
+	ZZ = { Z } # 'KHH4391'
+
+	# # Long search, retakes same busroute
+	# (AA, ZZ) = ({'KHH3820'}, {'KHH4484'})
+
+	# Short route
+	(AA, ZZ) = ({'KHH4439'}, {'KHH4370'})
+
+	print("Finding a route from {} to {}".format(AA, ZZ))
+
+
+
 	import matplotlib.pyplot as plt
 	plt.ion()
 	(fig, ax) = plt.subplots()
+
 
 	g = nx.DiGraph()
 
@@ -245,12 +267,12 @@ def test1() :
 		openset.remove(C)
 
 
-		ti_next = chain.from_iterable(
+		ti_choices = chain.from_iterable(
 			mode.where_can_i_go(C, t0=g.nodes[C]['t']).values()
 			for mode in [bb, bw]
 		)
 
-		for ti in ti_next :
+		for ti in ti_choices :
 
 			B = ti['B']
 
@@ -260,7 +282,7 @@ def test1() :
 				else :
 					g.remove_edges_from(list(g.in_edges(B)))
 
-			g.add_node(B, t=ti['t1'], pos=ll2xy(stop_pos[B]))
+			g.add_node(B, t=ti['t1'], pos=ll2xy(stop_pos[B]), ti=deepcopy(ti))
 			g.add_edge(C, B, mode=ti['transit']['mode'])
 			openset.add(B)
 
@@ -268,12 +290,23 @@ def test1() :
 
 			if B in ZZ :
 				#print("Done!")
-				openset = {}
+				openset.clear()
+
+				itinerary = []
+				while (B not in AA) :
+					itinerary.append(deepcopy(g.nodes[B]['ti']))
+					B = itinerary[-1]['A']
+				itinerary.reverse()
+
+				for it in itinerary :
+					print("{} : {} {}".format(it['t0'].strftime("%Y%m%d %H:%M"), it['transit']['mode'], it['transit']))
+
 				break
 
 		if (dt.datetime.now() >= nfu) or (not openset) :
 			ax: plt.Axes
 			ax.cla()
+
 			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == "walk")], pos=nx.get_node_attributes(g, 'pos'), edge_color='g', arrowsize=5, node_size=0)
 			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == "bus" )], pos=nx.get_node_attributes(g, 'pos'), edge_color='b', arrowsize=5, node_size=0)
 			if AA :
@@ -283,9 +316,25 @@ def test1() :
 			if openset :
 				ax.plot(*zip(*[ll2xy(stop_pos[O]) for O in openset]), 'kx')
 
+			if not openset :
+			# try :
+				for it in itinerary :
+					(y, x) = zip(stop_pos[it['A']], stop_pos[it['B']])
+					ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
+			# except :
+			# 	pass
+
+			a = ax.axis()
+			for route in routes :
+				(y, x) = zip(*(stop_pos[stop['StopUID']] for stop in route['Stops']))
+				ax.plot(x, y, 'm-', alpha=0.1)
+			ax.axis(a)
+
 			plt.pause(0.1)
 
 			nfu = dt.datetime.now() + dt.timedelta(seconds=2)
+
+	print("Done.")
 
 	plt.ioff()
 	plt.show()
