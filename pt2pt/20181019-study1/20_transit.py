@@ -4,7 +4,7 @@
 
 ## ================== IMPORTS :
 
-from helpers import commons, graph, maps
+from helpers import commons, graph, transit, maps
 
 import os
 import pickle
@@ -101,28 +101,25 @@ class BusstopWalker :
 		(I, tree) = commons.inspect(('node_ids', 'knn_tree'))(self.knn)
 		return [I[j] for j in tree.query_radius([x], r=PARAM['walker_neighborhood_radius'])[0]]
 
-	def where_can_i_go(self, A, t0, tspan=None) :
+	def where_can_i_go(self, P: transit.Loc, tspan=None) :
 		try :
-			# Interpret A as a geo-coordinate
-			(lat, lon) = A
-			a = (lat, lon)
-			# It is not a bus stop
-			A = None
+			# See if geo-coordinate is available
+			(lat, lon) = P.x
 		except :
-			# Interpret A as a bus stop; get its geo-coordinate
-			a = self.stop_pos[A]
+			# Interpret P.desc as a bus stop; get its geo-coordinate
+			P.x = self.stop_pos[P.desc]
 
 		transit_info = {
-			B : {
-				'A' : A,
-				'a' : a,
-				'B' : B,
-				'b' : self.stop_pos[B],
-				't0' : t0,
-				't1' : t0 + dt.timedelta(seconds=(PARAM['walker_delay'] + commons.geodesic(a, self.stop_pos[B]) / PARAM['walker_speed'])),
-				'transit' : {'mode': "walk"},
-			}
-			for B in self.get_neighbors(a)
+			B : transit.Leg(
+				P,
+				transit.Loc(
+					t=(P.t + dt.timedelta(seconds=(PARAM['walker_delay'] + commons.geodesic(P.x, self.stop_pos[B]) / PARAM['walker_speed']))),
+					x=self.stop_pos[B],
+					desc=B
+				),
+				mode=transit.Mode.walk
+			)
+			for B in self.get_neighbors(P.x)
 		}
 
 		return transit_info
@@ -132,7 +129,7 @@ class BusstopWalker :
 
 
 class BusstopBusser :
-	def __init__(self, routes) :
+	def __init__(self, routes, stop_pos) :
 		self.routes = { ROUTE_KEY(route) : route for route in routes }
 		self.routes_from = defaultdict(set)
 		for (i, route) in self.routes.items() :
@@ -143,17 +140,21 @@ class BusstopBusser :
 		self.routes_from = dict(self.routes_from)
 		#print(list(self.routes_from.items())[0:10])
 
-	def where_can_i_go(self, A, t0, tspan=dt.timedelta(minutes=60)) :
+		self.stop_pos = stop_pos
+
+	def where_can_i_go(self, P: transit.Loc, tspan=dt.timedelta(minutes=60)) :
+		# Stop ID --> Transit leg
 		dest = dict()
+		P = deepcopy(P)
 
-		if A not in self.routes_from :
-			# print("Warning: No routes from bus stop {}".format(A))
-			return dest
-		else :
+		# Location descriptor (usually, bus stop ID)
+		A = P.desc
+
+		try :
 			routes = self.routes_from[A]
-
-		# t0 = np.datetime64(t0)
-		# tspan = np.timedelta64(tspan)
+		except :
+			# 'stopid' is not recognized as a bus stop ID
+			return dest
 
 		for route_key in routes :
 
@@ -169,7 +170,7 @@ class BusstopBusser :
 			tt = tt.astype(pd.Timestamp)
 
 			# Find the reachable section of the time table
-			tt = tt.loc[(t0 <= tt[A]) & (tt[A] <= (t0 + tspan)), A:]
+			tt = tt.loc[(P.t <= tt[A]) & (tt[A] <= (P.t + tspan)), A:]
 
 			if tt.empty :
 				continue
@@ -178,26 +179,22 @@ class BusstopBusser :
 			if (len(tt.columns) < 2) :
 				continue
 
+			# Next stop name
 			B = tt.columns[1]
 
 			# Note: Convert to numpy datetime for the argmin computation
 			fastest: pd.Series
 			fastest = tt.ix[tt[B].astype(np.datetime64).idxmin()]
 
-			transit_info = {
-				't0' : fastest[A].to_pydatetime(),
-				't1' : fastest[B].to_pydatetime(),
-				'a' : None, # Stop location unknown here
-				'b' : None, # Stop location unknown here
-				'A' : A,
-				'B' : B,
-				'transit' : {'mode': "bus", 'route': route_key, 'bus_id': fastest.name},
-			}
+			P.t = fastest[A].to_pydatetime()
+			Q = transit.Loc(t=fastest[B].to_pydatetime(), x=self.stop_pos[B], desc=B)
+
+			leg = transit.Leg(P, Q, transit.Mode.bus, desc={'route': route_key, 'bus_id': fastest.name})
 
 			if B in dest :
-				dest[B] = min(dest[B], transit_info, key=commons.inspect('t1'))
+				dest[B] = min(dest[B], leg, key=(lambda _: _.Q.t))
 			else :
-				dest[B] = transit_info
+				dest[B] = leg
 
 		return dest
 
@@ -205,7 +202,7 @@ class BusstopBusser :
 
 def test1() :
 	t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-	print(t0)
+	print("Departure time: {}".format(t0.strftime("%Y-%m-%d %H:%M (%Z)")))
 
 	#
 	#t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
@@ -230,7 +227,7 @@ def test1() :
 	}
 
 
-	bb = BusstopBusser(routes)
+	bb = BusstopBusser(routes, stop_pos)
 
 	# print(bb.where_can_i_go('KHH308', t))
 	# exit(39)
@@ -245,19 +242,19 @@ def test1() :
 
 
 	(A, Z) = commons.random_subset(stop_pos.keys(), k=2)
-
-	# Initial openset -- start locations
-	AA = { A } # 'KHH4560', 'KHH308', 'KHH12822'
-	# Target locations
-	ZZ = { Z } # 'KHH4391'
+	(A, Z) = ('KHH4439', 'KHH4370')
 
 	# # Long search, retakes same busroute
-	# (AA, ZZ) = ({'KHH3820'}, {'KHH4484'})
+	# (A, Z) = ('KHH3820', 'KHH4484')
+
+	# Initial openset -- start locations
+	aa = { transit.Loc(t=t0.astimezone(dt.timezone.utc).replace(tzinfo=None), x=stop_pos[A], desc=A) } # 'KHH4560', 'KHH308', 'KHH12822'
+	# Target locations
+	zz = { transit.Loc(t=None, x=stop_pos[Z], desc=Z) } # 'KHH4391'
 
 	# Relatively short route, four buses
-	(AA, ZZ) = ({'KHH4439'}, {'KHH4370'})
 
-	print("Finding a route from {} to {}".format(AA, ZZ))
+	print("Finding a route from {} to {}".format(aa, zz))
 
 
 
@@ -270,20 +267,20 @@ def test1() :
 
 	# A*-algorithm heuristic: cost estimate from C to Z
 	# It is "admissible" if it never over-estimates
-	def h(C) :
+	def h(P: transit.Loc) :
 		return min(
-			dt.timedelta(seconds=(commons.geodesic(stop_pos[C], stop_pos[Z]) / (3 * PARAM['walker_speed'])))
-			for Z in ZZ
+			dt.timedelta(seconds=(commons.geodesic(P.x, Q.x) / (3 * PARAM['walker_speed'])))
+			for Q in zz
 		)
 
 	# A*-algorithm cost estimator of path via C
-	def f(C) :
-		return g.nodes[C]['t'] + h(C)
+	def f(P: transit.Loc) :
+		return P.t + h(P)
 
-	openset = set(AA)
+	openset = set(aa)
 
 	for P in openset :
-		g.add_node(P, t=t0.astimezone(dt.timezone.utc).replace(tzinfo=None), pos=ll2xy(stop_pos[P]))
+		g.add_node(P.desc, t=(P.t).astimezone(dt.timezone.utc).replace(tzinfo=None), pos=ll2xy(P.x))
 
 	# Next figure update
 	nfu = dt.datetime.now()
@@ -291,46 +288,49 @@ def test1() :
 	while openset :
 
 		# A*-algorithm: select candidate node/path to extend
-		C = min(openset, key=f)
+		c = min(openset, key=f)
 
-		openset.remove(C)
+		openset.remove(c)
 
 
-		ti_choices = chain.from_iterable(
-			mode.where_can_i_go(C, t0=g.nodes[C]['t']).values()
+		leg_choices = chain.from_iterable(
+			mode.where_can_i_go(c).values()
 			for mode in [bb, bw]
 		)
 
-		for ti in ti_choices :
+		leg: transit.Leg
+		for leg in leg_choices :
 
-			B = ti['B']
+			# Next potential bus stop
+			B = leg.Q.desc
 
 			if B in g.nodes :
-				if (g.nodes[B]['t'] <= ti['t1']) :
+				if (g.nodes[B]['t'] <= leg.Q.t) :
 					continue
 				else :
 					g.remove_edges_from(list(g.in_edges(B)))
 
-			g.add_node(B, t=ti['t1'], pos=ll2xy(stop_pos[B]), ti=deepcopy(ti))
-			g.add_edge(C, B, mode=ti['transit']['mode'])
-			openset.add(B)
+			g.add_node(leg.Q.desc, t=leg.Q.t, pos=ll2xy(leg.Q.x), leg=deepcopy(leg))
+			g.add_edge(leg.P.desc, leg.Q.desc, mode=leg.mode)
+			openset.add(leg.Q)
 
 			#print("Added new path to:", B)
 
-			if B in ZZ :
+			if B in [P.desc for P in zz] :
 				#print("Done!")
 				openset.clear()
 
 				# Retrace path
-				itinerary = []
-				while (B not in AA) :
-					itinerary.append(deepcopy(g.nodes[B]['ti']))
-					B = itinerary[-1]['A']
-				itinerary.reverse()
+				legs = []
+				A = B
+				while (A not in [P.desc for P in aa]) :
+					legs.append(deepcopy(g.nodes[A]['leg']))
+					A = legs[-1].P.desc
+				legs.reverse()
 
-				for it in itinerary :
-					(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (it['t0'], it['t1']))
-					print("{}-{} : {} {}".format(t0.strftime("%Y%m%d %H:%M"), t1.strftime("%H:%M (%Z)"), it['transit']['mode'], it['transit']))
+				for leg in legs :
+					(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
+					print("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
 
 				break
 
@@ -338,19 +338,19 @@ def test1() :
 			ax: plt.Axes
 			ax.cla()
 
-			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == "walk")], pos=nx.get_node_attributes(g, 'pos'), edge_color='g', arrowsize=5, node_size=0)
-			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == "bus" )], pos=nx.get_node_attributes(g, 'pos'), edge_color='b', arrowsize=5, node_size=0)
-			if AA :
-				ax.plot(*zip(*[ll2xy(stop_pos[P]) for P in AA]), 'go')
-			if ZZ :
-				ax.plot(*zip(*[ll2xy(stop_pos[P]) for P in ZZ]), 'ro')
+			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == transit.Mode.walk)], pos=nx.get_node_attributes(g, 'pos'), edge_color='g', arrowsize=5, node_size=0)
+			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == transit.Mode.bus )], pos=nx.get_node_attributes(g, 'pos'), edge_color='b', arrowsize=5, node_size=0)
+			if aa :
+				ax.plot(*zip(*[ll2xy(P.x) for P in aa]), 'go')
+			if zz :
+				ax.plot(*zip(*[ll2xy(P.x) for P in zz]), 'ro')
 			if openset :
-				ax.plot(*zip(*[ll2xy(stop_pos[O]) for O in openset]), 'kx')
+				ax.plot(*zip(*[ll2xy(O.x) for O in openset]), 'kx')
 
 			if not openset :
 				try :
-					for it in itinerary :
-						(y, x) = zip(stop_pos[it['A']], stop_pos[it['B']])
+					for leg in legs :
+						(y, x) = zip(leg.P.x, leg.Q.x)
 						ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
 				except :
 					pass
