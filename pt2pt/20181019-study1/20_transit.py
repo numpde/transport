@@ -109,7 +109,7 @@ class BusstopWalker :
 			# Interpret P.desc as a bus stop; get its geo-coordinate
 			P.x = self.stop_pos[P.desc]
 
-		transit_info = {
+		dest = {
 			B : transit.Leg(
 				P,
 				transit.Loc(
@@ -122,7 +122,7 @@ class BusstopWalker :
 			for B in self.get_neighbors(P.x)
 		}
 
-		return transit_info
+		return list(dest.values())
 
 	def __del__(self) :
 		pass
@@ -144,7 +144,6 @@ class BusstopBusser :
 
 	def where_can_i_go(self, P: transit.Loc, tspan=dt.timedelta(minutes=60)) :
 		# Stop ID --> Transit leg
-		dest = dict()
 		P = deepcopy(P)
 
 		# Location descriptor (usually, bus stop ID)
@@ -154,7 +153,9 @@ class BusstopBusser :
 			routes = self.routes_from[A]
 		except :
 			# 'stopid' is not recognized as a bus stop ID
-			return dest
+			return []
+
+		dest = dict()
 
 		for route_key in routes :
 
@@ -192,11 +193,11 @@ class BusstopBusser :
 			leg = transit.Leg(P, Q, transit.Mode.bus, desc={'route': route_key, 'bus_id': fastest.name})
 
 			if B in dest :
-				dest[B] = min(dest[B], leg, key=(lambda _: _.Q.t))
+				dest[B] = min(dest[B], leg, key=(lambda _ : _.Q.t))
 			else :
 				dest[B] = leg
 
-		return dest
+		return list(dest.values())
 
 ## ==================== TESTS :
 
@@ -222,8 +223,8 @@ def test1() :
 	}
 
 	stop_pos = {
-		stopid : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
-		for (stopid, stop) in stops.items()
+		next_stop : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
+		for (next_stop, stop) in stops.items()
 	}
 
 
@@ -240,22 +241,41 @@ def test1() :
 	# print(bw.where_can_i_go('KHH308', t))
 	# bw.where_can_i_go('KHH380', t)
 
-
-	(A, Z) = commons.random_subset(stop_pos.keys(), k=2)
-	(A, Z) = ('KHH4439', 'KHH4370')
-
+	# Random from-to pair
+	(stop_a, stop_z) = commons.random_subset(stop_pos.keys(), k=2)
+	# Relatively short route, many buses
+	(stop_a, stop_z) = ('KHH4439', 'KHH4370')
 	# # Long search, retakes same busroute
-	# (A, Z) = ('KHH3820', 'KHH4484')
+	# (stop_a, stop_z) = ('KHH3820', 'KHH4484')
 
-	# Initial openset -- start locations
-	aa = { transit.Loc(t=t0.astimezone(dt.timezone.utc).replace(tzinfo=None), x=stop_pos[A], desc=A) } # 'KHH4560', 'KHH308', 'KHH12822'
+	print("Finding a route from {} to {}".format(stop_a, stop_z))
+
+
+	# Initial astar_openset -- start locations
+	astar_initial = { stop_a : transit.Loc(t=t0, x=stop_pos[stop_a], desc=stop_a) }
 	# Target locations
-	zz = { transit.Loc(t=None, x=stop_pos[Z], desc=Z) } # 'KHH4391'
+	astar_targets = { stop_z : transit.Loc(t=None, x=stop_pos[stop_z], desc=stop_z) }
 
-	# Relatively short route, four buses
+	# Working copy of the open set
+	astar_openset = deepcopy(astar_initial)
 
-	print("Finding a route from {} to {}".format(aa, zz))
+	# The graph of visited locations will act as the closed set
+	astar_graph = nx.DiGraph()
+	# Initialize the graph
+	for (desc, P) in astar_openset.items() :
+		astar_graph.add_node(desc, pos=ll2xy(P.x), P=P)
 
+	# A*-algorithm heuristic: cost estimate from C to Z
+	# It is "admissible" if it never over-estimates
+	def h(P: transit.Loc) :
+		return min(
+			dt.timedelta(seconds=(commons.geodesic(P.x, Q.x) / (3 * PARAM['walker_speed'])))
+			for Q in astar_targets.values()
+		)
+
+	# A*-algorithm cost estimator of path via C
+	def f(P: transit.Loc) :
+		return P.t + h(P)
 
 
 	import matplotlib.pyplot as plt
@@ -263,70 +283,50 @@ def test1() :
 	(fig, ax) = plt.subplots()
 
 
-	g = nx.DiGraph()
-
-	# A*-algorithm heuristic: cost estimate from C to Z
-	# It is "admissible" if it never over-estimates
-	def h(P: transit.Loc) :
-		return min(
-			dt.timedelta(seconds=(commons.geodesic(P.x, Q.x) / (3 * PARAM['walker_speed'])))
-			for Q in zz
-		)
-
-	# A*-algorithm cost estimator of path via C
-	def f(P: transit.Loc) :
-		return P.t + h(P)
-
-	openset = set(aa)
-
-	for P in openset :
-		g.add_node(P.desc, t=(P.t).astimezone(dt.timezone.utc).replace(tzinfo=None), pos=ll2xy(P.x))
-
 	# Next figure update
 	nfu = dt.datetime.now()
 
-	while openset :
+	while astar_openset :
 
 		# A*-algorithm: select candidate node/path to extend
-		c = min(openset, key=f)
-
-		openset.remove(c)
-
+		c = astar_openset.pop(min(astar_openset.values(), key=f).desc)
 
 		leg_choices = chain.from_iterable(
-			mode.where_can_i_go(c).values()
+			mode.where_can_i_go(c)
 			for mode in [bb, bw]
 		)
-
 		leg: transit.Leg
 		for leg in leg_choices :
 
+			# Bus stop we are coming from
+			prev_stop = leg.P.desc
 			# Next potential bus stop
-			B = leg.Q.desc
+			next_stop = leg.Q.desc
 
-			if B in g.nodes :
-				if (g.nodes[B]['t'] <= leg.Q.t) :
+			if next_stop in astar_graph.nodes :
+				if (astar_graph.nodes[next_stop]['P'].t <= leg.Q.t) :
+					# No improvement
 					continue
 				else :
-					g.remove_edges_from(list(g.in_edges(B)))
+					astar_graph.remove_node(next_stop)
 
-			g.add_node(leg.Q.desc, t=leg.Q.t, pos=ll2xy(leg.Q.x), leg=deepcopy(leg))
-			g.add_edge(leg.P.desc, leg.Q.desc, mode=leg.mode)
-			openset.add(leg.Q)
+			astar_graph.add_node(next_stop, pos=ll2xy(leg.Q.x), P=leg.Q)
+			astar_graph.add_edge(prev_stop, next_stop, leg=leg)
+
+			astar_openset[next_stop] = leg.Q
 
 			#print("Added new path to:", B)
 
-			if B in [P.desc for P in zz] :
+			if next_stop in astar_targets :
 				#print("Done!")
-				openset.clear()
+				astar_openset.clear()
 
-				# Retrace path
-				legs = []
-				A = B
-				while (A not in [P.desc for P in aa]) :
-					legs.append(deepcopy(g.nodes[A]['leg']))
-					A = legs[-1].P.desc
-				legs.reverse()
+				def retrace_from_node(a) :
+					while astar_graph.in_edges(a) :
+						(a, b) = (next(iter(astar_graph.predecessors(a))), a)
+						yield astar_graph.edges[a, b]['leg']
+
+				legs = list(reversed(list(retrace_from_node(next_stop))))
 
 				for leg in legs :
 					(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
@@ -334,20 +334,20 @@ def test1() :
 
 				break
 
-		if (dt.datetime.now() >= nfu) or (not openset) :
+		if (dt.datetime.now() >= nfu) or (not astar_openset) :
 			ax: plt.Axes
 			ax.cla()
 
-			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == transit.Mode.walk)], pos=nx.get_node_attributes(g, 'pos'), edge_color='g', arrowsize=5, node_size=0)
-			nx.draw_networkx_edges(g, ax=ax, edgelist=[(a, b) for (a, b, d) in g.edges.data('mode') if (d == transit.Mode.bus )], pos=nx.get_node_attributes(g, 'pos'), edge_color='b', arrowsize=5, node_size=0)
-			if aa :
-				ax.plot(*zip(*[ll2xy(P.x) for P in aa]), 'go')
-			if zz :
-				ax.plot(*zip(*[ll2xy(P.x) for P in zz]), 'ro')
-			if openset :
-				ax.plot(*zip(*[ll2xy(O.x) for O in openset]), 'kx')
+			nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.walk)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='g', arrowsize=5, node_size=0)
+			nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.bus )], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='b', arrowsize=5, node_size=0)
+			if astar_initial :
+				ax.plot(*zip(*[ll2xy(P.x) for P in astar_initial.values()]), 'go')
+			if astar_targets :
+				ax.plot(*zip(*[ll2xy(P.x) for P in astar_targets.values()]), 'ro')
+			if astar_openset :
+				ax.plot(*zip(*[ll2xy(O.x) for O in astar_openset.values()]), 'kx')
 
-			if not openset :
+			if not astar_openset :
 				try :
 					for leg in legs :
 						(y, x) = zip(leg.P.x, leg.Q.x)
