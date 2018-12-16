@@ -71,8 +71,9 @@ OFILE = {
 ## ================== PARAM 2 :
 
 PARAM.update({
-	'walker_max_busstop_distance' : 250, # meters
+	'walker_neighborhood_radius' : 250, # meters
 	'walker_speed' : 1, # m/s
+	'walker_delay' : 5, # seconds
 })
 
 
@@ -90,24 +91,41 @@ class BusstopWalker :
 		self.stop_pos = deepcopy(stop_pos)
 		self.knn = graph.compute_geo_knn(self.stop_pos)
 
-	def get_neighbors(self, stopid) :
+	def get_neighbors(self, x) :
+		try :
+			(lat, lon) = x
+		except :
+			raise ValueError("Expect a (lat, lon) geo-coordinate")
+
 		tree : sklearn.neighbors.BallTree
 		(I, tree) = commons.inspect(('node_ids', 'knn_tree'))(self.knn)
-		return [I[j] for j in tree.query_radius([self.stop_pos[stopid]], r=PARAM['walker_max_busstop_distance'])[0] if (stopid != I[j])]
+		return [I[j] for j in tree.query_radius([x], r=PARAM['walker_neighborhood_radius'])[0]]
 
 	def where_can_i_go(self, A, t0, tspan=None) :
-		return {
+		try :
+			# Interpret A as a geo-coordinate
+			(lat, lon) = A
+			a = (lat, lon)
+			# It is not a bus stop
+			A = None
+		except :
+			# Interpret A as a bus stop; get its geo-coordinate
+			a = self.stop_pos[A]
+
+		transit_info = {
 			B : {
 				'A' : A,
-				'a' : self.stop_pos[A],
+				'a' : a,
 				'B' : B,
 				'b' : self.stop_pos[B],
 				't0' : t0,
-				't1' : t0 + dt.timedelta(seconds=(5 + commons.geodesic(self.stop_pos[A], self.stop_pos[B]) / PARAM['walker_speed'])),
+				't1' : t0 + dt.timedelta(seconds=(PARAM['walker_delay'] + commons.geodesic(a, self.stop_pos[B]) / PARAM['walker_speed'])),
 				'transit' : {'mode': "walk"},
 			}
-			for B in self.get_neighbors(A)
+			for B in self.get_neighbors(a)
 		}
+
+		return transit_info
 
 	def __del__(self) :
 		pass
@@ -162,8 +180,8 @@ class BusstopBusser :
 
 			B = tt.columns[1]
 
-			fastest: pd.Series
 			# Note: Convert to numpy datetime for the argmin computation
+			fastest: pd.Series
 			fastest = tt.ix[tt[B].astype(np.datetime64).idxmin()]
 
 			transit_info = {
@@ -303,6 +321,7 @@ def test1() :
 				#print("Done!")
 				openset.clear()
 
+				# Retrace path
 				itinerary = []
 				while (B not in AA) :
 					itinerary.append(deepcopy(g.nodes[B]['ti']))
@@ -310,9 +329,8 @@ def test1() :
 				itinerary.reverse()
 
 				for it in itinerary :
-					t: dt.datetime = pytz.utc.localize(it['t0'])
-					t = t.astimezone(tz=PARAM['TZ'])
-					print("{} : {} {}".format(t.strftime("%Y%m%d %H:%M (%Z)"), it['transit']['mode'], it['transit']))
+					(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (it['t0'], it['t1']))
+					print("{}-{} : {} {}".format(t0.strftime("%Y%m%d %H:%M"), t1.strftime("%H:%M (%Z)"), it['transit']['mode'], it['transit']))
 
 				break
 
