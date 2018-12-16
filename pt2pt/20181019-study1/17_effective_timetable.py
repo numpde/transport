@@ -120,6 +120,9 @@ def bus_at_stops(run, stops) :
 	# Note: pint does not serialize well
 	Units = pint.UnitRegistry()
 
+	# Return this if the input seems nonsensical
+	default_result = [None] * len(stops)
+
 	# These are sparse samples of a bus trajectory
 	candidate_gps = list(map(tuple, run['BusPosition']))
 	# Timestamps of GPS records as datetime objects
@@ -170,10 +173,10 @@ def bus_at_stops(run, stops) :
 	]
 
 	if not (PARAM['min_near_run'] <= sum((d <= PARAM['tail_eta_patch_dist']) for (d, q) in seg_dist)) :
-		return [None] * len(stops)
+		return default_result
 
 	try :
-		# Patch ETA at the tails
+		# Patch ETA at the tails using this travel speed estimate
 		typical_speed = np.median([s for s in run['Speed'] if s]) * (Units.km / Units.hour)
 		# Look at front and back tails
 		for (direction, traversal) in [(+1, commons.identity), (-1, reversed)] :
@@ -189,8 +192,11 @@ def bus_at_stops(run, stops) :
 			first = tail.pop()
 			# Patch ETA for prior waypoints
 			for n in tail :
-				td = dt.timedelta(seconds=(commons.geodesic(reference_gps[n], reference_gps[first]) * Units.meter / typical_speed).to(Units.second).magnitude)
-				ref_guess_tdt[n] = ref_guess_tdt[first] - direction * td
+				if (typical_speed == 0) :
+					ref_guess_tdt[n] = None
+				else :
+					td = dt.timedelta(seconds=(commons.geodesic(reference_gps[n], reference_gps[first]) * Units.meter / typical_speed).to(Units.second).magnitude)
+					ref_guess_tdt[n] = ref_guess_tdt[first] - direction * td
 	except :
 		print("Warning: Patching tail ETA failed")
 		print(traceback.format_exc())
@@ -292,7 +298,10 @@ def generate_timetables() :
 
 		# 2018-12-12: pandas does not digest dt.datetime with timezones
 		# https://github.com/pandas-dev/pandas/issues/13287
-		# Note: datetime64 automatically converts to UTC
+		# Note: datetime64 automatically converts to UTC,
+		# i.e. these are the same:
+		#     np.datetime64(dt.datetime.utcnow())
+		#     np.datetime64(dt.datetime.now().astimezone())
 		ETA = ETA.astype('datetime64[ms]')
 
 		# Timetable as DataFrame
