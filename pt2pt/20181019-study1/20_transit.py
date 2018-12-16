@@ -134,8 +134,9 @@ class BusstopBusser :
 		else :
 			routes = self.routes_from[A]
 
-		t0 = np.datetime64(t0)
-		tspan = np.timedelta64(tspan)
+		# t0 = np.datetime64(t0)
+		# tspan = np.timedelta64(tspan)
+
 		for route_key in routes :
 
 			fn = IFILE['timetable_json'].format(**dict(zip(['routeid', 'dir'], route_key)))
@@ -146,23 +147,28 @@ class BusstopBusser :
 			# Note: 'datetime64[ms]' appears necessary here to properly parse the JSON
 			#       but the resulting datatype is '...[ns]'
 			tt : pd.DataFrame # Timetable
-			tt = pd.read_json(commons.zipjson_load(fn)['timetable_df'], dtype='datetime64[ms]')
-			tt = tt.loc[(t0 <= tt[A]) & (tt[A] <= (t0 + tspan)), A :]
+			tt = pd.read_json(commons.zipjson_load(fn)['timetable_df'], dtype='datetime64[ms]').dropna()
+			tt = tt.astype(pd.Timestamp)
+
+			# Find the reachable section of the time table
+			tt = tt.loc[(t0 <= tt[A]) & (tt[A] <= (t0 + tspan)), A:]
 
 			if tt.empty :
 				continue
 
-			#tt = tt.sort_values(by=A)
-			assert(len(tt.columns) >= 2)
+			# This should not happen, but just in case
+			if (len(tt.columns) < 2) :
+				continue
 
 			B = tt.columns[1]
 
 			fastest: pd.Series
-			fastest = tt.ix[tt[B].idxmin()]
+			# Note: Convert to numpy datetime for the argmin computation
+			fastest = tt.ix[tt[B].astype(np.datetime64).idxmin()]
 
 			transit_info = {
-				't0' : fastest[A].to_pydatetime(), #, tzinfo=dt.timezone.utc),
-				't1' : fastest[B].to_pydatetime(), #, tzinfo=dt.timezone.utc),
+				't0' : fastest[A].to_pydatetime(),
+				't1' : fastest[B].to_pydatetime(),
 				'a' : None, # Stop location unknown here
 				'b' : None, # Stop location unknown here
 				'A' : A,
@@ -180,11 +186,11 @@ class BusstopBusser :
 ## ==================== TESTS :
 
 def test1() :
-	t0 = dt.datetime(year=2018, month=11, day=6, hour=13, minute=15, tzinfo=PARAM['TZ'])
+	t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
 	print(t0)
 
 	#
-	t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
+	#t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
 
 	def ll2xy(latlon) :
 		return (latlon[1], latlon[0])
@@ -194,10 +200,15 @@ def test1() :
 		for fn in commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))
 	]
 
-	stop_pos = {
-		stop['StopUID'] : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
+	stops = {
+		stop['StopUID'] : stop
 		for route in routes
 		for stop in route['Stops']
+	}
+
+	stop_pos = {
+		stopid : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
+		for (stopid, stop) in stops.items()
 	}
 
 
@@ -225,7 +236,7 @@ def test1() :
 	# # Long search, retakes same busroute
 	# (AA, ZZ) = ({'KHH3820'}, {'KHH4484'})
 
-	# Short route
+	# Relatively short route, four buses
 	(AA, ZZ) = ({'KHH4439'}, {'KHH4370'})
 
 	print("Finding a route from {} to {}".format(AA, ZZ))
@@ -254,7 +265,7 @@ def test1() :
 	openset = set(AA)
 
 	for P in openset :
-		g.add_node(P, t=t0, pos=ll2xy(stop_pos[P]))
+		g.add_node(P, t=t0.astimezone(dt.timezone.utc).replace(tzinfo=None), pos=ll2xy(stop_pos[P]))
 
 	# Next figure update
 	nfu = dt.datetime.now()
@@ -299,7 +310,9 @@ def test1() :
 				itinerary.reverse()
 
 				for it in itinerary :
-					print("{} : {} {}".format(it['t0'].strftime("%Y%m%d %H:%M"), it['transit']['mode'], it['transit']))
+					t: dt.datetime = pytz.utc.localize(it['t0'])
+					t = t.astimezone(tz=PARAM['TZ'])
+					print("{} : {} {}".format(t.strftime("%Y%m%d %H:%M (%Z)"), it['transit']['mode'], it['transit']))
 
 				break
 
@@ -317,12 +330,12 @@ def test1() :
 				ax.plot(*zip(*[ll2xy(stop_pos[O]) for O in openset]), 'kx')
 
 			if not openset :
-			# try :
-				for it in itinerary :
-					(y, x) = zip(stop_pos[it['A']], stop_pos[it['B']])
-					ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
-			# except :
-			# 	pass
+				try :
+					for it in itinerary :
+						(y, x) = zip(stop_pos[it['A']], stop_pos[it['B']])
+						ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
+				except :
+					pass
 
 			a = ax.axis()
 			for route in routes :
