@@ -11,6 +11,9 @@ class Loc :
 	# 'x' to be a (lat, lon) pair
 	# 'desc' some descriptor of the location
 	def __init__(self, t=None, x=None, desc=None) :
+		t: dt.datetime
+		if t and t.tzinfo :
+			t = t.astimezone(dt.timezone.utc).replace(tzinfo=None)
 		self.t = t
 		self.x = x
 		self.desc = desc
@@ -24,6 +27,7 @@ class Loc :
 class Mode(Enum) :
 	walk = "Walk"
 	bus = "Bus"
+
 
 class Leg :
 	def __init__(self, P: Loc, Q: Loc, mode: Mode, desc=None) :
