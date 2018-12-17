@@ -4,35 +4,20 @@
 
 ## ================== IMPORTS :
 
-from helpers import commons, graph, transit, maps
+from helpers import commons, transit, maps
 
-import os
-import pickle
-import inspect
 import datetime as dt
-import numpy as np
-import pandas as pd
-import networkx as nx
-import sklearn.neighbors
-
-from copy import deepcopy
-from joblib import Parallel, delayed
-from progressbar import progressbar
-from itertools import chain
-
-from collections import defaultdict
-
+import inspect
 import pytz
+
+import networkx as nx
+
 
 ## ==================== NOTES :
 
 pass
 
 
-## ===================== META :
-
-# What finally identifies a one-way route
-ROUTE_KEY = (lambda r : (r['SubRouteUID'], r['Direction']))
 
 
 ## ================== PARAM 1 :
@@ -53,7 +38,7 @@ IFILE = {
 	#'MOTC_routes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_StopOfRoute.json",
 	#'MOTC_stops'  : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Stop.json",
 
-	'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Shape.json",
+	#'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Shape.json",
 
 	'timetable_json' : "OUTPUT/17/timetable/{scenario}/json/{{routeid}}-{{dir}}.json",
 }
@@ -70,300 +55,123 @@ OFILE = {
 
 ## ================== PARAM 2 :
 
-PARAM.update({
-	'walker_neighborhood_radius' : 250, # meters
-	'walker_speed' : 1, # m/s
-	'walker_delay' : 5, # seconds
-})
-
 
 ## ====================== AUX :
+
+def ll2xy(latlon) :
+	return (latlon[1], latlon[0])
 
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 
-## =================== SLAVES :
-
-class BusstopWalker :
-
-	def __init__(self, stop_pos) :
-		self.stop_pos = deepcopy(stop_pos)
-		self.knn = graph.compute_geo_knn(self.stop_pos)
-
-	def get_neighbors(self, x) :
-		try :
-			(lat, lon) = x
-		except :
-			raise ValueError("Expect a (lat, lon) geo-coordinate")
-
-		tree : sklearn.neighbors.BallTree
-		(I, tree) = commons.inspect(('node_ids', 'knn_tree'))(self.knn)
-		return [I[j] for j in tree.query_radius([x], r=PARAM['walker_neighborhood_radius'])[0]]
-
-	def where_can_i_go(self, P: transit.Loc, tspan=None) :
-		try :
-			# See if geo-coordinate is available
-			(lat, lon) = P.x
-		except :
-			# Interpret P.desc as a bus stop; get its geo-coordinate
-			P.x = self.stop_pos[P.desc]
-
-		dest = {
-			B : transit.Leg(
-				P,
-				transit.Loc(
-					t=(P.t + dt.timedelta(seconds=(PARAM['walker_delay'] + commons.geodesic(P.x, self.stop_pos[B]) / PARAM['walker_speed']))),
-					x=self.stop_pos[B],
-					desc=B
-				),
-				mode=transit.Mode.walk
-			)
-			for B in self.get_neighbors(P.x)
-		}
-
-		return list(dest.values())
-
-	def __del__(self) :
-		pass
-
-
-class BusstopBusser :
-	def __init__(self, routes, stop_pos) :
-		self.routes = { ROUTE_KEY(route) : route for route in routes }
-		self.routes_from = defaultdict(set)
-		for (i, route) in self.routes.items() :
-			assert(type(route['Direction']) is int), "Routes should be unidirectional at this point"
-			# Note: we are excluding the last stop (no boarding there)
-			for stop in route['Stops'][:-1] :
-				self.routes_from[stop['StopUID']].add(i)
-		self.routes_from = dict(self.routes_from)
-		#print(list(self.routes_from.items())[0:10])
-
-		self.stop_pos = stop_pos
-
-	def where_can_i_go(self, P: transit.Loc, tspan=dt.timedelta(minutes=60)) :
-		# Stop ID --> Transit leg
-		P = deepcopy(P)
-
-		# Location descriptor (usually, bus stop ID)
-		A = P.desc
-
-		try :
-			routes = self.routes_from[A]
-		except :
-			# 'stopid' is not recognized as a bus stop ID
-			return []
-
-		dest = dict()
-
-		for route_key in routes :
-
-			fn = IFILE['timetable_json'].format(**dict(zip(['routeid', 'dir'], route_key)))
-			if not os.path.isfile(fn) :
-				print("Warning: No timetable for route {}".format(route_key))
-				continue
-
-			# Note: 'datetime64[ms]' appears necessary here to properly parse the JSON
-			#       but the resulting datatype is '...[ns]'
-			tt : pd.DataFrame # Timetable
-			tt = pd.read_json(commons.zipjson_load(fn)['timetable_df'], dtype='datetime64[ms]').dropna()
-			tt = tt.astype(pd.Timestamp)
-
-			# Find the reachable section of the time table
-			tt = tt.loc[(P.t <= tt[A]) & (tt[A] <= (P.t + tspan)), A:]
-
-			if tt.empty :
-				continue
-
-			# This should not happen, but just in case
-			if (len(tt.columns) < 2) :
-				continue
-
-			# Next stop name
-			B = tt.columns[1]
-
-			# Note: Convert to numpy datetime for the argmin computation
-			fastest: pd.Series
-			fastest = tt.ix[tt[B].astype(np.datetime64).idxmin()]
-
-			P.t = fastest[A].to_pydatetime()
-			Q = transit.Loc(t=fastest[B].to_pydatetime(), x=self.stop_pos[B], desc=B)
-
-			leg = transit.Leg(P, Q, transit.Mode.bus, desc={'route': route_key, 'bus_id': fastest.name})
-
-			if B in dest :
-				dest[B] = min(dest[B], leg, key=(lambda _ : _.Q.t))
-			else :
-				dest[B] = leg
-
-		return list(dest.values())
-
 ## ==================== TESTS :
 
 def test1() :
-	t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-	print("Departure time: {}".format(t0.strftime("%Y-%m-%d %H:%M (%Z)")))
-
-	#
-	#t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
-
-	def ll2xy(latlon) :
-		return (latlon[1], latlon[0])
-
-	routes = [
-		commons.zipjson_load(fn)['route']
-		for fn in commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))
-	]
-
-	stops = {
-		stop['StopUID'] : stop
-		for route in routes
-		for stop in route['Stops']
-	}
-
-	stop_pos = {
-		next_stop : commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')})(stop)
-		for (next_stop, stop) in stops.items()
-	}
-
-
-	bb = BusstopBusser(routes, stop_pos)
-
-	# print(bb.where_can_i_go('KHH308', t))
-	# exit(39)
-
-	# print("Routes passing through {}: {}".format(A, bb.routes_from[A]))
-	# print(bb.routes[('KHH100', 0)]['Stops'])
-	# exit(39)
-
-	bw = BusstopWalker(stop_pos)
-	# print(bw.where_can_i_go('KHH308', t))
-	# bw.where_can_i_go('KHH380', t)
-
-	# Random from-to pair
-	(stop_a, stop_z) = commons.random_subset(stop_pos.keys(), k=2)
-	# Relatively short route, many buses
-	(stop_a, stop_z) = ('KHH4439', 'KHH4370')
-	# # Long search, retakes same busroute
-	# (stop_a, stop_z) = ('KHH3820', 'KHH4484')
-
-	print("Finding a route from {} to {}".format(stop_a, stop_z))
-
-
-	# Initial astar_openset -- start locations
-	astar_initial = { stop_a : transit.Loc(t=t0, x=stop_pos[stop_a], desc=stop_a) }
-	# Target locations
-	astar_targets = { stop_z : transit.Loc(t=None, x=stop_pos[stop_z], desc=stop_z) }
-
-	# Working copy of the open set
-	astar_openset = deepcopy(astar_initial)
-
-	# The graph of visited locations will act as the closed set
-	astar_graph = nx.DiGraph()
-	# Initialize the graph
-	for (desc, P) in astar_openset.items() :
-		astar_graph.add_node(desc, pos=ll2xy(P.x), P=P)
-
-	# A*-algorithm heuristic: cost estimate from C to Z
-	# It is "admissible" if it never over-estimates
-	def h(P: transit.Loc) :
-		return min(
-			dt.timedelta(seconds=(commons.geodesic(P.x, Q.x) / (3 * PARAM['walker_speed'])))
-			for Q in astar_targets.values()
-		)
-
-	# A*-algorithm cost estimator of path via C
-	def f(P: transit.Loc) :
-		return P.t + h(P)
-
 
 	import matplotlib.pyplot as plt
 	plt.ion()
-	(fig, ax) = plt.subplots()
 
+	def plot_callback(result) :
+		if (result['status'] == "zero") :
+			return
 
-	# Next figure update
-	nfu = dt.datetime.now()
+		if (result['status'] == "init") :
+			(fig, ax) = plt.subplots()
+			result['fig'] = fig
+			result['ax'] = ax
+			return
 
-	while astar_openset :
+		if (result['status'] == "opti") :
+			if (result.get('nfu', dt.datetime.min) > dt.datetime.now()) :
+				return
 
-		# A*-algorithm: select candidate node/path to extend
-		c = astar_openset.pop(min(astar_openset.values(), key=f).desc)
+		astar_initial = result['astar_initial']
+		astar_targets = result['astar_targets']
+		astar_openset = result['astar_openset']
+		astar_graph = result['astar_graph']
+		routes = result['routes']
+		stop_pos = result['stop_pos']
 
-		leg_choices = chain.from_iterable(
-			mode.where_can_i_go(c)
-			for mode in [bb, bw]
-		)
-		leg: transit.Leg
-		for leg in leg_choices :
+		ax: plt.Axes
+		ax = result['ax']
 
-			# Bus stop we are coming from
-			prev_stop = leg.P.desc
-			# Next potential bus stop
-			next_stop = leg.Q.desc
+		ax.cla()
 
-			if next_stop in astar_graph.nodes :
-				if (astar_graph.nodes[next_stop]['P'].t <= leg.Q.t) :
-					# No improvement
-					continue
-				else :
-					astar_graph.remove_node(next_stop)
+		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.walk)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='g', arrowsize=5, node_size=0)
+		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.bus)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='b', arrowsize=5, node_size=0)
+		if astar_initial :
+			ax.plot(*zip(*[ll2xy(P.x) for P in astar_initial.values()]), 'go')
+		if astar_targets :
+			ax.plot(*zip(*[ll2xy(P.x) for P in astar_targets.values()]), 'ro')
+		if astar_openset :
+			ax.plot(*zip(*[ll2xy(O.x) for O in astar_openset.values()]), 'kx')
 
-			astar_graph.add_node(next_stop, pos=ll2xy(leg.Q.x), P=leg.Q)
-			astar_graph.add_edge(prev_stop, next_stop, leg=leg)
-
-			astar_openset[next_stop] = leg.Q
-
-			#print("Added new path to:", B)
-
-			if next_stop in astar_targets :
-				#print("Done!")
-				astar_openset.clear()
-
-				def retrace_from_node(a) :
-					while astar_graph.in_edges(a) :
-						(a, b) = (next(iter(astar_graph.predecessors(a))), a)
-						yield astar_graph.edges[a, b]['leg']
-
-				legs = list(reversed(list(retrace_from_node(next_stop))))
-
+		if not astar_openset :
+			try :
 				for leg in legs :
-					(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
-					print("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
+					(y, x) = zip(leg.P.x, leg.Q.x)
+					ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
+			except :
+				pass
 
-				break
+		a = ax.axis()
+		for route in routes.values() :
+			(y, x) = zip(*(stop_pos[stop['StopUID']] for stop in route['Stops']))
+			ax.plot(x, y, 'm-', alpha=0.1)
+		ax.axis(a)
 
-		if (dt.datetime.now() >= nfu) or (not astar_openset) :
-			ax: plt.Axes
-			ax.cla()
+		plt.pause(0.1)
 
-			nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.walk)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='g', arrowsize=5, node_size=0)
-			nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.bus )], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='b', arrowsize=5, node_size=0)
-			if astar_initial :
-				ax.plot(*zip(*[ll2xy(P.x) for P in astar_initial.values()]), 'go')
-			if astar_targets :
-				ax.plot(*zip(*[ll2xy(P.x) for P in astar_targets.values()]), 'ro')
-			if astar_openset :
-				ax.plot(*zip(*[ll2xy(O.x) for O in astar_openset.values()]), 'kx')
+		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
 
-			if not astar_openset :
-				try :
-					for leg in legs :
-						(y, x) = zip(leg.P.x, leg.Q.x)
-						ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
-				except :
-					pass
 
-			a = ax.axis()
-			for route in routes :
-				(y, x) = zip(*(stop_pos[stop['StopUID']] for stop in route['Stops']))
-				ax.plot(x, y, 'm-', alpha=0.1)
-			ax.axis(a)
+	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
 
-			plt.pause(0.1)
+	if True :
+		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+		origin = 'KHH4439'
+		legs = tr.connect(transit.Loc(t=t0, desc=origin), callback=plot_callback)
 
-			nfu = dt.datetime.now() + dt.timedelta(seconds=2)
+	if False :
+		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+		#print("Departure time: {}".format(t0.strftime("%Y-%m-%d %H:%M (%Z)")))
+
+
+		#
+		#t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
+
+
+		#bb = BusstopBusser(routes, stop_pos)
+
+		# print(bb.where_can_i_go('KHH308', t))
+		# exit(39)
+
+		# print("Routes passing through {}: {}".format(A, bb.routes_from[A]))
+		# print(bb.routes[('KHH100', 0)]['Stops'])
+		# exit(39)
+
+		#bw = BusstopWalker(stop_pos)
+		# print(bw.where_can_i_go('KHH308', t))
+		# bw.where_can_i_go('KHH380', t)
+
+		# Random from-to pair
+		(stop_a, stop_z) = commons.random_subset(tr.stop_pos.keys(), k=2)
+		# Relatively short route, many buses
+		(stop_a, stop_z) = ('KHH4439', 'KHH4370')
+		# # Long search, retakes same busroute
+		# (stop_a, stop_z) = ('KHH3820', 'KHH4484')
+
+		print("Finding a route from {} to {} at {}".format(stop_a, stop_z, t0))
+
+		legs = tr.connect(transit.Loc(t=t0, desc=stop_a), transit.Loc(desc=stop_z)) #, callback=plot_callback)
+
+		print(legs[0], legs[-1])
+
+		for leg in legs :
+			(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
+			print("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
+
 
 	print("Done.")
 
