@@ -41,7 +41,13 @@ PARAM = {
 
 	# Edge attribute for shortest path computation
 	'weight' : 'time',
+
+	# Expect to find at least one road within this radius from each waypoint
+	'max_wp_to_graph_dist' : 30, # meters
 }
+
+class MapMatchingError(Exception) :
+	pass
 
 def geodist(a, b) :
 	""" Metric for (lat, lon) coordinates """
@@ -190,10 +196,14 @@ def mapmatch(
 	# A cloud of candidate edges for each waypoint
 	dist_clouds = [dict(kne(wp)) for wp in waypoints]
 
-	# Check if there are edge repeats within clouds
+	# CHECK if there are edge repeats within clouds
 	for dc in dist_clouds :
 		if not commons.all_distinct(dc.keys()) :
 			print("Warning: Repeated edges in cloud:", sorted(dc.keys()))
+
+	# CHECK if nearest edges are implausibly far
+	if (max(min(dc.values()) for dc in dist_clouds) > PARAM['max_wp_to_graph_dist']) :
+		raise MapMatchingError("The graph does not seem to cover the waypoints")
 
 	# Initial likelihood prop to road class and inv-prop to the regularized distance (in meters) to the waypoint
 	def dist2prob(dc) :
@@ -495,9 +505,11 @@ def foo() :
 	# wp2 = (22.621259, 120.295913) # upper
 	# print(waypoints.index(wp1), waypoints.index(wp2)) # 29 30
 	
-	waypoints = [(22.591286, 120.305706), (22.593253, 120.305906), (22.59474, 120.305306), (22.597746, 120.304186), (22.596886, 120.305133)]
+	# waypoints = [(22.591286, 120.305706), (22.593253, 120.305906), (22.59474, 120.305306), (22.597746, 120.304186), (22.596886, 120.305133)]
 
 	# waypoints = [(22.613109, 120.301681), (22.612779, 120.301078), (22.61255, 120.300239), (22.6123, 120.298408), (22.61313, 120.29811), (22.621259, 120.295913), (22.62174, 120.296768), (22.622539, 120.29956)]
+
+	waypoints = [(23.158953, 120.764319), (23.159556, 120.766213), (23.159126, 120.764453), (23.158566, 120.76336), (23.15574, 120.760866), (23.154659, 120.760319), (23.151839, 120.757533), (23.14992, 120.75664), (23.14823, 120.755399), (23.146363, 120.754159), (23.145453, 120.750733), (23.144263, 120.749773), (23.138233, 120.738666), (23.137466, 120.7296), (23.13557, 120.724706), (23.134416, 120.723146), (23.133646, 120.72244), (23.132079, 120.720439), (23.130616, 120.71916), (23.12967, 120.717573), (23.129436, 120.71688), (23.127803, 120.714626), (23.119859, 120.710013), (23.116743, 120.712706), (23.11632, 120.713466), (23.114913, 120.713279), (23.110603, 120.712013), (23.109433, 120.710333), (23.110526, 120.7086), (23.108769, 120.699866), (23.105703, 120.694919), (23.103096, 120.690733), (23.101586, 120.688879), (23.100159, 120.685826), (23.095286, 120.682013), (23.09337, 120.681706), (23.08988, 120.682866), (23.08783, 120.681039), (23.086396, 120.679666), (23.08473, 120.679426), (23.079733, 120.676773), (23.079039, 120.676333), (23.077429, 120.675373), (23.073783, 120.673479), (23.073319, 120.673133), (23.072413, 120.672933), (23.06987, 120.672719), (23.067569, 120.673386), (23.06427, 120.672773), (23.064096, 120.671453), (23.062183, 120.670893), (23.052396, 120.667506), (23.049193, 120.669039), (23.046186, 120.667866), (23.042326, 120.667413), (23.03734, 120.665693), (23.025093, 120.663466), (23.020016, 120.664373), (23.015033, 120.665293), (23.012633, 120.665346), (23.007923, 120.664519), (23.00765, 120.662826), (23.006326, 120.654946), (23.006913, 120.651799), (23.006509, 120.649106), (23.004886, 120.647413), (23.003593, 120.646879), (22.999726, 120.644453), (22.996513, 120.643013), (22.995793, 120.642453), (22.996606, 120.641493), (22.996259, 120.64068), (22.995889, 120.634906), (22.996983, 120.63436), (22.99773, 120.634213)]
 
 	# commons.seed()
 	# mapmatch(waypoints, g, kne, None, stubborn=0.2)
@@ -586,11 +598,14 @@ def foo() :
 	plt.ion()
 
 	commons.seed()
-	result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
 
-	for _ in range(20) :
-		result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
-		print(result['path'])
+	for _ in range(2) :
+		try :
+			result = mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
+			print(result['path'])
+		except MapMatchingError as e :
+			print("Mapmatch failed ({})".format(e))
+
 		plt.pause(5)
 
 	plt.ioff()
