@@ -395,10 +395,10 @@ def mapmatch(
 
 
 # node_pos is a dictionary node id -> (lat, lon)
-def compute_geo_knn(node_pos, leaf_size=20):
+def compute_geo_knn(node_pos, leaf_size=20, Tree=sklearn.neighbors.BallTree):
 	return {
 		'node_ids': list(node_pos.keys()),
-		'knn_tree': sklearn.neighbors.BallTree(list(node_pos.values()), leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
+		'knn_tree': Tree(list(node_pos.values()), leaf_size=leaf_size, metric='pyfunc', func=commons.geodesic)
 	}
 
 
