@@ -3,6 +3,33 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import re
+
+def unformat(template: str, instance: str, replace={}) :
+	from string import Formatter
+	K = [ bit[1] for bit in Formatter().parse(template) ]
+	K = [ k for k in K if k ]
+	template = template.replace(".", "\.")
+	return {
+		**dict(zip(K, re.fullmatch(template.format(**{k: "(.*)" for k in K}), instance).groups())),
+		**replace
+	}
+
+def reformat(template: str, instance: str, replace={}) :
+	return template.format(**unformat(template, instance, replace))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+def token_for(service: str) :
+	service = service.lower()
+
+	if ("mapbox" in service) :
+		return open(".credentials/UV/mapbox-token.txt", 'r').readline().strip()
+
+	raise ValueError("No token for service '{}'".format(service))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 def is_truthy(x) :
 	return bool(x)
 
