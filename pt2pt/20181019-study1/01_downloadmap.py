@@ -3,6 +3,8 @@
 
 ## ================== IMPORTS :
 
+from helpers import commons
+
 import os
 import inspect
 import datetime
@@ -42,8 +44,7 @@ OFILE = {
 	'OSM-meta' : "OUTPUT/01/{region}_meta.txt",
 }
 
-# Create output directories
-for f in OFILE.values() : os.makedirs(os.path.dirname(f), exist_ok=True)
+commons.makedirs(OFILE)
 
 
 ## ====================== AUX :
