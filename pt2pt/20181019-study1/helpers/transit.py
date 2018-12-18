@@ -30,7 +30,7 @@ from progressbar import progressbar
 ## ==================== PARAM :
 
 PARAM = {
-	'walker_neighborhood_radius' : 250, # meters
+	'walker_neighborhood_radius' : 500, # meters
 	'walker_speed' : 1, # m/s
 	'walker_delay' : 5, # seconds
 }
