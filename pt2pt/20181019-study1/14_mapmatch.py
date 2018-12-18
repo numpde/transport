@@ -12,7 +12,6 @@ import time
 import json
 import networkx as nx
 import math
-import random
 import pickle
 import inspect
 import traceback
@@ -40,9 +39,7 @@ IFILE = {
 ## =================== OUTPUT :
 
 OFILE = {
-	'progress_img': "OUTPUT/14/progress/UV/current_route.png",
-	'progress_txt': "OUTPUT/14/progress/UV/current_route.txt",
-	'progress_gpx': "OUTPUT/14/progress/UV/current_route.gpx",
+	'progress': "OUTPUT/14/progress/UV/current_route.{ext}",
 
 	'mapmatched': "OUTPUT/14/mapmatched/{scenario}/{routeid}-{direction}/UV/{mapmatch_uuid}.{ext}",
 }
@@ -53,7 +50,7 @@ commons.makedirs(OFILE)
 ## ==================== PARAM :
 
 PARAM = {
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+	'mapbox_api_token' : commons.token_for('mapbox'),
 
 	# Only retain routes contained in this area (left, bottom, right, top)
 	# Will be filled based on the graph if 'None'
@@ -116,10 +113,6 @@ def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
 			a = b
 			yield a
 
-def compute_graph_bbox() :
-	g: nx.DiGraph = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g']
-	return maps.bbox_for_points([(lat, lon) for (_, (lat, lon)) in g.nodes.data('pos')])
-
 def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
@@ -133,8 +126,8 @@ def mapmatch_runs(scenario, runs) :
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g: nx.DiGraph
 	knn : sklearn.neighbors.NearestNeighbors
-	(g, knn) = commons.inspect({'main_component_with_knn': ('g', 'knn')})(
-		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))
+	(g, knn) = commons.inspect(['g', 'knn'])(
+		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
 
 	# Nearest edges
@@ -170,15 +163,15 @@ def mapmatch_runs(scenario, runs) :
 			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
 
 		# Display/save figure here
-		commons.makedirs(OFILE['progress_img'])
-		with open(OFILE['progress_img'], 'wb') as fd :
+
+		with open(OFILE['progress'].format(ext="png"), 'wb') as fd :
 			fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 
 		# Next figure update
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
 
 		# Log into a GPX file
-		with open(OFILE['progress_gpx'], 'w') as fd :
+		with open(OFILE['progress'].format(ext="gpx"), 'w') as fd :
 			fd.write(graph.simple_gpx(result['waypoints'], [result.get('geo_path', [])]).to_xml())
 
 		# Note: need to close figure
@@ -255,7 +248,12 @@ def mapmatch_all() :
 
 	commons.seed()
 
-	PARAM['graph_bbox'] = compute_graph_bbox()
+	PARAM['graph_bbox'] = maps.bbox_for_points(
+		nx.get_node_attributes(
+			pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g'],
+			'pos'
+		).values()
+	)
 
 	route_files = commons.ls(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"))
 	print("Found {} route files.".format(len(route_files)))
