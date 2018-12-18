@@ -278,9 +278,9 @@ def make_transit_img(J) -> io.BytesIO :
 	# Location --> Transit time in minutes
 	gohere = { tuple(r['x']) : (float(r['s']) / 60) for r in J['gohere'] }
 
-	# Cut-off (and normalize)
+	# # Cut-off (and normalize)
 	T = 60 # Minutes
-	gohere = { p : s for (p, s) in gohere.items() if (s <= T) }
+	# gohere = { p : s for (p, s) in gohere.items() if (s <= T) }
 
 	#boxes = dict(boxify(gohere, maxinbox=10))
 
@@ -320,7 +320,7 @@ def make_transit_img(J) -> io.BytesIO :
 	cmap = ListedColormap(np.vstack([cmap(np.arange(cmap.N))[:, 0:3].T, np.linspace(0, 0.5, cmap.N)]).T)
 
 	(x, y) = zip(*contour_pts)
-	levels = list(range(0, round(max(contour_pts.values())), 5))
+	levels = list(range(0, T, 5))
 	c = ax.tricontourf(x, y, list(contour_pts.values()), levels=levels, zorder=100, cmap=cmap, extent=maps.mb2ax(*bbox), extend='max')
 
 
