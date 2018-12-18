@@ -4,14 +4,20 @@
 
 ## ================== IMPORTS :
 
-from helpers import commons, transit, maps
-
 import datetime as dt
 import inspect
 import pytz
+import json
+import uuid
 
 import networkx as nx
 
+from helpers import commons, transit, maps, graph
+
+import io
+
+from itertools import product
+from math import inf
 
 ## ==================== NOTES :
 
@@ -49,12 +55,21 @@ for (k, s) in IFILE.items() : IFILE[k] = s.format(**PARAM)
 ## =================== OUTPUT :
 
 OFILE = {
-	'' : "",
+	'transit_map' : "OUTPUT/20/transit_map/v1/{uuid}.{ext}",
 }
+
+commons.makedirs(OFILE)
 
 
 ## ================== PARAM 2 :
 
+PARAM.update({
+	'mapbox' : {
+		'token' : commons.token_for('mapbox'),
+		'cachedir' : "helpers/maps_cache/UV/",
+	},
+
+})
 
 ## ====================== AUX :
 
@@ -64,6 +79,33 @@ def ll2xy(latlon) :
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
+# points is a dictionary (lat, lon) --> data
+# returns a pairs (bbox, point dict)
+def boxify(points: dict, maxinbox=5) :
+
+	if not points : return
+
+	get_lat = (lambda p: p[0])
+	get_lon = (lambda p: p[1])
+
+	(lat, lon) = zip(*points.keys())
+
+	bbox = (min(lon), min(lat), max(lon), max(lat))
+
+	if (len(points) <= maxinbox) :
+		yield (bbox, points)
+		return
+
+	if ((max(lat) - min(lat)) >= (max(lon) - min(lon))) :
+		# partition along lat
+		first = (lambda p: get_lat(p) < ((max(lat) + min(lat)) / 2))
+	else :
+		# partition along lon
+		first = (lambda p: get_lon(p) < ((max(lon) + min(lon)) / 2))
+
+	yield from boxify({ p: d for (p, d) in points.items() if first(p) }, maxinbox)
+	yield from boxify({ p: d for (p, d) in points.items() if not first(p) }, maxinbox)
+
 
 ## ==================== TESTS :
 
@@ -71,6 +113,14 @@ def test1() :
 
 	import matplotlib.pyplot as plt
 	plt.ion()
+
+	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
+
+	if True :
+		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+		origin = 'KHH4439'
+		legs = tr.connect(transit.Loc(t=t0, desc=origin), callback=plot_callback)
+
 
 	def plot_callback(result) :
 		if (result['status'] == "zero") :
@@ -100,6 +150,7 @@ def test1() :
 
 		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.walk)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='g', arrowsize=5, node_size=0)
 		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.bus)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='b', arrowsize=5, node_size=0)
+
 		if astar_initial :
 			ax.plot(*zip(*[ll2xy(P.x) for P in astar_initial.values()]), 'go')
 		if astar_targets :
@@ -125,13 +176,6 @@ def test1() :
 
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
 
-
-	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
-
-	if True :
-		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-		origin = 'KHH4439'
-		legs = tr.connect(transit.Loc(t=t0, desc=origin), callback=plot_callback)
 
 	if False :
 		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
@@ -180,11 +224,150 @@ def test1() :
 
 
 
-## ===================== WORK :
+## =================== SLAVES :
+
+def map_transit_from(t: dt.datetime, x) :
+
+	def tr_callback(result) :
+		if (result['status'] in {"zero", "init"}) :
+			return
+
+		# Next callback update
+		if (result['status'] == "opti") :
+			if (result.get('ncu', dt.datetime.min) > dt.datetime.now()) :
+				return
+
+		g: nx.DiGraph
+		g = result['astar_graph']
+		J = {
+			'origin' : {
+				'x' : x,
+				't' : t.isoformat(),
+			},
+			'gohere' : [
+				{
+					'x' : g.nodes[n]['P'].x,
+					's' : (g.nodes[n]['P'].t - t.astimezone(dt.timezone.utc).replace(tzinfo=None)).total_seconds(),
+				}
+				for n in g.nodes
+			],
+		}
+
+		with open(OFILE['transit_map'].format(uuid=result.setdefault('file_uuid', uuid.uuid4().hex), ext="json"), 'w') as fd :
+			json.dump(J, fd)
+
+		print("Location mapped: {} ({})".format(g.number_of_nodes(), dt.datetime.now().strftime("%H:%M:%S")))
+
+		result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=3)
+
+	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
+	tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
+
+
+def make_transit_img(J) -> io.BytesIO :
+	import matplotlib as mpl
+	mpl.use('Agg')
+
+	import matplotlib.pyplot as plt
+
+	(fig, ax) = plt.subplots()
+	ax: plt.Axes
+
+	origin = { 'x': tuple(J['origin']['x']), 't' : J['origin']['t'], 'desc' : J['origin'].get('desc') }
+
+	# Location --> Transit time in minutes
+	gohere = { tuple(r['x']) : (float(r['s']) / 60) for r in J['gohere'] }
+
+	# Cut-off (and normalize)
+	T = 60 # Minutes
+	gohere = { p : s for (p, s) in gohere.items() if (s <= T) }
+
+	#boxes = dict(boxify(gohere, maxinbox=10))
+
+	# "Inner" Kaohsiung
+	bbox = (120.2593, 22.5828, 120.3935, 22.6886)
+
+	# Set plot view to the bbox
+	ax.axis(maps.mb2ax(*bbox))
+	ax.autoscale(enable=False)
+
+	ax.tick_params(axis='both', which='both', labelsize='xx-small')
+
+	try :
+		background_map = maps.get_map_by_bbox(bbox, style=maps.MapBoxStyle.light, **PARAM['mapbox'])
+		ax.imshow(background_map, interpolation='quadric', extent=maps.mb2ax(*bbox), zorder=-100)
+	except :
+		pass
+
+	ax.plot(*ll2xy(origin['x']), 'gx')
+
+	contour_pts = dict(zip(map(ll2xy, gohere.keys()), gohere.values()))
+
+	# Datapoints
+	ax.scatter(*zip(*contour_pts), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
+
+	# # Hack! for corners
+	# for (x, y) in product(ax.axis()[:2], ax.axis()[2:]) :
+	# 	contour_pts[(x, y)] = max(gohere.values())
+
+
+	cmap = plt.get_cmap('Purples')
+	cmap.set_over('k')
+
+	# https://stackoverflow.com/questions/37327308/add-alpha-to-an-existing-matplotlib-colormap
+	from matplotlib.colors import ListedColormap
+	import numpy as np
+	cmap = ListedColormap(np.vstack([cmap(np.arange(cmap.N))[:, 0:3].T, np.linspace(0, 0.5, cmap.N)]).T)
+
+	(x, y) = zip(*contour_pts)
+	levels = list(range(0, round(max(contour_pts.values())), 5))
+	c = ax.tricontourf(x, y, list(contour_pts.values()), levels=levels, zorder=100, cmap=cmap, extent=maps.mb2ax(*bbox), extend='max')
+
+
+	cbar = fig.colorbar(c)
+	cbar.ax.tick_params(labelsize='xx-small')
+
+	# import matplotlib.patches as patches
+	# for (bb, gohere_part) in boxes.items() :
+	# 	#ax.add_patch(patches.Rectangle(bb[0:2], bb[2]-bb[0], bb[3]-bb[1], linewidth=0.5, edgecolor='k', facecolor='none'))
+	# 	for (latlon, s) in list(gohere_part.items()) :
+	# 		ax.plot(*ll2xy(latlon), 'o', c=plt.get_cmap('Purples')(s), markersize=3)
+
+
+	buffer = io.BytesIO()
+	fig.savefig(buffer, bbox_inches='tight', pad_inches=0, dpi=300)
+
+	buffer.seek(0)
+
+	return buffer
+
+
+## =================== MASTER :
+
+def map_transit() :
+	t = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+	# Unknown location
+	x = (22.63322, 120.33468)
+	# HonDo
+	x = (22.63121, 120.32742)
+	map_transit_from(t=t, x=x)
+
+def img_transit() :
+
+	for fn in commons.ls(OFILE['transit_map'].format(uuid="*", ext="json")) :
+		with open(commons.reformat(OFILE['transit_map'], fn, {'ext': "png"}), 'wb') as fd :
+			fd.write(make_transit_img(commons.zipjson_load(fn)).read())
+
+
+## ================== OPTIONS :
+
+OPTIONS = {
+	'MAP' : map_transit,
+	'IMG' : img_transit,
+}
 
 
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-	test1()
-
+	commons.parse_options(OPTIONS)
