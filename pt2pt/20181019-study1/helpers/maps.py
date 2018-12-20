@@ -85,18 +85,14 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 	(lat, lon) = ((top + bottom) / 2, (left + right) / 2)
 
 	# Reduce precision of (lat, lon) to increase cache hits
-	def snap_to_grid(a, b) :
-		scale = 2 ** floor(log2(max(a, b) - min(a, b)) - 2)
-		return (lambda x : round(x / scale) * scale)
-	#
-	lat = snap_to_grid(bottom, top)(lat)
-	lon = snap_to_grid(left, right)(lon)
+	snap_to_dyadic = (lambda a, b : (lambda x, scale=(2 ** floor(log2(abs(b - a) / 4))) : (round(x / scale) * scale)))
+	lat = snap_to_dyadic(bottom, top)(lat)
+	lon = snap_to_dyadic(left, right)(lon)
 
 	# Rendered image map size in pixels as it should come from MapBox (no retina)
 	(w, h) = (1024, 1024)
 
 	# Look for appropriate zoom level to cover the region of interest by that map
-	zoom = None
 	for zoom in range(16, 0, -1) :
 		# Center point in pixel coordinates at this zoom level
 		(x0, y0) = g2p(lat, lon, zoom)
@@ -105,8 +101,6 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 		# Would the map cover the region of interest?
 		if (LEFT <= left < right <= RIGHT) and (BOTTOM <= bottom < top <= TOP) :
 			break
-
-	assert(zoom is not None)
 
 	# Choose "retina" quality of the map
 	retina = { True : "@2x", False : "" }[True]
