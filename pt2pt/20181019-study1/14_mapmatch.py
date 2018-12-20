@@ -143,6 +143,7 @@ def mapmatch_runs(scenario, runs) :
 		if not ('plt' in result) :
 			(fig, ax) = plt.subplots()
 			result['plt'] = { 'fig' : fig, 'ax' : ax }
+			result['auto_close_fig'] = commons.UponDel(lambda : plt.close(fig))
 
 		if (result['status'] == "opti") :
 			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
@@ -174,8 +175,6 @@ def mapmatch_runs(scenario, runs) :
 		with open(OFILE['progress'].format(ext="gpx"), 'w') as fd :
 			fd.write(graph.simple_gpx(result['waypoints'], [result.get('geo_path', [])]).to_xml())
 
-		# Note: need to close figure
-
 
 	for run in runs :
 
@@ -200,11 +199,8 @@ def mapmatch_runs(scenario, runs) :
 		try :
 			commons.seed()
 			result = graph.mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
-		except Exception as e :
-			print("Warning: Mapmatch failed on run {} ({})".format(run[KEYS.runid], e))
-			print(traceback.format_exc())
-			time.sleep(2)
-			continue
+		except :
+			raise
 
 		# Copy relevant fields from the mapmatcher result
 		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] :
@@ -219,7 +215,6 @@ def mapmatch_runs(scenario, runs) :
 			fig = result['plt']['fig']
 			with open(fn.format(ext="png"), 'wb') as fd :
 				fig.savefig(fd, bbox_inches='tight', pad_inches=0)
-			plt.close(fig)
 		except Exception as e :
 			print("Warning: Could not save figure {} ({})".format(fn.format(ext="png"), e))
 
@@ -273,39 +268,41 @@ def mapmatch_all() :
 		# Check that the file indeed contains only one type of route
 		assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
 
+		# Remove runs that have a negative quality flag
+		runs = [run for run in runs if not (run.get('quality') == "-")]
+		print("Number of runs: {} ({})".format(len(runs), "not marked as bad quality"))
+
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
 		print("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
 
-		# Q: clustering here?
+		if (len(runs) > PARAM['max_runs_to_mapmatch']) :
+			print("Out of {} available runs, will mapmatch only random {}.".format(len(runs), PARAM['max_runs_to_mapmatch']))
+			runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
 
-		if not runs :
-			print("File does not contain usable runs.")
+		if (len(runs) < PARAM['min_runs_to_mapmatch']) :
+			print("Skipping mapmatch: too few runs.")
 			continue
+
+		# Q: clustering here?
 
 		# Existing mapmatched runs for this route
 		def get_mapmatched_files() :
 			return commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
 
+		if get_mapmatched_files() :
+			print("Skipping mapmatch: mapmatched files found.")
+			continue
+
 		try :
-
-			if get_mapmatched_files() :
-				print("Skipping mapmatch: mapmatched files found.")
-				continue
-
-			if (len(runs) > PARAM['max_runs_to_mapmatch']) :
-				print("Out of {} available runs, will mapmatch only random {}.".format(len(runs), PARAM['max_runs_to_mapmatch']))
-				runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
-
-			if (len(runs) < PARAM['min_runs_to_mapmatch']) :
-				print("Skipping mapmatch: too few runs.")
-				continue
 
 			mapmatch_runs(scenario, runs)
 
-		except Exception as e:
+		except Exception as e :
+
 			print("Mapmatch failed ({}).".format(e))
 			print(traceback.format_exc())
+			print("Continuing...")
 
 
 ## ==================== ENTRY :
