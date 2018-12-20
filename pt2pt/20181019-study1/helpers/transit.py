@@ -263,7 +263,7 @@ class Transit :
 			astar_graph.add_node(desc, pos=ll2xy(P.x), P=P)
 
 
-		# A*-algorithm heuristic: cost estimate from C to Z
+		# A*-algorithm heuristic: cost estimate from P to Targets
 		# It is "admissible" if it never over-estimates
 		def h(P: Loc) :
 			if astar_targets :
@@ -274,7 +274,7 @@ class Transit :
 			else :
 				return dt.timedelta(seconds=0)
 
-		# A*-algorithm cost estimator of path via C
+		# A*-algorithm cost estimator of path via P
 		def f(P: Loc) :
 			return P.t + h(P)
 
@@ -327,14 +327,15 @@ class Transit :
 
 				#print("Added new path to:", B)
 
+				# Reached targets: retrace the path
 				if next_stop in astar_targets :
 					#print("Done!")
 					astar_openset.clear()
 
 					def retrace_from_node(a) :
-						while astar_graph.in_edges(a) :
-							(a, b) = (next(iter(astar_graph.predecessors(a))), a)
-							yield astar_graph.edges[a, b]['leg']
+						while astar_graph.pred[a] :
+							(a, edge_data) = next(iter(astar_graph.pred[a].items()))
+							yield edge_data.get('leg')
 
 					legs = [
 						list(group)
