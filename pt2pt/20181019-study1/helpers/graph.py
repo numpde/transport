@@ -152,7 +152,7 @@ def mapmatch(
 
 	# Check connectivity of the graph
 	if (g.number_of_nodes() > max(map(len, nx.strongly_connected_components(g)))) :
-		raise RuntimeError("The graph appears not to be strongly connected.")
+		raise MapMatchingError("The graph appears not to be strongly connected")
 
 	# Dictionary to pass to the callback function (updated below)
 	result = { 'waypoints' : waypoints, 'mapmatcher_version' : 11111128 }
@@ -193,17 +193,20 @@ def mapmatch(
 	# Function to express edges in terms of the basenodes
 	to_basenodes = (lambda edges : [tuple(g.nodes[n]['basenode'] for n in e) for e in edges])
 
+	# CHECK if nearest edges are implausibly far
+	def check_dist(distdict: dict) :
+		if (min(distdict.values()) > PARAM['max_wp_to_graph_dist']) :
+			raise MapMatchingError("The graph does not seem to cover the waypoints")
+		else :
+			return distdict
+
 	# A cloud of candidate edges for each waypoint
-	dist_clouds = [dict(kne(wp)) for wp in waypoints]
+	dist_clouds = [check_dist(dict(kne(wp))) for wp in waypoints]
 
 	# CHECK if there are edge repeats within clouds
 	for dc in dist_clouds :
 		if not commons.all_distinct(dc.keys()) :
 			print("Warning: Repeated edges in cloud:", sorted(dc.keys()))
-
-	# CHECK if nearest edges are implausibly far
-	if (max(min(dc.values()) for dc in dist_clouds) > PARAM['max_wp_to_graph_dist']) :
-		raise MapMatchingError("The graph does not seem to cover the waypoints")
 
 	# Initial likelihood prop to road class and inv-prop to the regularized distance (in meters) to the waypoint
 	def dist2prob(dc) :
@@ -448,7 +451,7 @@ def estimate_kne(g, knn, q, ke=10) :
 		ee = filter_nearest_edges(g, q, ee, ke)
 		return ee
 
-	raise RuntimeError("Could not find enough nearest edges.")
+	raise RuntimeError("Could not find enough nearest edges")
 
 
 def foo() :
