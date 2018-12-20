@@ -10,6 +10,7 @@ import pytz
 import json
 import uuid
 
+import numpy as np
 import networkx as nx
 
 from helpers import commons, transit, maps, graph
@@ -98,12 +99,12 @@ def boxify(points: dict, maxinbox=5) :
 
 	if ((max(lat) - min(lat)) >= (max(lon) - min(lon))) :
 		# partition along lat
-		first = (lambda p: get_lat(p) < ((max(lat) + min(lat)) / 2))
+		first = (lambda p, m=((max(lat) + min(lat)) / 2) : (get_lat(p) < m))
 	else :
 		# partition along lon
-		first = (lambda p: get_lon(p) < ((max(lon) + min(lon)) / 2))
+		first = (lambda p, m=((max(lon) + min(lon)) / 2) : (get_lon(p) < m))
 
-	yield from boxify({ p: d for (p, d) in points.items() if first(p) }, maxinbox)
+	yield from boxify({ p: d for (p, d) in points.items() if     first(p) }, maxinbox)
 	yield from boxify({ p: d for (p, d) in points.items() if not first(p) }, maxinbox)
 
 
@@ -206,18 +207,18 @@ def test1() :
 		# # Long search, retakes same busroute
 		# (stop_a, stop_z) = ('KHH3820', 'KHH4484')
 
-		print("Finding a route from {} to {} at {}".format(stop_a, stop_z, t0))
+		commons.logger.info("Finding a route from {} to {} at {}".format(stop_a, stop_z, t0))
 
 		legs = tr.connect(transit.Loc(t=t0, desc=stop_a), transit.Loc(desc=stop_z)) #, callback=plot_callback)
 
-		print(legs[0], legs[-1])
+		commons.logger.debug("First/last legs: {}/{}".format(legs[0], legs[-1]))
 
 		for leg in legs :
 			(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
-			print("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
+			commons.logger.info("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
 
 
-	print("Done.")
+	commons.logger.info("Done.")
 
 	plt.ioff()
 	plt.show()
@@ -236,6 +237,8 @@ def map_transit_from(t: dt.datetime, x) :
 		if (result['status'] == "opti") :
 			if (result.get('ncu', dt.datetime.min) > dt.datetime.now()) :
 				return
+			else :
+				result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
 
 		g: nx.DiGraph
 		g = result['astar_graph']
@@ -248,19 +251,23 @@ def map_transit_from(t: dt.datetime, x) :
 				{
 					'x' : g.nodes[n]['P'].x,
 					's' : (g.nodes[n]['P'].t - t.astimezone(dt.timezone.utc).replace(tzinfo=None)).total_seconds(),
+					'o' : (g.nodes[next(iter(g.pred[n]))]['P'].x if g.pred[n] else None),
 				}
-				for n in g.nodes
+				for n in list(g.nodes)
 			],
 		}
 
-		with open(OFILE['transit_map'].format(uuid=result.setdefault('file_uuid', uuid.uuid4().hex), ext="json"), 'w') as fd :
+		# Preserve the UUID and the filename between callbacks
+		fn = OFILE['transit_map'].format(uuid=result.setdefault('file_uuid', uuid.uuid4().hex), ext="json")
+
+		with open(fn, 'w') as fd :
 			json.dump(J, fd)
 
-		print("Location mapped: {} ({})".format(g.number_of_nodes(), dt.datetime.now().strftime("%H:%M:%S")))
+		commons.logger.info("Locations mapped: {} ({})".format(g.number_of_nodes(), dt.datetime.now().strftime("%H:%M:%S")))
 
-		result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=3)
-
+	# Initialize A*
 	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
+	# Run A* without destination
 	tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
 
 
@@ -282,6 +289,9 @@ def make_transit_img(J) -> io.BytesIO :
 	T = 60 # Minutes
 	# gohere = { p : s for (p, s) in gohere.items() if (s <= T) }
 
+	# Reindex datapoints by (x, y) pairs
+	contour_pts = dict(zip(map(ll2xy, gohere.keys()), gohere.values()))
+
 	#boxes = dict(boxify(gohere, maxinbox=10))
 
 	# "Inner" Kaohsiung
@@ -296,14 +306,12 @@ def make_transit_img(J) -> io.BytesIO :
 	try :
 		background_map = maps.get_map_by_bbox(bbox, style=maps.MapBoxStyle.light, **PARAM['mapbox'])
 		ax.imshow(background_map, interpolation='quadric', extent=maps.mb2ax(*bbox), zorder=-100)
-	except :
-		pass
+	except Exception as e :
+		commons.logger.warning("No background map ({})".format(e))
 
 	ax.plot(*ll2xy(origin['x']), 'gx')
 
-	contour_pts = dict(zip(map(ll2xy, gohere.keys()), gohere.values()))
-
-	# Datapoints
+	# Show all datapoints
 	ax.scatter(*zip(*contour_pts), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
 
 	# # Hack! for corners
@@ -316,7 +324,6 @@ def make_transit_img(J) -> io.BytesIO :
 
 	# https://stackoverflow.com/questions/37327308/add-alpha-to-an-existing-matplotlib-colormap
 	from matplotlib.colors import ListedColormap
-	import numpy as np
 	cmap = ListedColormap(np.vstack([cmap(np.arange(cmap.N))[:, 0:3].T, np.linspace(0, 0.5, cmap.N)]).T)
 
 	(x, y) = zip(*contour_pts)
@@ -351,6 +358,7 @@ def map_transit() :
 	# HonDo
 	x = (22.63121, 120.32742)
 	map_transit_from(t=t, x=x)
+
 
 def img_transit() :
 
