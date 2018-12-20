@@ -3,20 +3,79 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# https://docs.python-guide.org/writing/logging/
+# https://docs.python.org/3/library/logging.html
+# https://stackoverflow.com/questions/3220284/how-to-customize-the-time-format-for-python-logging
+
+#LoggingLevels = dict(CRITICAL=50, ERROR=40, WARNING=30, INFO=20, DEBUG=10, NOTSET=0)
+
+import sys
+import logging
+
+def initialize_logger() :
+	from logging.config import dictConfig
+
+	logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
+	dictConfig(dict(
+		version = 1,
+		formatters = {
+			'f': {
+				'format': "%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
+				'datefmt': "%Y-%m-%d %H:%M",
+			},
+		},
+		handlers = {
+			'h': {
+				'class': "logging.StreamHandler",
+				'formatter': "f",
+				'level': logging.DEBUG,
+				'stream': "ext://sys.stdout",
+			},
+		},
+		root = {
+			'handlers': ['h'],
+			'level': logging.DEBUG,
+		}
+	))
+
+	logger = logging.getLogger()
+
+	return logger
+
+logger = initialize_logger()
+
+def test_logger() :
+	print("Testing logger: Before")
+	for f in [logger.debug, logger.info, logger.warning, logger.error, logger.critical] :
+		f("OK")
+	print("Testing logger: After")
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class UponDel :
+	def __init__(self, action) :
+		self.action = action
+	def __del__(self) :
+		self.action()
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import re
 
-def unformat(template: str, instance: str, replace={}) :
+# Reverse a str.format operation, for example:
+# from template="abc {x} def {y}" and instance="abc X def Y"
+# make a dictionary {'x': X, 'y': Y}
+def unformat(template: str, instance: str) :
 	from string import Formatter
 	K = [ bit[1] for bit in Formatter().parse(template) ]
 	K = [ k for k in K if k ]
 	template = template.replace(".", "\.")
-	return {
-		**dict(zip(K, re.fullmatch(template.format(**{k: "(.*)" for k in K}), instance).groups())),
-		**replace
-	}
+	return dict(zip(K, re.fullmatch(template.format(**{k: "(.*)" for k in K}), instance).groups()))
 
+# Undo a str.format operation, then redo it using the dict 'replace'
 def reformat(template: str, instance: str, replace={}) :
-	return template.format(**unformat(template, instance, replace))
+	return template.format(**{**unformat(template, instance), **replace})
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -103,11 +162,6 @@ def remove_repeats(xx, key=None):
 	# https://stackoverflow.com/a/5738933
 	return [next(iter(g)) for (k, g) in groupby(xx, key)]
 
-	# Alternative:
-	# xx = list(xx)
-	# key = key or (lambda x : x)
-	# return [x for (x, y) in zip(xx, xx[1:]) if (key(x) != key(y))] + xx[-1:]
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import random
@@ -130,7 +184,7 @@ class wget :
 	THROTTLE_MAX_CALLS = 1000 # Max number of wget requests per session
 	THROTTLE_INBETWEEN = 1 # Throttle time in seconds
 
-	def __init__(self, url, cachedir=None) :
+	def __init__(self, url: str, cachedir=None) :
 
 		assert(url), "Illegal URL parameter"
 
@@ -139,6 +193,8 @@ class wget :
 
 		if cachedir :
 			os.makedirs(cachedir, exist_ok=True)
+
+			# Compress cache filename
 			# https://stackoverflow.com/a/295150
 			filename = cachedir + "/" + hashlib.sha256(url.encode('utf-8')).hexdigest()
 		else :
@@ -146,6 +202,7 @@ class wget :
 
 		if filename :
 			if os.path.isfile(filename) :
+				# Cached result found
 				with open(filename, 'rb') as f :
 					self.bytes = f.read()
 				return
@@ -166,8 +223,7 @@ class wget :
 					with open(filename, 'wb') as f :
 						f.write(self.bytes)
 				except IOError as e :
-					print(e)
-					pass
+					print("Warning: error writing cache in wget ({})".format(e))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
