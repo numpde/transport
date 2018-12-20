@@ -227,7 +227,8 @@ def is_normal_status(values, normal_values=[0, '0']) :
 	else :
 		return (values in normal_values)
 
-def diameter(pp) :
+# Diameter estimate for a set of points
+def diameter(pp: set) :
 	(left, bottom, right, top) = maps.bbox_for_points(pp)
 	return max(commons.geodesic((bottom, left), (top, right)), commons.geodesic((top, left), (bottom, right)))
 
