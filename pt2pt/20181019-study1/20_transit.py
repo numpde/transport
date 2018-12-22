@@ -13,12 +13,9 @@ import uuid
 import numpy as np
 import networkx as nx
 
-from helpers import commons, transit, maps, graph
-
 import io
 
-from itertools import product
-from math import inf
+from helpers import commons, transit, maps, graph
 
 ## ==================== NOTES :
 
@@ -249,9 +246,9 @@ def map_transit_from(t: dt.datetime, x) :
 			},
 			'gohere' : [
 				{
-					'x' : g.nodes[n]['P'].x,
-					's' : (g.nodes[n]['P'].t - t.astimezone(dt.timezone.utc).replace(tzinfo=None)).total_seconds(),
-					'o' : (g.nodes[next(iter(g.pred[n]))]['P'].x if g.pred[n] else None),
+					'x' : g.nodes[n]['loc'].x,
+					's' : (g.nodes[n]['loc'].t - t.astimezone(dt.timezone.utc).replace(tzinfo=None)).total_seconds(),
+					'o' : (g.nodes[next(iter(g.pred[n]))]['loc'].x if g.pred[n] else None),
 				}
 				for n in list(g.nodes)
 			],
@@ -263,27 +260,46 @@ def map_transit_from(t: dt.datetime, x) :
 		with open(fn, 'w') as fd :
 			json.dump(J, fd)
 
-		commons.logger.info("Locations mapped: {} ({})".format(g.number_of_nodes(), dt.datetime.now().strftime("%H:%M:%S")))
+		commons.logger.info("Number of locations mapped is {}".format(g.number_of_nodes()))
 
-	# Initialize A*
-	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
-	# Run A* without destination
+	def keep_ttfile(fn) :
+		J = commons.zipjson_load(fn)
+
+		# "Inner" Kaohsiung
+		bbox = (120.2593, 22.5828, 120.3935, 22.6886)
+		(left, bottom, right, top) = bbox
+
+		(lat, lon) = map(np.asarray, zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), J['route']['Stops'])))
+		return all(map(all, [bottom <= lat, lat <= top, left <= lon, lon <= right]))
+
+	# A* INITIALIZE
+	commons.logger.info("Initializing transit...")
+	tr = transit.Transit(filter(keep_ttfile, commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))))
+
+	# A* COMPUTE
+	commons.logger.info("Computing transit from {} at {}...".format(x, t))
 	tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
 
 
-def make_transit_img(J) -> io.BytesIO :
+def make_transit_img(J) -> bytes :
 	import matplotlib as mpl
 	mpl.use('Agg')
 
 	import matplotlib.pyplot as plt
 
-	(fig, ax) = plt.subplots()
 	ax: plt.Axes
+	(fig, ax) = plt.subplots()
 
-	origin = { 'x': tuple(J['origin']['x']), 't' : J['origin']['t'], 'desc' : J['origin'].get('desc') }
+	origin = {
+		'x': J['origin']['x'],
+		't' : J['origin']['t'],
+		'desc' : J['origin'].get('desc'),
+	}
 
-	# Location --> Transit time in minutes
-	gohere = { tuple(r['x']) : (float(r['s']) / 60) for r in J['gohere'] }
+	# Location --> Transit time in minutes ; keep track of duplicates
+	gohere = commons.index_dicts_by_key(J['gohere'], key_func=(lambda __ : tuple(__['x'])), collapse_repetitive=False)
+	# Keep only the minimal reach time, convert to minutes
+	gohere = { x : (min(attr['s']) / 60) for (x, attr) in gohere.items() }
 
 	# # Cut-off (and normalize)
 	T = 60 # Minutes
@@ -340,13 +356,12 @@ def make_transit_img(J) -> io.BytesIO :
 	# 	for (latlon, s) in list(gohere_part.items()) :
 	# 		ax.plot(*ll2xy(latlon), 'o', c=plt.get_cmap('Purples')(s), markersize=3)
 
-
 	buffer = io.BytesIO()
 	fig.savefig(buffer, bbox_inches='tight', pad_inches=0, dpi=300)
 
 	buffer.seek(0)
 
-	return buffer
+	return buffer.read()
 
 
 ## =================== MASTER :
@@ -364,14 +379,85 @@ def img_transit() :
 
 	for fn in commons.ls(OFILE['transit_map'].format(uuid="*", ext="json")) :
 		with open(commons.reformat(OFILE['transit_map'], fn, {'ext': "png"}), 'wb') as fd :
-			fd.write(make_transit_img(commons.zipjson_load(fn)).read())
+			J = commons.zipjson_load(fn)
+			fd.write(make_transit_img(J))
 
 
-## ================== OPTIONS :
+## ==================== DEBUG :
+
+def debug_compare_two() :
+	uuids = ["16b767f12ac841fea47ad9b735df1504", "69e47ef6a81a4a3aae0529b8b974896b"]
+	(J1, J2) = (commons.zipjson_load(OFILE['transit_map'].format(uuid=uuid, ext="json")) for uuid in uuids)
+
+	o = tuple(J1['origin']['x'])
+	assert (J1['origin'] == J2['origin'])
+
+	(H1, H2) = ({}, {})
+	(O1, O2) = ({}, {})
+	for (J, H, O) in zip([J1, J2], [H1, H2], [O1, O2]) :
+		# Location --> Transit time in minutes ; keep track of duplicates
+		J['gohere'] = commons.index_dicts_by_key(J['gohere'], key_func=(lambda __ : tuple(__['x'])), collapse_repetitive=False)
+		# Keep the *time* field
+		H.update({ x : attr['s'] for (x, attr) in J['gohere'].items() })
+		# Keep the *origin* field
+		O.update({ x : attr['o'] for (x, attr) in J['gohere'].items() })
+
+	# The two datasets cover the same geo-locations
+	assert (set(H1) == set(H2))
+
+	X = sorted([x for x in H1 if (set(H1[x]) != set(H2[x]))], key=(lambda x : sum(H1[x]) + sum(H2[x])))
+	# commons.logger.debug("Earliest differing location: {}".format(X[0]))
+
+	for x in X[0:4] :
+
+		g1 = nx.DiGraph()
+		g2 = nx.DiGraph()
+
+		def retrace(O, g, x) :
+			for o in O[x] :
+				if o :
+					o = tuple(o)
+					if not g.has_edge(o, x) :
+						g.add_edge(o, x)
+						retrace(O, g, o)
+			g.nodes[x]['pos'] = ll2xy(x)
+
+		retrace(O1, g1, x)
+		retrace(O2, g2, x)
+
+		commons.logger.debug("Graph 1: {}".format(g1.nodes))
+		commons.logger.debug("Graph 2: {}".format(g2.nodes))
+
+
+
+		import matplotlib as mpl
+		mpl.use("TkAgg")
+
+		import matplotlib.pyplot as plt
+		(fig, ax) = plt.subplots()
+
+		# # "Inner" Kaohsiung
+		# bbox = (120.2593, 22.5828, 120.3935, 22.6886)
+		# # Set plot view to the bbox
+		# ax.axis(maps.mb2ax(*bbox))
+		# ax.autoscale(enable=False)
+
+		nx.draw_networkx(g1, pos=nx.get_node_attributes(g1, 'pos'), edge_color='b', node_size=1, with_labels=False)
+		nx.draw_networkx(g2, pos=nx.get_node_attributes(g2, 'pos'), edge_color='g', node_size=1, with_labels=False)
+
+		# ax.plot(*o, 'gx')
+		# ax.scatter(*zip(*nx.get_node_attributes(g1, 'pos').values()), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
+
+		plt.show()
+
+
+## ================== OPTIONS :r
 
 OPTIONS = {
 	'MAP' : map_transit,
 	'IMG' : img_transit,
+
+	'DBG' : debug_compare_two,
 }
 
 

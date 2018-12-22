@@ -7,24 +7,24 @@
 import datetime as dt
 
 
-import os
-
-from itertools import chain, groupby
-
 import numpy as np
 import pandas as pd
 import networkx as nx
 
+import random
+
 import sklearn.neighbors
 
-from helpers import commons, graph
 from copy import deepcopy
 from enum import Enum
 
 from collections import defaultdict
+from itertools import chain, groupby
 
-from joblib import Parallel, delayed
-from progressbar import progressbar
+# from joblib import Parallel, delayed
+# from progressbar import progressbar
+
+from helpers import commons, graph
 
 
 ## ==================== PARAM :
@@ -33,6 +33,8 @@ PARAM = {
 	'walker_neighborhood_radius' : 500, # meters
 	'walker_speed' : 1, # m/s
 	'walker_delay' : 5, # seconds
+
+	'prefilter_legs' : False,
 }
 
 ## ===================== META :
@@ -62,7 +64,6 @@ class Loc :
 		self.x = x
 		self.desc = desc
 	def __str__(self) :
-		#return "<Location '{}' at {}>".format(self.desc, self.x)
 		return "{}/{} at {}".format(self.desc, self.x, self.t)
 	def __repr__(self) :
 		return "Loc(t={}, x={}, desc={})".format(self.t, self.x, self.desc)
@@ -101,28 +102,34 @@ class BusstopWalker :
 		(I, tree) = commons.inspect(('node_ids', 'knn_tree'))(self.knn)
 		return [I[j] for j in tree.query_radius([x], r=PARAM['walker_neighborhood_radius'])[0]]
 
-	def where_can_i_go(self, P: Loc, tspan=None) :
+	def where_can_i_go(self, O: Loc, tspan=None) :
 		try :
 			# See if geo-coordinate is available
-			(lat, lon) = P.x
+			(lat, lon) = O.x
 		except :
-			# Interpret P.desc as a bus stop; get its geo-coordinate
-			P.x = self.stop_pos[P.desc]
+			# Interpret O.desc as a bus stop; get its geo-coordinate
+			O.x = self.stop_pos[O.desc]
 
-		dest = {
-			B : Leg(
-				P,
+		# "Orientation" delay before start walking
+		t = O.t + dt.timedelta(seconds=PARAM['walker_delay'])
+
+		legs = [
+			# Encode a walk
+			Leg(
 				Loc(
-					t=(P.t + dt.timedelta(seconds=(PARAM['walker_delay'] + commons.geodesic(P.x, self.stop_pos[B]) / PARAM['walker_speed']))),
+					t=t, x=O.x, desc=O.desc
+				),
+				Loc(
+					t=(t + dt.timedelta(seconds=(commons.geodesic(O.x, self.stop_pos[B]) / PARAM['walker_speed']))),
 					x=self.stop_pos[B],
 					desc=B
 				),
 				mode=Mode.walk
 			)
-			for B in self.get_neighbors(P.x)
-		}
+			for B in self.get_neighbors(O.x)
+		]
 
-		return list(dest.values())
+		return legs
 
 	def __del__(self) :
 		pass
@@ -132,40 +139,67 @@ class BusstopBusser :
 	def __init__(self, routes, stop_pos, timetables) :
 
 		self.routes_from = defaultdict(set)
-
+		#
 		for (i, route) in routes.items() :
 			assert(type(route['Direction']) is int), "Routes should be unidirectional at this point"
-			# Note: we are excluding the last stop (no boarding there)
+			# Note: we are excluding the last stop of the route (no boarding there)
 			for stop in route['Stops'][:-1] :
 				self.routes_from[stop['StopUID']].add(i)
-
+		#
 		self.routes_from = dict(self.routes_from)
-		#print(list(self.routes_from.items())[0:10])
 
 		self.stop_pos = stop_pos
 		self.timetables = timetables
 
-	def where_can_i_go(self, P: Loc, tspan=dt.timedelta(minutes=60)) :
-		P = deepcopy(P)
+		self.patch_timetable_monotonicity()
+
+	def patch_timetable_monotonicity(self) :
+
+		is_row_monotone = (lambda row : all(pd.Series(row.astype(pd.Timestamp) == row.cummax().astype(pd.Timestamp))))
+
+		patched_routes = set()
+
+		tt: pd.DataFrame
+		for (route_key, tt) in self.timetables.items() :
+
+			for (r, row) in tt.iterrows() :
+				if not is_row_monotone(row) :
+					# commons.logger.debug("Row datatype: {}".format(row.dtype))
+					# commons.logger.debug("Original row: {}".format(self.timetables[route_key].ix[r].values))
+					tt.ix[r] = row.cummax().astype(pd.Timestamp)
+					# commons.logger.debug("Patched row: {}".format(self.timetables[route_key].ix[r].values))
+					patched_routes.add(route_key)
+					assert(is_row_monotone(self.timetables[route_key].ix[r]))
+
+		if patched_routes :
+			commons.logger.warning("Patched monotonicity in timetable for {}/{} routes".format(len(patched_routes), len(self.timetables)))
+
+
+	def where_can_i_go(self, O: Loc, tspan=dt.timedelta(minutes=60)) :
+
+		# Earliest time of departure
+		t = O.t
 
 		# Location descriptor (usually, bus stop ID)
-		A = P.desc
+		this_stop = O.desc
 
 		try :
-			routes_through_here = self.routes_from[A]
+			routes_through_here = self.routes_from[this_stop]
 		except :
-			# 'A' is not recognized as a bus stop ID
+			# 'this_stop' is not recognized as a bus stop ID
 			return []
 
-		# Stop ID --> Transit leg
-		dest = dict()
+		# Transit legs; may contain repeated destinations
+		legs = []
 
 		for route_key in routes_through_here :
 			tt : pd.DataFrame # Timetable
 			tt = self.timetables[route_key]
 
+			# commons.logger.debug(O.t, tt[this_stop])
+
 			# Find the reachable section of the time table
-			reachable = tt.loc[(P.t <= tt[A]) & (tt[A] <= (P.t + tspan)), A:]
+			reachable = tt.loc[(t <= tt[this_stop]) & (tt[this_stop] <= (t + tspan)), this_stop:]
 
 			# No connection at this space-time point
 			if reachable.empty : continue
@@ -180,23 +214,26 @@ class BusstopBusser :
 			fastest: pd.Series
 			fastest = reachable.ix[reachable[next_stop].astype(np.datetime64).idxmin()]
 
-			P.t = fastest[A].to_pydatetime()
+			P = Loc(t=fastest[this_stop].to_pydatetime(), x=O.x, desc=O.desc)
 			Q = Loc(t=fastest[next_stop].to_pydatetime(), x=self.stop_pos[next_stop], desc=next_stop)
 
 			leg = Leg(P, Q, Mode.bus, desc={'route': route_key, 'bus_id': fastest.name})
 
-			if next_stop in dest :
-				dest[next_stop] = min(dest[next_stop], leg, key=(lambda _ : _.Q.t))
-			else :
-				dest[next_stop] = leg
+			if not (leg.P.t <= leg.Q.t) :
+				commons.logger.warning("Non-monotonic timedelta in leg of route {}".format(route_key))
 
-		return list(dest.values())
+			legs.append(leg)
+
+		return legs
 
 
 ## =================== MASTER :
 
 class Transit :
 	def __init__(self, timetable_files) :
+		#
+		timetable_files = list(timetable_files)
+
 		self.routes = {
 			ROUTE_KEY(tt['route']) : tt['route']
 			for tt in map(commons.zipjson_load, timetable_files)
@@ -230,17 +267,20 @@ class Transit :
 	def now(self) :
 		return dt.datetime.now().astimezone().isoformat()
 
+	# Run A*-algorithm to connect 'loc_a' and 'loc_b'
 	def connect(self, loc_a: Loc, loc_b=None, callback=None) :
 		result = { 'status' : "zero", 'time_start' : self.now() }
 		if callback : callback(result)
 
-		if True :
+		if loc_a :
 			try :
 				# Initial astar_openset -- start locations
 				loc_a = self.completed_loc(loc_a)
 				astar_initial = {loc_a.desc : loc_a}
 			except :
 				raise ValueError("Start location not understood")
+		else :
+			raise ValueError("No start location provided")
 
 		if loc_b :
 			try :
@@ -260,12 +300,12 @@ class Transit :
 
 		# Initialize the graph
 		for (desc, P) in astar_openset.items() :
-			astar_graph.add_node(desc, pos=ll2xy(P.x), P=P)
+			astar_graph.add_node(desc, pos=ll2xy(P.x), loc=P)
 
 
 		# A*-algorithm heuristic: cost estimate from P to Targets
 		# It is "admissible" if it never over-estimates
-		def h(P: Loc) :
+		def astar_cost_h(P: Loc) :
 			if astar_targets :
 				return min(
 					dt.timedelta(seconds=(commons.geodesic(P.x, Q.x) / (3 * PARAM['walker_speed'])))
@@ -274,16 +314,22 @@ class Transit :
 			else :
 				return dt.timedelta(seconds=0)
 
+		# A*-algorithm cost of path to P
+		def astar_cost_g(P: Loc) :
+			return P.t
+
 		# A*-algorithm cost estimator of path via P
-		def f(P: Loc) :
-			return P.t + h(P)
+		def astar_cost_f(P: Loc) :
+			return astar_cost_g(P) + astar_cost_h(P)
 
 
+		# These do not change during the main loop
 		result['routes'] = deepcopy(self.routes)
 		result['stop_pos'] = deepcopy(self.stop_pos)
 		result['astar_initial'] = deepcopy(astar_initial)
 		result['astar_targets'] = deepcopy(astar_targets)
 
+		# These do change during the main loop
 		def do_callback(status) :
 			if not callback : return
 			result['astar_openset'] = (astar_openset)
@@ -294,54 +340,125 @@ class Transit :
 
 		do_callback("init")
 
-		# Main A*-algorithm loop
+
+		# MAIN A*-ALGORITHM LOOP
 		while astar_openset :
 
+			# commons.logger.debug("Open set: {}".format(sorted(astar_openset)))
+
 			# A*-algorithm: select candidate node/path to extend
-			c = astar_openset.pop(min(astar_openset.values(), key=f).desc)
+			C: Loc
+			C = astar_openset.pop(min(astar_openset.values(), key=astar_cost_f).desc)
 
+			# Collect potential next moves
+			leg_choices = list(chain.from_iterable(mode.where_can_i_go(C) for mode in [self.bb, self.bw]))
 
-			leg_choices = chain.from_iterable(
-				mode.where_can_i_go(c)
-				for mode in [self.bb, self.bw]
-			)
+			if PARAM['prefilter_legs'] :
+				# Keep only the most efficient candidate for each next destination
+				leg_choices = [
+					min(legs, key=(lambda __ : astar_cost_g(__.Q)))
+					# Sort and group by 'desc', i.e. the bus stop ID
+					for (k, legs) in commons.sort_and_group(
+						leg_choices, key=(lambda __ : __.Q.desc)
+					)
+				]
+
+			# All next moves should originate with the selected location
+			assert({C.desc} == set(leg.P.desc for leg in leg_choices))
+
+			# ... and should respect monotonicity of the cost
+			assert(all((astar_cost_g(C) <= astar_cost_g(leg.P)) for leg in leg_choices))
+
+			# # DEBUG
+			# if C.desc == 'KHH4354' :
+			# 	commons.logger.debug("Choices at t={}: \n{}".format(C.t, "\n".join(str(leg) for leg in leg_choices)))
+			# 	exit(39)
+
+			# Randomize the traversal order (the solution should be independent of it)
+			random.shuffle(leg_choices)
 
 			leg: Leg
 			for leg in leg_choices :
 
-				# Bus stop we are coming from & maybe going to
+				# Bus stop we are coming from & may be going to
 				(prev_stop, next_stop) = (leg.P.desc, leg.Q.desc)
 
+				# prev_stop may be None if it is the origin of search
+				# next_stop should not
+				assert(next_stop is not None), "Next stop should have an ID"
+
 				# Have we visited that stop already?
-				if next_stop in astar_graph.nodes :
-					if (astar_graph.nodes[next_stop]['P'].t <= leg.Q.t) :
-						# No improvement
+				if astar_graph.has_node(next_stop) :
+					# Compare the path cost this far
+					if (astar_cost_g(astar_graph.nodes[next_stop]['loc']) <= astar_cost_g(leg.Q)) :
+						# No improvement in cost
 						continue
 					else :
-						astar_graph.remove_node(next_stop)
+						# Remove incoming edges to be replaced
+						# Maintains the integrity of the graph better than 'remove_node'
+						astar_graph.remove_edges_from(set(astar_graph.in_edges(next_stop)))
 
-				astar_graph.add_node(next_stop, pos=ll2xy(leg.Q.x), P=leg.Q)
+				astar_graph.add_node(next_stop, pos=ll2xy(leg.Q.x), loc=leg.Q)
 				astar_graph.add_edge(prev_stop, next_stop, leg=leg)
 
-				astar_openset[next_stop] = leg.Q
+				try :
+					# If 'next_stop' is in the open set already, keep only the better suggestion
+					astar_openset[next_stop] = min(astar_openset[next_stop], leg.Q, key=astar_cost_g)
+				except KeyError :
+					astar_openset[next_stop] = leg.Q
 
-				#print("Added new path to:", B)
+				# # DEBUG BLOCK I
+				# if True :
+				# 	astar_openset_reduced = {
+				# 		k : loc
+				# 		for (k, loc) in astar_openset.items()
+				# 		if (loc.x in {(22.627224, 120.320029), (22.62735, 120.31913), (22.629226, 120.324291), (22.63121, 120.32742)})
+				# 	}
+				# 	#
+				# 	try :
+				# 		old_msg = msg
+				# 	except :
+				# 		old_msg = None
+				# 	finally :
+				# 		msg = "ROS: {}".format(sorted(astar_openset_reduced.items()))
+				# 		if (old_msg != msg) : commons.logger.debug(msg)
 
-				# Reached targets: retrace the path
+				# # DEBUG BLOCK II
+				# if True :
+				# 	astar_graph_reduced = nx.subgraph(
+				# 		astar_graph,
+				# 		{
+				# 			n
+				# 			for (n, loc) in list(astar_graph.nodes.data('loc'))
+				# 			if (loc.x in {(22.627224, 120.320029), (22.62735, 120.31913), (22.629226, 120.324291), (22.63121, 120.32742)})
+				# 		}
+				# 	)
+				# 	#
+				# 	try :
+				# 		old_msg = msg
+				# 	except :
+				# 		old_msg = None
+				# 	finally :
+				# 		msg = '/'.join(sorted(str(leg) for (a, b, leg) in astar_graph_reduced.edges.data('leg')))
+				# 		if (old_msg != msg) : commons.logger.debug(msg)
+
+				# A* termination criterion
+				# If reached the target retrace the path
 				if next_stop in astar_targets :
-					#print("Done!")
-					astar_openset.clear()
 
 					def retrace_from_node(a) :
 						while astar_graph.pred[a] :
+							assert (1 == len(astar_graph.pred)), "By construction, a node should be reached through one path only"
 							(a, edge_data) = next(iter(astar_graph.pred[a].items()))
 							yield edge_data.get('leg')
 
+					# Transform 'legs' into groups
 					legs = [
 						list(group)
 						for (k, group) in groupby(reversed(list(retrace_from_node(next_stop))), key=(lambda leg: (leg.mode, leg.desc)))
 					]
 
+					# Transform 'legs' by collapsing groups
 					legs = [
 						Leg(P=group[0].P, Q=group[-1].Q, mode=group[0].mode, desc=group[0].desc)
 						for group in legs
@@ -352,9 +469,14 @@ class Transit :
 
 					return legs
 
+			for leg in leg_choices :
+				assert(leg.Q.desc in astar_graph.nodes)
+				assert(astar_cost_g(astar_graph.nodes[leg.Q.desc]['loc']) <= astar_cost_g(leg.Q))
+
 			do_callback("opti")
 
 		if astar_targets :
+			# The function should have *return*ed by this point
 			do_callback("fail")
 			raise RuntimeError("No connection found")
 		else:
