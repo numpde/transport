@@ -3,6 +3,13 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+from itertools import groupby
+
+def sort_and_group(C, key=None) :
+	return groupby(sorted(C, key=key), key=key)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 # https://docs.python-guide.org/writing/logging/
 # https://docs.python.org/3/library/logging.html
 # https://stackoverflow.com/questions/3220284/how-to-customize-the-time-format-for-python-logging
@@ -15,14 +22,15 @@ import logging
 def initialize_logger() :
 	from logging.config import dictConfig
 
-	logging.getLogger('matplotlib').setLevel(logging.WARNING)
+	for mod in ['PIL', 'matplotlib'] :
+		logging.getLogger(mod).setLevel(logging.WARNING)
 
 	dictConfig(dict(
 		version = 1,
 		formatters = {
 			'f': {
-				'format': "%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
-				'datefmt': "%Y-%m-%d %H:%M",
+				'format': "%(levelname)-8s [%(asctime)s] : %(message)s",
+				'datefmt': "%Y%m%d %H:%M:%S %Z",
 			},
 		},
 		handlers = {
@@ -203,8 +211,10 @@ class wget :
 		if filename :
 			if os.path.isfile(filename) :
 				# Cached result found
-				with open(filename, 'rb') as f :
-					self.bytes = f.read()
+				# logger.debug("wget cachefile found ({})".format(filename))
+				with open(filename, 'rb') as fd :
+					self.bytes = fd.read()
+				# logger.debug("wget cachefile read ({})".format(len(self.bytes)))
 				return
 
 		wget.number_of_calls = wget.number_of_calls + 1
@@ -220,8 +230,8 @@ class wget :
 
 			if filename :
 				try :
-					with open(filename, 'wb') as f :
-						f.write(self.bytes)
+					with open(filename, 'wb') as fd :
+						fd.write(self.bytes)
 				except IOError as e :
 					print("Warning: error writing cache in wget ({})".format(e))
 
@@ -378,35 +388,9 @@ def all_distinct(L) :
 	L = list(L)
 	return (len(L) == len(set(L)))
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-import sys
-
-def parse_options(OPTIONS, commands=sys.argv[1:]) :
-
-	if not OPTIONS :
-		raise ValueError("No options to choose from")
-
-	if not commands :
-
-		if (1 == len(OPTIONS)) :
-
-			# No option provided, but there is only one to choose from
-			(next(iter(OPTIONS.values())))()
-			return True
-
-	else :
-
-		(opt, args) = (commands[0], commands[1:])
-
-		if opt in OPTIONS :
-			(OPTIONS[opt])(*args)
-			return True
-
-	print("Invalid or no option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
-	commands = [c for c in input("Select option: ").strip().split(' ') if c]
-
-	return (commands and parse_options(OPTIONS, commands))
+# Does the collection L contain only copies of one element?
+def all_samesame(L) :
+	return (1 == len(set(L)))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -493,6 +477,36 @@ def zipjson_dump(J, fn, opener=open) :
 	E = ZIPJSON(J).enc()
 	assert(json.dumps(E))
 	return json.dump(E, opener(fn, 'w'))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import sys
+
+def parse_options(OPTIONS, commands=sys.argv[1:]) :
+
+	if not OPTIONS :
+		raise ValueError("No options to choose from")
+
+	if not commands :
+
+		if (1 == len(OPTIONS)) :
+
+			# No option provided, but there is only one to choose from
+			(next(iter(OPTIONS.values())))()
+			return True
+
+	else :
+
+		(opt, args) = (commands[0], commands[1:])
+
+		if opt in OPTIONS :
+			(OPTIONS[opt])(*args)
+			return True
+
+	print("Invalid or no option provided. Options are: {}".format(", ".join(OPTIONS.keys())))
+	commands = [c for c in input("Select option: ").strip().split(' ') if c]
+
+	return (commands and parse_options(OPTIONS, commands))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
