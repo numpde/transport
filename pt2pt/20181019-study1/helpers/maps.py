@@ -4,15 +4,13 @@
 import io
 
 from enum import Enum
-from helpers import commons
-
 from PIL import Image
-
 from math import pi, log, tan, exp, atan, log2, floor
-
 from urllib.error import URLError
 
 import matplotlib as mpl
+
+from helpers import commons
 
 # Convert geographical coordinates to pixels
 # https://en.wikipedia.org/wiki/Web_Mercator_projection
@@ -111,9 +109,19 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 
 	# Download the rendered image
 	b = commons.wget(url, cachedir=cachedir).bytes
+	# commons.logger.debug("Got {} bytes from wget
 
 	# Convert bytes to image object
-	I = Image.open(io.BytesIO(b))
+	I = Image.open(io.BytesIO(b), mode='r')
+	# commons.logger.debug("Constructed image from bytes")
+
+	# # DEBUG: show image
+	# import matplotlib as mpl
+	# mpl.use("TkAgg")
+	# import matplotlib.pyplot as plt
+	# plt.imshow(I)
+	# plt.show()
+	# exit(39)
 
 	# If the "retina" @2x parameter is used, the image is twice the size of the requested dimensions
 	(W, H) = I.size
