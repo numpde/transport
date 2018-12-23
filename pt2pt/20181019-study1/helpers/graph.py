@@ -64,9 +64,9 @@ def angle(p, q, r) :
 	return (((angles.r2d(pq - qr) + 540) % 360) - 180)
 
 
-def dist_to_segment(x, ab, rel_acc=0.05, abs_acc=1) :
+def dist_to_segment_rec(x, ab, rel_acc=0.05, abs_acc=1) :
 	""" Compute the geo-distance of a point to a segment.
-	
+
 	Args:
 		x: geo-coordinates of the point as a pair (lat, lon).
 		ab: a pair (a, b) where a and b are endpoints of the segment.
@@ -105,6 +105,36 @@ def dist_to_segment(x, ab, rel_acc=0.05, abs_acc=1) :
 
 	return min((da, s), (db, t))
 
+def dist_to_segment(x, ab, distance=geopy.distance.vincenty) :
+	# Compute lengths
+	xa = distance(x, ab[0]).m
+	xb = distance(x, ab[1]).m
+	ab = distance(ab[0], ab[1]).m
+	if (ab == 0) : return (xa, None)
+	# Heron's formula
+	s = (xa + xb + ab) / 2
+	A = math.sqrt(s * (s - xa) * (s - xb) * (s - ab))
+	# Height
+	h = A / ab * 2
+	# Base corners to base of the height
+	ah = math.sqrt(max(0, xa**2 - h**2))
+	bh = math.sqrt(max(0, xb**2 - h**2))
+	# Distance and relative coordinate
+	(d, t) = max([(bh, (xa, 0)), (ah, (xb, 1)), (ab, (h, ah / ab))])[1]
+	return (d, t)
+
+def test_dist_to_segment():
+	(x, a, b) = zip([20.1 + random.uniform(0.15, 0.18) for __ in range(3)], [120.2 + random.uniform(0.12, 0.2) for __ in range(3)])
+	print("x = {}, a = {}, b = {}".format(x, a, b))
+	print("A1:", dist_to_segment_rec(x, (a, b)))
+	print("A2:", dist_to_segment(x, (a, b)))
+	with commons.Timer("recursion") :
+		for __ in range(1000) :
+			dist_to_segment_rec(x, (a, b))
+	with commons.Timer("triangle") :
+		for __ in range(1000) :
+			dist_to_segment(x, (a, b))
+	commons.Timer.report()
 
 def simple_gpx(waypoints, segments) :
 	try :
@@ -454,7 +484,7 @@ def estimate_kne(g, knn, q, ke=10) :
 	raise RuntimeError("Could not find enough nearest edges")
 
 
-def foo() :
+def test_mapmatch() :
 
 	mapbox_token = open("../.credentials/UV/mapbox-token.txt", 'r').read()
 
@@ -618,4 +648,5 @@ def foo() :
 
 
 if (__name__ == "__main__") :
-	foo()
+	test_mapmatch()
+	# test_dist_to_segment()
