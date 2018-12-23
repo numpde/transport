@@ -10,6 +10,8 @@ import pytz
 import json
 import uuid
 
+import pickle
+
 import numpy as np
 import networkx as nx
 
@@ -45,6 +47,8 @@ IFILE = {
 	#'MOTC_shapes' : "OUTPUT/00/ORIGINAL_MOTC/{city}/CityBusApi_Shape.json",
 
 	'timetable_json' : "OUTPUT/17/timetable/{scenario}/json/{{routeid}}-{{dir}}.json",
+
+	'OSM_graph_file' : "OUTPUT/02/UV/{region}.pkl".format(region=PARAM['city'].lower()),
 }
 
 for (k, s) in IFILE.items() : IFILE[k] = s.format(**PARAM)
@@ -66,7 +70,6 @@ PARAM.update({
 		'token' : commons.token_for('mapbox'),
 		'cachedir' : "helpers/maps_cache/UV/",
 	},
-
 })
 
 ## ====================== AUX :
@@ -75,7 +78,7 @@ def ll2xy(latlon) :
 	return (latlon[1], latlon[0])
 
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
-THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
+# THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 # points is a dictionary (lat, lon) --> data
 # returns a pairs (bbox, point dict)
@@ -107,124 +110,17 @@ def boxify(points: dict, maxinbox=5) :
 
 ## ==================== TESTS :
 
-def test1() :
-
-	import matplotlib.pyplot as plt
-	plt.ion()
-
-	tr = transit.Transit(commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*")))
-
-	if True :
-		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-		origin = 'KHH4439'
-		legs = tr.connect(transit.Loc(t=t0, desc=origin), callback=plot_callback)
-
-
-	def plot_callback(result) :
-		if (result['status'] == "zero") :
-			return
-
-		if (result['status'] == "init") :
-			(fig, ax) = plt.subplots()
-			result['fig'] = fig
-			result['ax'] = ax
-			return
-
-		if (result['status'] == "opti") :
-			if (result.get('nfu', dt.datetime.min) > dt.datetime.now()) :
-				return
-
-		astar_initial = result['astar_initial']
-		astar_targets = result['astar_targets']
-		astar_openset = result['astar_openset']
-		astar_graph = result['astar_graph']
-		routes = result['routes']
-		stop_pos = result['stop_pos']
-
-		ax: plt.Axes
-		ax = result['ax']
-
-		ax.cla()
-
-		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.walk)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='g', arrowsize=5, node_size=0)
-		nx.draw_networkx_edges(astar_graph, ax=ax, edgelist=[(a, b) for (a, b, d) in astar_graph.edges.data('leg') if (d.mode == transit.Mode.bus)], pos=nx.get_node_attributes(astar_graph, 'pos'), edge_color='b', arrowsize=5, node_size=0)
-
-		if astar_initial :
-			ax.plot(*zip(*[ll2xy(P.x) for P in astar_initial.values()]), 'go')
-		if astar_targets :
-			ax.plot(*zip(*[ll2xy(P.x) for P in astar_targets.values()]), 'ro')
-		if astar_openset :
-			ax.plot(*zip(*[ll2xy(O.x) for O in astar_openset.values()]), 'kx')
-
-		if not astar_openset :
-			try :
-				for leg in legs :
-					(y, x) = zip(leg.P.x, leg.Q.x)
-					ax.plot(x, y, 'y-', alpha=0.3, linewidth=8, zorder=100)
-			except :
-				pass
-
-		a = ax.axis()
-		for route in routes.values() :
-			(y, x) = zip(*(stop_pos[stop['StopUID']] for stop in route['Stops']))
-			ax.plot(x, y, 'm-', alpha=0.1)
-		ax.axis(a)
-
-		plt.pause(0.1)
-
-		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
-
-
-	if False :
-		t0 = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-		#print("Departure time: {}".format(t0.strftime("%Y-%m-%d %H:%M (%Z)")))
-
-
-		#
-		#t0 = t0.astimezone(dt.timezone.utc).replace(tzinfo=None)
-
-
-		#bb = BusstopBusser(routes, stop_pos)
-
-		# print(bb.where_can_i_go('KHH308', t))
-		# exit(39)
-
-		# print("Routes passing through {}: {}".format(A, bb.routes_from[A]))
-		# print(bb.routes[('KHH100', 0)]['Stops'])
-		# exit(39)
-
-		#bw = BusstopWalker(stop_pos)
-		# print(bw.where_can_i_go('KHH308', t))
-		# bw.where_can_i_go('KHH380', t)
-
-		# Random from-to pair
-		(stop_a, stop_z) = commons.random_subset(tr.stop_pos.keys(), k=2)
-		# Relatively short route, many buses
-		(stop_a, stop_z) = ('KHH4439', 'KHH4370')
-		# # Long search, retakes same busroute
-		# (stop_a, stop_z) = ('KHH3820', 'KHH4484')
-
-		commons.logger.info("Finding a route from {} to {} at {}".format(stop_a, stop_z, t0))
-
-		legs = tr.connect(transit.Loc(t=t0, desc=stop_a), transit.Loc(desc=stop_z)) #, callback=plot_callback)
-
-		commons.logger.debug("First/last legs: {}/{}".format(legs[0], legs[-1]))
-
-		for leg in legs :
-			(t0, t1) = (pytz.utc.localize(t).astimezone(tz=PARAM['TZ']) for t in (leg.P.t, leg.Q.t))
-			commons.logger.info("{}-{} : {} {}".format(t0.strftime("%Y-%m-%d %H:%M"), t1.strftime("%H:%M (%Z)"), leg.mode, leg.desc))
-
-
-	commons.logger.info("Done.")
-
-	plt.ioff()
-	plt.show()
-
 
 
 ## =================== SLAVES :
 
 def map_transit_from(t: dt.datetime, x) :
+	commons.logger.info("Loading the graph...")
+	#graph_with_knn = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
+	g = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['G'].to_undirected()
+	# TODO: filter out unwalkable roads
+	# TODO: partition long edges
+	graph_with_knn = { 'g': g, 'knn': graph.compute_geo_knn(nx.get_node_attributes(g, 'pos')) }
 
 	def tr_callback(result) :
 		if (result['status'] in {"zero", "init"}) :
@@ -234,8 +130,6 @@ def map_transit_from(t: dt.datetime, x) :
 		if (result['status'] == "opti") :
 			if (result.get('ncu', dt.datetime.min) > dt.datetime.now()) :
 				return
-			else :
-				result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
 
 		g: nx.DiGraph
 		g = result['astar_graph']
@@ -262,7 +156,15 @@ def map_transit_from(t: dt.datetime, x) :
 
 		commons.logger.info("Number of locations mapped is {}".format(g.number_of_nodes()))
 
+		# make_transit_img(J, backend='TkAgg')
+
+		# Next callback update
+		result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
+
+
 	def keep_ttfile(fn) :
+		return True
+
 		J = commons.zipjson_load(fn)
 
 		# "Inner" Kaohsiung
@@ -274,16 +176,20 @@ def map_transit_from(t: dt.datetime, x) :
 
 	# A* INITIALIZE
 	commons.logger.info("Initializing transit...")
-	tr = transit.Transit(filter(keep_ttfile, commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))))
+	with commons.Timer('transit_prepare') :
+		tr = transit.Transit(filter(keep_ttfile, commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))), graph_with_knn=graph_with_knn)
 
 	# A* COMPUTE
 	commons.logger.info("Computing transit from {} at {}...".format(x, t))
-	tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
+	with commons.Timer('transit_execute') :
+		tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
+
+	commons.Timer.report()
 
 
-def make_transit_img(J) -> bytes :
+def make_transit_img(J, backend='Agg') -> bytes :
 	import matplotlib as mpl
-	mpl.use('Agg')
+	mpl.use(backend)
 
 	import matplotlib.pyplot as plt
 
@@ -328,7 +234,7 @@ def make_transit_img(J) -> bytes :
 	ax.plot(*ll2xy(origin['x']), 'gx')
 
 	# Show all datapoints
-	ax.scatter(*zip(*contour_pts), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
+	#ax.scatter(*zip(*contour_pts), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
 
 	# # Hack! for corners
 	# for (x, y) in product(ax.axis()[:2], ax.axis()[2:]) :
@@ -361,6 +267,11 @@ def make_transit_img(J) -> bytes :
 
 	buffer.seek(0)
 
+	if backend.lower() in ["tkagg"] :
+		plt.ion()
+		plt.show()
+		plt.pause(0.1)
+
 	return buffer.read()
 
 
@@ -368,10 +279,10 @@ def make_transit_img(J) -> bytes :
 
 def map_transit() :
 	t = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-	# Unknown location
-	x = (22.63322, 120.33468)
 	# HonDo
 	x = (22.63121, 120.32742)
+	# Unknown location
+	x = (22.63322, 120.33468)
 	map_transit_from(t=t, x=x)
 
 
@@ -420,7 +331,7 @@ def debug_compare_two() :
 					if not g.has_edge(o, x) :
 						g.add_edge(o, x)
 						retrace(O, g, o)
-			g.nodes[x]['pos'] = ll2xy(x)
+			g.nodes[x]['xy'] = ll2xy(x)
 
 		retrace(O1, g1, x)
 		retrace(O2, g2, x)
@@ -442,11 +353,8 @@ def debug_compare_two() :
 		# ax.axis(maps.mb2ax(*bbox))
 		# ax.autoscale(enable=False)
 
-		nx.draw_networkx(g1, pos=nx.get_node_attributes(g1, 'pos'), edge_color='b', node_size=1, with_labels=False)
-		nx.draw_networkx(g2, pos=nx.get_node_attributes(g2, 'pos'), edge_color='g', node_size=1, with_labels=False)
-
-		# ax.plot(*o, 'gx')
-		# ax.scatter(*zip(*nx.get_node_attributes(g1, 'pos').values()), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
+		nx.draw_networkx(g1, pos=nx.get_node_attributes(g1, 'xy'), edge_color='b', node_size=1, with_labels=False)
+		nx.draw_networkx(g2, pos=nx.get_node_attributes(g2, 'xy'), edge_color='g', node_size=1, with_labels=False)
 
 		plt.show()
 

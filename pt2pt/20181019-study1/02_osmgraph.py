@@ -58,7 +58,7 @@ PARAM = {
 
 	# For the slimmer bus roads graph exclude those edges/ways
 	'osm_way_bus_exclude' : {
-		'highway' : ["service"],
+		#'highway' : ["service"],
 	},
 }
 

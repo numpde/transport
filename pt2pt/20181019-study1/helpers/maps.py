@@ -12,6 +12,11 @@ import matplotlib as mpl
 
 from helpers import commons
 
+PARAM = {
+	'do_retina' : True,
+	'do_snap_to_dyadic' : False,
+}
+
 # Convert geographical coordinates to pixels
 # https://en.wikipedia.org/wiki/Web_Mercator_projection
 # Note on google API:
@@ -70,25 +75,25 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 	if not token :
 		raise RuntimeError("An API token is required")
 
-	# Get the actual value from the enum class
-	style = style.value
-
 	# The region of interest in geo-coordinates in degrees
 	(left, bottom, right, top) = bbox
 	# Sanity check
-	assert(-180 <= left < right <= 180)
 	assert(-90 <= bottom < top <= 90)
+	assert(-180 <= left < right <= 180)
+
+	# Rendered image map size in pixels as it should come from MapBox (no retina)
+	(w, h) = (1024, 1024)
 
 	# The center point of the region of interest
 	(lat, lon) = ((top + bottom) / 2, (left + right) / 2)
 
 	# Reduce precision of (lat, lon) to increase cache hits
-	snap_to_dyadic = (lambda a, b : (lambda x, scale=(2 ** floor(log2(abs(b - a) / 4))) : (round(x / scale) * scale)))
-	lat = snap_to_dyadic(bottom, top)(lat)
-	lon = snap_to_dyadic(left, right)(lon)
+	if PARAM['do_snap_to_dyadic'] :
+		snap_to_dyadic = (lambda a, b : (lambda x, scale=(2 ** floor(log2(abs(b - a) / 4))) : (round(x / scale) * scale)))
+		lat = snap_to_dyadic(bottom, top)(lat)
+		lon = snap_to_dyadic(left, right)(lon)
 
-	# Rendered image map size in pixels as it should come from MapBox (no retina)
-	(w, h) = (1024, 1024)
+		assert((bottom < lat < top) and (left < lon < right)), "Reference point not inside the region of interest"
 
 	# Look for appropriate zoom level to cover the region of interest by that map
 	for zoom in range(16, 0, -1) :
@@ -101,19 +106,17 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 			break
 
 	# Choose "retina" quality of the map
-	retina = { True : "@2x", False : "" }[True]
+	retina = { True : "@2x", False : "" }[PARAM['do_retina']]
 
 	# Assemble the query URL
 	url = "https://api.mapbox.com/styles/v1/mapbox/{style}/static/{lon},{lat},{zoom}/{w}x{h}{retina}?access_token={token}&attribution=false&logo=false"
-	url = url.format(style=style, lat=lat, lon=lon, token=token, zoom=zoom, w=w, h=h, retina=retina)
+	url = url.format(style=style.value, lat=lat, lon=lon, token=token, zoom=zoom, w=w, h=h, retina=retina)
 
 	# Download the rendered image
 	b = commons.wget(url, cachedir=cachedir).bytes
-	# commons.logger.debug("Got {} bytes from wget
 
 	# Convert bytes to image object
 	I = Image.open(io.BytesIO(b), mode='r')
-	# commons.logger.debug("Constructed image from bytes")
 
 	# # DEBUG: show image
 	# import matplotlib as mpl
@@ -130,9 +133,9 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 	# Extract the map of the region of interest from the covering map
 	i = I.crop((
 		round(W * (left - LEFT) / (RIGHT - LEFT)),
-		round(H * (bottom - BOTTOM) / (TOP - BOTTOM)),
+        round(H * (top - TOP) / (BOTTOM - TOP)),
 		round(W * (right - LEFT) / (RIGHT - LEFT)),
-        round(H * (top - BOTTOM) / (TOP - BOTTOM)),
+		round(H * (bottom - TOP) / (BOTTOM - TOP)),
 	))
 
 	return i

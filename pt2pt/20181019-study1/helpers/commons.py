@@ -3,6 +3,54 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+PARAM = {
+	'logger_ofile' : "logs/UV/{id}.log",
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import os
+
+# Create output directories
+def makedirs(OFILE) :
+	if type(OFILE) is str :
+		try :
+			os.makedirs(os.path.dirname(OFILE).format(), exist_ok=True)
+		except (IndexError, KeyError) as e :
+			pass
+
+	elif type(OFILE) is dict :
+		makedirs(OFILE.values())
+		return OFILE
+
+	else :
+		for f in OFILE : makedirs(f)
+		return OFILE
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import time
+
+# https://stackoverflow.com/questions/5849800/tic-toc-functions-analog-in-python
+class Timer :
+	# Shared variable
+	accumulated = {}
+
+	def __init__(self, name) :
+		self.name = name
+	def __enter__(self) :
+		self._start = time.time()
+	def __exit__(self, exc_type, exc_value, exc_traceback) :
+		Timer.accumulated[self.name] = (time.time() - self._start) + Timer.accumulated.get(self.name, 0)
+		self._start = time.time()
+
+	@staticmethod
+	def report() :
+		for (name, t) in sorted(Timer.accumulated.items()) :
+			logger.debug("|{}|: {}s".format(name, t))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 from itertools import groupby
 
 def sort_and_group(C, key=None) :
@@ -18,17 +66,18 @@ def sort_and_group(C, key=None) :
 
 import sys
 import logging
+import datetime as dt
 
 def initialize_logger() :
-	from logging.config import dictConfig
+	import logging.config
 
 	for mod in ['PIL', 'matplotlib'] :
 		logging.getLogger(mod).setLevel(logging.WARNING)
 
-	dictConfig(dict(
+	logging.config.dictConfig(dict(
 		version = 1,
 		formatters = {
-			'f': {
+			'forma': {
 				'format': "%(levelname)-8s [%(asctime)s] : %(message)s",
 				'datefmt': "%Y%m%d %H:%M:%S %Z",
 			},
@@ -36,13 +85,19 @@ def initialize_logger() :
 		handlers = {
 			'h': {
 				'class': "logging.StreamHandler",
-				'formatter': "f",
+				'formatter': "forma",
 				'level': logging.DEBUG,
 				'stream': "ext://sys.stdout",
 			},
+			'f': {
+				'class': "logging.FileHandler",
+				'formatter': "forma",
+				'level': logging.DEBUG,
+				'filename': makedirs({'fn': PARAM['logger_ofile'].format(id=dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f"))})['fn'],
+			}
 		},
 		root = {
-			'handlers': ['h'],
+			'handlers': ['h', 'f'],
 			'level': logging.DEBUG,
 		}
 	))
@@ -204,7 +259,7 @@ class wget :
 
 			# Compress cache filename
 			# https://stackoverflow.com/a/295150
-			filename = cachedir + "/" + hashlib.sha256(url.encode('utf-8')).hexdigest()
+			filename = os.path.join(cachedir, hashlib.sha256(url.encode('utf-8')).hexdigest())
 		else :
 			filename = None
 
@@ -212,7 +267,7 @@ class wget :
 			if os.path.isfile(filename) :
 				# Cached result found
 				# logger.debug("wget cachefile found ({})".format(filename))
-				with open(filename, 'rb') as fd :
+				with logged_open(filename, 'rb') as fd :
 					self.bytes = fd.read()
 				# logger.debug("wget cachefile read ({})".format(len(self.bytes)))
 				return
@@ -230,10 +285,10 @@ class wget :
 
 			if filename :
 				try :
-					with open(filename, 'wb') as fd :
+					with logged_open(filename, 'wb') as fd :
 						fd.write(self.bytes)
 				except IOError as e :
-					print("Warning: error writing cache in wget ({})".format(e))
+					logger.warning("Error writing cache in wget ({})".format(e))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -325,32 +380,14 @@ import geopy.distance
 
 # Metric for (lat, lon) coordinates
 def geodesic(a, b) :
-	return geopy.distance.geodesic(a, b).m
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-import os
-
-# Create output directories
-def makedirs(OFILE) :
-	if type(OFILE) is str :
-		try :
-			os.makedirs(os.path.dirname(OFILE).format(), exist_ok=True)
-			return OFILE
-		except (IndexError, KeyError) as e :
-			#print("makedirs failed ({})".format(e))
-			return False
-
-	if type(OFILE) is dict :
-		return makedirs(OFILE.values())
-
-	return all(makedirs(f) for f in OFILE)
+	return geopy.distance.vincenty(a, b).m
+	#return geopy.distance.geodesic(a, b).m
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # Print which files are opened
 def logged_open(filename, mode='r', *argv, **kwargs) :
-	print("({}):\t{}".format(mode, filename))
+	logger.debug("({}):\t{}".format(mode, filename))
 	return open(filename, mode, *argv, **kwargs)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #

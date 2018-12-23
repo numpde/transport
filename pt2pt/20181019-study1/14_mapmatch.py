@@ -109,7 +109,7 @@ def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
 	a = next(iter(wps))
 	yield a
 	for b in wps :
-		if (graph.geodist(a, b) >= dist) :
+		if (commons.geodesic(a, b) >= dist) :
 			a = b
 			yield a
 
@@ -117,7 +117,9 @@ def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
 
-
+def trim_graph_to_busable(g: nx.DiGraph) :
+	commons.logger.warning("trim_graph_to_busable not implemented")
+	return g
 
 ## ==================== SLAVE :
 
@@ -129,6 +131,8 @@ def mapmatch_runs(scenario, runs) :
 	(g, knn) = commons.inspect(['g', 'knn'])(
 		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
+
+	g = trim_graph_to_busable(g)
 
 	# Nearest edges
 	kne = (lambda q: graph.estimate_kne(g, knn, q, ke=20))
@@ -245,7 +249,7 @@ def mapmatch_all() :
 
 	PARAM['graph_bbox'] = maps.bbox_for_points(
 		nx.get_node_attributes(
-			pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g'],
+			trim_graph_to_busable(pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']['g']),
 			'pos'
 		).values()
 	)
