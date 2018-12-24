@@ -103,6 +103,71 @@ def simple_gpx(waypoints, segments) :
 		return None
 
 
+class NodeIdGenerator :
+	def __init__(self, g: nx.DiGraph) :
+		self.g = g
+		self.n = 1
+	def __iter__(self) :
+		return self
+	def __next__(self) :
+		while self.g.has_node(self.n) :
+			self.n += 1
+		return self.n
+
+
+# Split long edges
+# Assumes edge length in the attribute 'len'
+def partition_edges(g: nx.DiGraph, max_len=50, nodeid_generator=None) :
+
+	lens = dict(nx.get_edge_attributes(g, 'len'))
+	assert(lens), "Expect edge lengths in the 'len' attribute"
+
+	# Edges to split
+	edges = { e for (e, s) in lens.items() if (s > max_len) }
+	commons.logger.debug("Number of edges to split is {}".format(len(edges)))
+
+	# Edges are identified and grouped if they connect the same nodes
+	iso = (lambda e : (min(e), max(e)))
+	edges = { tuple(g) for (__, g) in commons.sort_and_group(edges, iso) }
+	commons.logger.debug("Number of edge groups to split is {}".format(len(edges)))
+
+	# Node ID generator
+	if not nodeid_generator :
+		nodeid_generator = NodeIdGenerator(g)
+
+	def split1(e, tt) :
+		(a, b) = e
+		(alat, alon) = g.nodes[a]['pos']
+		(blat, blon) = g.nodes[b]['pos']
+		# All nodes
+		nn = [a] + list(next(nodeid_generator) for __ in range(len(tt) - 2)) + [b]
+		# Create all new edges, remove the old one
+		g.add_path(nn)
+		g.remove_edge(e)
+		# TODO: copy attributes
+		# Geo-location of new nodes
+		lats = alat * (1 - tt) + blat * tt
+		lons = alon * (1 - tt) + blon * tt
+		# Set the locations of all nodes
+		for (n, t, lat, lon) in zip(nn, tt, lats, lons) :
+			g.nodes[n]['pos'] = (lat, lon)
+
+
+
+
+
+	from math import ceil
+
+	for ee in edges :
+		if (1 == len(ee)) :
+			# Edge to split
+			e = next(iter(ee))
+			# Number of nodes to add
+			k = int(lens[e] / max_len)
+			split1(e, np.linspace(0, 1, ceil(lens[e] / max_len)))
+	# TODO
+
+
 def mapmatch(
 		waypoints: list,
 		g: nx.DiGraph,
