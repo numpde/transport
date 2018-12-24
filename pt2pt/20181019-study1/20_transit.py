@@ -72,6 +72,7 @@ PARAM.update({
 	},
 })
 
+
 ## ====================== AUX :
 
 def ll2xy(latlon) :
@@ -108,6 +109,37 @@ def boxify(points: dict, maxinbox=5) :
 	yield from boxify({ p: d for (p, d) in points.items() if not first(p) }, maxinbox)
 
 
+def load_walkable_graph_with_knn() :
+	commons.logger.info("Loading the graph...")
+
+	G: nx.DiGraph
+	G = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['G']
+
+	g = nx.Graph()
+	# Collapse DiGraph to an undirected graph
+	g.add_edges_from(G.edges(data=False))
+	# Copy desired node attributes
+	for attr in {'pos'} :
+		nx.set_node_attributes(g, nx.get_node_attributes(G, name=attr), name=attr)
+	# Copy desired edge attributes
+	for attr in {'highway'} :
+		nx.set_edge_attributes(g, nx.get_edge_attributes(G, name=attr), name=attr)
+
+	# Note: G.to_undirected() copies all attributes
+
+	# # Some diagnostic info
+	# for (u, v, d) in list(g.edges.data())[0:10] :
+	# 	commons.logger.debug("Edge {}-{} ({})".format(u, v, d))
+	# 	for (a, b) in [(u, v), (v, u)] :
+	# 		try :
+	# 			commons.logger.debug("In original graph: {}-{} ({})".format(a, b, G.edges[a, b]))
+	# 		except KeyError :
+	# 			pass
+
+	# TODO: partition long edges; project bus stop onto graph
+	return {'g' : g, 'knn' : graph.compute_geo_knn(nx.get_node_attributes(g, 'pos'))}
+
+
 ## ==================== TESTS :
 
 
@@ -115,12 +147,8 @@ def boxify(points: dict, maxinbox=5) :
 ## =================== SLAVES :
 
 def map_transit_from(t: dt.datetime, x) :
-	commons.logger.info("Loading the graph...")
-	#graph_with_knn = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
-	g = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['G'].to_undirected()
-	# TODO: filter out unwalkable roads
-	# TODO: partition long edges
-	graph_with_knn = { 'g': g, 'knn': graph.compute_geo_knn(nx.get_node_attributes(g, 'pos')) }
+
+	graph_with_knn = load_walkable_graph_with_knn()
 
 	def tr_callback(result) :
 		if (result['status'] in {"zero", "init"}) :
@@ -359,7 +387,7 @@ def debug_compare_two() :
 		plt.show()
 
 
-## ================== OPTIONS :r
+## ================== OPTIONS :
 
 OPTIONS = {
 	'MAP' : map_transit,
