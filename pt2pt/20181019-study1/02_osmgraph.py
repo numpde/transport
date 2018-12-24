@@ -55,11 +55,6 @@ PARAM = {
 	'osm_way_keep' : {
 		'highway' : ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"] + ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"],
 	},
-
-	# For the slimmer bus roads graph exclude those edges/ways
-	'osm_way_bus_exclude' : {
-		#'highway' : ["service"],
-	},
 }
 
 ## ===================== META :
@@ -71,8 +66,9 @@ PARAM = {
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
+open = commons.logged_open
 
-## ===================== WORK :
+## =================== SLAVES :
 
 class RoadNetworkExtractor(osmium.SimpleHandler) :
 	def __init__(self) :
@@ -143,15 +139,15 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 		self.way_tags = {}
 		self.rels = defaultdict(dict)
 
-		print("Reading OSM file...")
+		commons.logger.info("Reading OSM file...")
 
 		osmium.SimpleHandler.apply_file(self, filename)
 
-		print("Done. Now making the graph...")
+		commons.logger.info("Done. Now making the graph...")
 
 		# Step 1: insert all nodes as vertices of the graph
 
-		print(" - 1. Collecting nodes")
+		commons.logger.info(" - 1. Collecting nodes")
 
 		self.G = nx.DiGraph()
 
@@ -161,7 +157,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 		# Step 2: construct edges of the road graph
 
-		print(" - 2. Collecting edges")
+		commons.logger.info(" - 2. Collecting edges")
 
 		def add_path(wnodes, wid, is_forward) :
 			self.G.add_path(wnodes, wid=wid)
@@ -188,7 +184,7 @@ class RoadNetworkExtractor(osmium.SimpleHandler) :
 
 		# Step 3: compute lengths of graph edges (in meters)
 
-		print(" - 3. Computing edge lengths")
+		commons.logger.info(" - 3. Computing edge lengths")
 
 		# Compute edge length representing distance, in meters
 		# Location expected as a (lat, lon) pair
@@ -235,14 +231,14 @@ def illustration() :
 		except nx.NetworkXError as e :
 			# Happens if nonexisting nodes or ways
 			# are referenced by the relation
-			print(e)
+			commons.logger.warning("networkx error: {}".format(e))
 
 	input("Press ENTER")
 
+
 # Extract roads and routes, write to file
 def extract(region) :
-
-	print("I. Processing the OSM file")
+	commons.logger.info("I. Processing the OSM file")
 
 	(G, node_tags, node_locs, way_tags, way_nodes, rels) = (
 		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
@@ -253,20 +249,14 @@ def extract(region) :
 		if (mode == 'WithoutNN') :
 			main_component_with_knn = None
 		else :
-			print("II. Making the nearest-neighbor tree for the main component...")
+			commons.logger.info("II. Making the nearest-neighbor tree for the main component...")
 
 			g : nx.DiGraph
 			g = G.copy()
 
-			# Remove the edges where the bus is not supposed to travel
-			for (key, exclude) in PARAM['osm_way_bus_exclude'].items() :
-				g.remove_edges_from(
-					list((a, b) for (a, b, d) in g.edges.data(key) if (d in exclude))
-				)
-
 			# Restrict to the largest weakly/strongly connected component
 			# Note: do not remove edges *after* extracting the connected component
-			if __name__ == '__main__':
+			if (__name__ == '__main__') :
 				g = nx.subgraph(g, max(list(nx.strongly_connected_components(g)), key=len)).copy()
 
 			# Note: Graph.copy() does not deep-copy container attributes
@@ -306,18 +296,56 @@ def extract(region) :
 			},
 
 			# Pickle to:
-			commons.logged_open(OFILE['OSM-pickled'].format(region=region), 'wb'),
+			open(OFILE['OSM-pickled'].format(region=region), 'wb'),
 			pickle.HIGHEST_PROTOCOL
 		)
+
+
+def show_stats(region) :
+	commons.logger.info("Loading the complete graph...")
+	G: nx.DiGraph
+	G = pickle.load(open(OFILE['OSM-pickled'].format(region=region), 'rb'))['G']
+
+	commons.logger.info("Stats:")
+
+	# Edge lengths
+	lens = list(nx.get_edge_attributes(G, 'len').values())
+	commons.logger.info("Number of nodes = {}, number of edges = {}".format(G.number_of_nodes(), G.number_of_edges()))
+	commons.logger.info("Min edge len = {}, max edge len = {}".format(min(lens), max(lens)))
+	# How many nodes need to have short edges
+	from math import floor
+	H = G.to_undirected()
+	for desired_max_len in [5, 10, 20, 50] :
+		commons.logger.info("Estimated number of extra nodes to have edges below {}m is {}".format(desired_max_len, sum(floor(s / desired_max_len) for s in nx.get_edge_attributes(H, 'len').values())))
+	# Histogram of edge lengths
+	import matplotlib.pyplot as plt
+	plt.hist(lens, bins=30)
+	plt.yscale('log', nonposy='clip')
+	plt.xlabel("Edge length")
+	plt.ylabel("Number of unidirectional edges")
+	plt.show()
+
+
+## ================== MASTERS :
+
+def extract_all_regions() :
+	for region in PARAM['regions'] :
+		extract(region)
+
+def show_stats_all_regions() :
+	for region in PARAM['regions'] :
+		show_stats(region)
+
+
+## ================== OPTIONS :
+
+OPTIONS = {
+	'EXTRACT_ALL' : extract_all_regions,
+	'SHOW_STATS' : show_stats_all_regions,
+}
 
 
 ## ==================== ENTRY :
 
 if (__name__ == "__main__") :
-
-	# illustration()
-
-	for region in PARAM['regions'] :
-		extract(region)
-
-
+	commons.parse_options(OPTIONS)
