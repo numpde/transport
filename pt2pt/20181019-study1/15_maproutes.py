@@ -142,11 +142,13 @@ def into_two_clusters(geopaths, keep=3/4, seq_sim=sequence_sim) :
 ## =================== SLAVES :
 
 def distill_geopath_ver2(sources) :
+	all_waypoints = set(map(tuple, (chain.from_iterable(src['waypoints_used'] for src in sources))))
+
 	geopaths = [src['geo_path'] for src in sources]
 
-	if (len(geopaths) < 2) : raise ValueError("At least two paths are required")
+	if (len(geopaths) < 2) :
+		raise ValueError("At least two paths are required")
 
-	all_waypoints = set(map(tuple, (chain.from_iterable(src['waypoints'] for src in sources))))
 
 	# Image of provided route variants and the original waypoints
 	with open(OFILE['progress'].format(stage='templates', ext='png'), 'wb') as fd :
@@ -157,19 +159,19 @@ def distill_geopath_ver2(sources) :
 		knn = graph.compute_geo_knn(dict(enumerate(cloud)), leaf_size=20)['knn_tree']
 		return [np.min(knn.query(np.asarray(p).reshape(1, -1), k=1)[0]) for p in pp]
 
-	# Edge to next point for forward paths
-	node_forw = dict()
-	for gp in geopaths :
-		gp = gp + [None]
-		for (e, c) in zip(zip(gp, gp[1:]), gp[2:]) :
-			node_forw[e] = node_forw.get(e, []) + [c]
+	# Returns a dictionary
+	# Directed edge --> Counter of possible next points
+	def predictor(paths) :
+		from collections import defaultdict, Counter
+		node_next = defaultdict(Counter)
+		for p in paths :
+			p = list(p) + [None]
+			for (e, c) in zip(zip(p, p[1:]), p[2:]) :
+				node_next[e].update([c])
+		return dict(node_next)
 
-	# Edge to next point for reverse paths
-	node_back = dict()
-	for gp in geopaths :
-		gp = [None] + gp
-		for (f, a) in zip(zip(gp[2:], gp[1:]), gp) :
-			node_back[f] = node_back.get(f, []) + [a]
+	node_forw = predictor(geopaths)
+	node_back = predictor(map(reversed, geopaths))
 
 
 	# g = nx.DiGraph()
@@ -216,7 +218,7 @@ def distill_geopath_ver2(sources) :
 	# Complete path tail from an edge
 	def complete(e, node_next) :
 		while node_next.get(e) :
-			a = random.choice(node_next[e])
+			a = random.choices(list(node_next[e].keys()), weights=list(node_next[e].values()), k=1).pop()
 			e = (e[1], a)
 			if a : yield a
 
@@ -319,8 +321,8 @@ def map_routes() :
 	# case = (scenario, 'KHH116', '0')
 	# case = (scenario, 'KHH1221', '0')
 	# case = (scenario, 'KHH1221', '1')
-	case = (scenario, 'KHH131', '0')
-	case_files = { case : case_files[case] }
+	# case = (scenario, 'KHH131', '0')
+	# case_files = { case : case_files[case] }
 
 	for ((scenario, routeid, dir), files) in case_files.items() :
 		print("===")
@@ -339,7 +341,7 @@ def map_routes() :
 
 			# Quality filter
 			def is_qualified(src) :
-				if (len(src['waypoints']) < PARAM['quality_min_wp/src']) : return False
+				if (len(src['waypoints_used']) < PARAM['quality_min_wp/src']) : return False
 				return True
 
 			# Filter quality

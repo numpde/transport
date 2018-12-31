@@ -58,12 +58,8 @@ PARAM = {
 	# Example:
 	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
-	'min_run_waypoints' : 4,
-
 	'min_runs_to_mapmatch' : 24,
 	'max_runs_to_mapmatch' : 24,
-
-	'waypoints_min_distance' : 60, # (meters)
 }
 
 
@@ -101,18 +97,6 @@ RUN_KEY = (lambda r : (ROUTEID_OF(r), DIRECTION_OF(r)))
 # https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
 THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
-def run_waypoints(run) :
-	return list(map(tuple, run[KEYS.pos]))
-
-# Keep a certain distance between waypoints (in meters)
-def sparsify(wps, dist=PARAM['waypoints_min_distance']) :
-	a = next(iter(wps))
-	yield a
-	for b in wps :
-		if (commons.geodesic(a, b) >= dist) :
-			a = b
-			yield a
-
 def is_in_map(lat, lon) :
 	(left, bottom, right, top) = PARAM['graph_bbox']
 	return ((bottom < lat < top) and (left < lon < right))
@@ -134,7 +118,7 @@ def mapmatch_runs(scenario, runs) :
 
 	g = trim_graph_to_busable(g)
 
-	# Nearest edges
+	# Nearest edges computer
 	kne = (lambda q: graph.estimate_kne(g, knn, q, ke=20))
 
 	mpl.use('Agg')
@@ -159,8 +143,8 @@ def mapmatch_runs(scenario, runs) :
 
 		ax.set_title("{} ({}%)".format(result['status'], math.floor(100 * result.get('progress', 0))))
 
-		if ('waypoints' in result) :
-			(y, x) = zip(*result['waypoints'])
+		if ('waypoints_all' in result) :
+			(y, x) = zip(*result['waypoints_all'])
 			ax.plot(x, y, 'o', c='m', markersize=4)
 
 		if ('geo_path' in result) :
@@ -172,42 +156,50 @@ def mapmatch_runs(scenario, runs) :
 		with open(OFILE['progress'].format(ext="png"), 'wb') as fd :
 			fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 
-		# Next figure update
-		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=2)
-
 		# Log into a GPX file
-		with open(OFILE['progress'].format(ext="gpx"), 'w') as fd :
-			fd.write(graph.simple_gpx(result['waypoints'], [result.get('geo_path', [])]).to_xml())
+		if ('waypoints_all' in result) :
+			with open(OFILE['progress'].format(ext="gpx"), 'w') as fd :
+				fd.write(graph.simple_gpx(result['waypoints_all'], [result.get('geo_path', [])]).to_xml())
+
+		# Next figure update
+		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=5)
 
 
-	for run in runs :
+	# Collect all bus runs
+	runs_by_runid = {
+		run[KEYS.runid] : run
+		for run in runs
+	}
 
-		waypoints = list(sparsify(run_waypoints(run)))
+	# Collect all waypoints
+	waypoints_by_runid = {
+		runid : list(map(tuple, run[KEYS.pos]))
+		for (runid, run) in runs_by_runid.items()
+	}
 
-		if (len(waypoints) < PARAM['min_run_waypoints']) :
-			print("Warning: too few waypoints -- skipping.")
-			continue
+	commons.logger.info("Running mapmatch on {} runs".format(len(runs)))
 
-		print("Waypoints:", waypoints)
+	for result in graph.mapmatch(waypoints_by_runid, g, kne, mm_callback, stubborn=0.2, many_partial=True) :
+		commons.logger.info("Got result for partial mapmatch with waypoints {}".format(result['waypoints_used']))
 
+		# The run on which mapmatch operated
+		run = runs_by_runid[result['waypoint_setid']]
+
+		# Collect initial info about the mapmatch attempt
 		mapmatch_attempt = {
 			k: run[k] for k in [KEYS.routeid, KEYS.dir, KEYS.runid, KEYS.busid]
 		}
 
+		# Attach a unique identifier for this mapmatch
 		mapmatch_attempt['MapMatchUUID'] = uuid.uuid4().hex
 
+		# Filename without the extension
 		fn = OFILE['mapmatched'].format(scenario=scenario, routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="{ext}")
 
 		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
 
-		try :
-			commons.seed()
-			result = graph.mapmatch(waypoints, g, kne, mm_callback, stubborn=0.2)
-		except :
-			raise
-
 		# Copy relevant fields from the mapmatcher result
-		for k in ['waypoints', 'path', 'geo_path', 'mapmatcher_version'] :
+		for k in ['waypoints_used', 'path', 'geo_path', 'mapmatcher_version'] :
 			mapmatch_attempt[k] = result[k]
 
 		# Save the result in different formats, in this directory
@@ -234,7 +226,7 @@ def mapmatch_runs(scenario, runs) :
 
 		try :
 			with open(fn.format(ext="gpx"), 'w') as fd :
-				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints'], [mapmatch_attempt['geo_path']]).to_xml())
+				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints_used'], [mapmatch_attempt['geo_path']]).to_xml())
 		except Exception as e :
 			print("Warning: Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
 

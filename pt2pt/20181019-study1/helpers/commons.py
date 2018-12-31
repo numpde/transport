@@ -3,10 +3,6 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-PARAM = {
-	'logger_ofile' : "logs/UV/{id}.log",
-}
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import os
@@ -64,9 +60,10 @@ def sort_and_group(C, key=None) :
 
 #LoggingLevels = dict(CRITICAL=50, ERROR=40, WARNING=30, INFO=20, DEBUG=10, NOTSET=0)
 
-import sys
-import logging
+import os.path
 import datetime as dt
+
+PARAM_LOGGER_OFILE = os.path.join(os.path.dirname(__file__), "logs/UV/{id}.log")
 
 def initialize_logger() :
 	import logging.config
@@ -93,7 +90,7 @@ def initialize_logger() :
 				'class': "logging.FileHandler",
 				'formatter': "forma",
 				'level': logging.DEBUG,
-				'filename': makedirs({'fn': PARAM['logger_ofile'].format(id=dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f"))})['fn'],
+				'filename': makedirs({'fn': PARAM_LOGGER_OFILE.format(id=dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f"))})['fn'],
 			}
 		},
 		root = {
@@ -220,7 +217,7 @@ def niceaxis(axis, expand=1.1, minaspect=((1 + math.sqrt(5)) / 2)) :
 
 from itertools import groupby
 
-# Remove consecutive repeats
+# Remove consecutive repeats (collects the first element of each subgroup)
 def remove_repeats(xx, key=None):
 	# https://stackoverflow.com/a/5738933
 	return [next(iter(g)) for (k, g) in groupby(xx, key)]

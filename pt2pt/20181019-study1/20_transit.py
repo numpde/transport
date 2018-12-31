@@ -83,7 +83,7 @@ def ll2xy(latlon) :
 
 # points is a dictionary (lat, lon) --> data
 # returns a pairs (bbox, point dict)
-def boxify(points: dict, maxinbox=5) :
+def boxify(points: dict, maxinbox=5, bbox=None) :
 
 	if not points : return
 
@@ -92,7 +92,8 @@ def boxify(points: dict, maxinbox=5) :
 
 	(lat, lon) = zip(*points.keys())
 
-	bbox = (min(lon), min(lat), max(lon), max(lat))
+	if not bbox :
+		bbox = (min(lon), min(lat), max(lon), max(lat))
 
 	if (len(points) <= maxinbox) :
 		yield (bbox, points)
@@ -219,6 +220,7 @@ def make_transit_img(J, backend='Agg') -> bytes :
 	import matplotlib as mpl
 	mpl.use(backend)
 
+	import dateutil.parser as dateparser
 	import matplotlib.pyplot as plt
 
 	ax: plt.Axes
@@ -226,7 +228,7 @@ def make_transit_img(J, backend='Agg') -> bytes :
 
 	origin = {
 		'x': J['origin']['x'],
-		't' : J['origin']['t'],
+		't' : dateparser.parse(J['origin']['t']),
 		'desc' : J['origin'].get('desc'),
 	}
 
@@ -251,15 +253,16 @@ def make_transit_img(J, backend='Agg') -> bytes :
 	ax.axis(maps.mb2ax(*bbox))
 	ax.autoscale(enable=False)
 
-	ax.tick_params(axis='both', which='both', labelsize='xx-small')
-
 	try :
 		background_map = maps.get_map_by_bbox(bbox, style=maps.MapBoxStyle.light, **PARAM['mapbox'])
 		ax.imshow(background_map, interpolation='quadric', extent=maps.mb2ax(*bbox), zorder=-100)
 	except Exception as e :
 		commons.logger.warning("No background map ({})".format(e))
 
-	ax.plot(*ll2xy(origin['x']), 'gx')
+	# Cross at the origin
+	((ox, oy), ot) = (ll2xy(origin['x']), origin['t'].strftime("%Y-%m-%d / %H:%M"))
+	ax.plot(ox, oy, 'gx', ms=3, mew=0.2)
+	ax.text(ox, oy, s="\n{}".format(ot), ha='center', va='top', fontsize=2)
 
 	# Show all datapoints
 	#ax.scatter(*zip(*contour_pts), marker='o', c='k', s=0.1, lw=0, edgecolor='none')
@@ -280,15 +283,19 @@ def make_transit_img(J, backend='Agg') -> bytes :
 	levels = list(range(0, T, 5))
 	c = ax.tricontourf(x, y, list(contour_pts.values()), levels=levels, zorder=100, cmap=cmap, extent=maps.mb2ax(*bbox), extend='max')
 
+	# Reduce fontsize
+	ax.tick_params(axis='both', which='both', labelsize='xx-small')
+	fig.colorbar(c).ax.tick_params(axis='both', which='both', labelsize='xx-small')
 
-	cbar = fig.colorbar(c)
-	cbar.ax.tick_params(labelsize='xx-small')
 
 	# import matplotlib.patches as patches
-	# for (bb, gohere_part) in boxes.items() :
-	# 	#ax.add_patch(patches.Rectangle(bb[0:2], bb[2]-bb[0], bb[3]-bb[1], linewidth=0.5, edgecolor='k', facecolor='none'))
-	# 	for (latlon, s) in list(gohere_part.items()) :
-	# 		ax.plot(*ll2xy(latlon), 'o', c=plt.get_cmap('Purples')(s), markersize=3)
+	# boxes = dict(boxify(contour_pts, maxinbox=20))
+	# for (bb, gohere_part) in list(boxes.items()) :
+	# 	(y, x) = bb[0:2]
+	# 	(h, w) = (bb[2]-bb[0], bb[3]-bb[1])
+	# 	ax.add_patch(patches.Rectangle((x, y), w, h, linewidth=0.5, edgecolor='k', facecolor='none'))
+	# # 	for (latlon, s) in list(gohere_part.items()) :
+	# # 		ax.plot(*ll2xy(latlon), 'o', c=plt.get_cmap('Purples')(s), markersize=3)
 
 	buffer = io.BytesIO()
 	fig.savefig(buffer, bbox_inches='tight', pad_inches=0, dpi=300)
@@ -307,10 +314,16 @@ def make_transit_img(J, backend='Agg') -> bytes :
 
 def map_transit() :
 	t = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+
 	# HonDo
 	x = (22.63121, 120.32742)
+
 	# Unknown location
 	x = (22.63322, 120.33468)
+
+	# Kaohsiung train station
+	x = (22.63835, 120.30180)
+
 	map_transit_from(t=t, x=x)
 
 

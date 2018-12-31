@@ -50,6 +50,9 @@ commons.makedirs(OFILE)
 PARAM = {
 	'regions' : ["kaohsiung"],
 
+	# Partition long edges
+	'max_edge_len' : 50, # meters
+
 	# Construct the road graph from these tags only
 	# https://wiki.openstreetmap.org/wiki/Key:highway
 	'osm_way_keep' : {
@@ -238,25 +241,30 @@ def illustration() :
 
 # Extract roads and routes, write to file
 def extract(region) :
-	commons.logger.info("I. Processing the OSM file")
+	commons.logger.info("I. Processing the OSM file...")
 
 	(G, node_tags, node_locs, way_tags, way_nodes, rels) = (
 		RoadNetworkExtractor().get_graph(IFILE['OSM'].format(region=region))
 	)
+
+	commons.logger.info("II. Partitioning long edges...")
+	graph.partition_edges(G, max_len=PARAM['max_edge_len'])
 
 	for mode in ['WithoutNN', 'WithNN'] :
 
 		if (mode == 'WithoutNN') :
 			main_component_with_knn = None
 		else :
-			commons.logger.info("II. Making the nearest-neighbor tree for the main component...")
+			commons.logger.info("III. Making the nearest-neighbor tree for the main component...")
 
 			g : nx.DiGraph
 			g = G.copy()
 
 			# Restrict to the largest weakly/strongly connected component
 			# Note: do not remove edges *after* extracting the connected component
+			# Note: non-walkable and non-busable roads are still present
 			if (__name__ == '__main__') :
+				commons.logger.info(" - Extracting the main component")
 				g = nx.subgraph(g, max(list(nx.strongly_connected_components(g)), key=len)).copy()
 
 			# Note: Graph.copy() does not deep-copy container attributes
