@@ -8,7 +8,9 @@ import math
 
 def cpu_frac(f) :
 	assert(0 < f <= 1), "The fraction should be 0 < f <= 1"
-	return min(12, math.ceil(multiprocessing.cpu_count() * f))
+	ncpu = min(12, math.ceil(multiprocessing.cpu_count() * f))
+	logger.debug("Somebody inquired about {} #CPUs".format(ncpu))
+	return ncpu
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -96,7 +98,7 @@ def initialize_logger() :
 				'class': "logging.StreamHandler",
 				'formatter': "forma",
 				'level': logging.DEBUG,
-				'stream': "ext://sys.stdout",
+				'stream': "ext://sys.stderr",
 			},
 			'f': {
 				'class': "logging.FileHandler",
