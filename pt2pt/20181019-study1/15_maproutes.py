@@ -19,10 +19,15 @@ import datetime as dt
 
 from sklearn.neighbors import NearestNeighbors
 
+from copy import deepcopy
+
 from itertools import chain, product, groupby
 
 from difflib import SequenceMatcher
 from sklearn.cluster import AgglomerativeClustering
+
+from joblib import Parallel, delayed
+from progressbar import progressbar
 
 import matplotlib as mpl
 # Note: do not import pyplot here -- may need to select renderer
@@ -59,7 +64,7 @@ commons.makedirs(OFILE)
 ## ==================== PARAM :
 
 PARAM = {
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').read(),
+	'mapbox_api_token' : commons.token_for('mapbox'),
 
 	'do_path_alignment' : True,
 	'do_path_clustering' : False,
@@ -68,11 +73,16 @@ PARAM = {
 	'quality_min_wp/src' : 4,
 
 	'candidates_oversampling' : 1/2,
-	'candidates_min#' : 24,
-	'candidates_max#' : 100,
+	'candidates_min#' : 12,
+	'candidates_max#' : 48,
+	'candidates_rounds' : 30,
+
+	'candidates_all_repeat' : 10,
 
 	# Final candidate route score
 	'route_fitness' : (lambda m: (m['covr'] + m['miss'] + sqrt(m['dist']) + (m['turn'] / m['dist']))),
+
+	'#jobs' : commons.cpu_frac(0.7),
 }
 
 
@@ -99,7 +109,7 @@ def preprocess_source(src) :
 	assert(len(src[k_p]) == len(src[k_gp])), "Node path and geo-path do not seem to match."
 	# Remove sequentially repeated geo-coordinates
 	(src[k_gp], src[k_p]) = map(list, zip(*commons.remove_repeats(list(zip(src[k_gp], src[k_p])), key=(lambda gp_p : gp_p[0]))))
-	(list(commons.remove_repeats(src[k_gp])) == list(src[k_gp])) or print("Warning: repeats in geopath.")
+	(list(commons.remove_repeats(src[k_gp])) == list(src[k_gp])) or commons.logger.warning("Repeats in geopath")
 	return src
 
 
@@ -142,16 +152,21 @@ def into_two_clusters(geopaths, keep=3/4, seq_sim=sequence_sim) :
 ## =================== SLAVES :
 
 def distill_geopath_ver2(sources) :
-	all_waypoints = set(map(tuple, (chain.from_iterable(src['waypoints_used'] for src in sources))))
 
-	geopaths = [src['geo_path'] for src in sources]
+	# Processing flowchart:
+	#
+	# geopaths ==> templates --> candidates --> route
+	#                 ^==============="
+
+	all_waypoints = set(map(tuple, chain.from_iterable(src['waypoints_used'] for src in sources)))
+
+	geopaths = [tuple(src['geo_path']) for src in sources]
 
 	if (len(geopaths) < 2) :
 		raise ValueError("At least two paths are required")
 
-
 	# Image of provided route variants and the original waypoints
-	with open(OFILE['progress'].format(stage='templates', ext='png'), 'wb') as fd :
+	with open(OFILE['progress'].format(stage='candidates_{round:02d}'.format(round=0), ext='png'), 'wb') as fd :
 		maps.write_track_img(waypoints=all_waypoints, tracks=geopaths, fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 	# Return for each point in 'pp' its minimal distance to the cloud of points 'cloud'
@@ -170,97 +185,77 @@ def distill_geopath_ver2(sources) :
 				node_next[e].update([c])
 		return dict(node_next)
 
-	node_forw = predictor(geopaths)
-	node_back = predictor(map(reversed, geopaths))
-
-
-	# g = nx.DiGraph()
-	# p = (22.6211862, 120.3456268)
-	# #
-	# def populate_from(P, depth) :
-	# 	g.add_node(P)
-	# 	g.nodes[P]['pos'] = (P[0][1], P[0][0]) # Geo-location
-	# 	g.nodes[P]['win'] = P[1] # Winding
-	#
-	# 	if (depth <= 0) : return
-	#
-	# 	target = list(node_forw.get(P, []))
-	# 	for Q in set(target) :
-	# 		g.add_edge(P, Q, flow=(target.count(Q) / len(target)))
-	# 		populate_from(Q, depth - 1)
-	# #
-	# populate_from((p, 1), depth=15)
-	#
-	# import matplotlib.pyplot as plt
-	# def plotter(fig, ax: plt.Axes) :
-	# 	ax.tick_params(axis='both', which='both', labelsize='xx-small')
-	# 	# Removing axis: https://stackoverflow.com/a/26610602/3609568
-	# 	ax.axis('off')
-	# 	ax.get_xaxis().set_visible(False)
-	# 	ax.get_yaxis().set_visible(False)
-	# 	#nx.draw_networkx_nodes(g, dict(g.nodes.data('pos')), ax=ax, node_size=0.1, node_shape='x')
-	# 	for (a, b, flow) in g.edges.data('flow') :
-	# 		nx.draw_networkx_edges(g, dict(g.nodes.data('pos')), edgelist=[(a, b)], ax=ax, node_size=0, width=0.3, edge_color='r', alpha=flow, arrowsize=1)
-	# 	#ax.scatter(*zip(*dict(g.nodes.data('pos')).values()), s=0.01, c='r', marker='.', zorder=100)
-	# 	ax.scatter(p[1], p[0], s=0.1, c='g', marker='.', zorder=1000)
-	#
-	# maps.write_track_img([], [], OFILE['progress'].format(stage='debug', ext='png'), PARAM['mapbox_api_token'], plotter=plotter, dpi=1200)
-	# exit(39)
-
-
-	# print("1-next:", node_forw[((22.6211862, 120.3456268), 1)])
-	# print("1-prev:", node_prev[((22.6211862, 120.3456268), 1)])
-	# print("2-next:", node_forw[((22.6211862, 120.3456268), 2)])
-	# print("2-prev:", node_prev[((22.6211862, 120.3456268), 2)])
-	#
-	# exit(30)
-
-	# Complete path tail from an edge
+	# Estimate path tail from an edge using a predictor
 	def complete(e, node_next) :
 		while node_next.get(e) :
 			a = random.choices(list(node_next[e].keys()), weights=list(node_next[e].values()), k=1).pop()
 			e = (e[1], a)
 			if a : yield a
 
-	print("Computing candidates...")
+	#
+	def get_candidates_from(templates, rounds=0) :
 
-	# Collect distinct route candidates, some of them multiple times
-	routes = []
-	while (len(routes) < PARAM['candidates_min#']) or (len(routes) <= len(set(routes)) * (1 + PARAM['candidates_oversampling'])) :
-		if (len(routes) >= PARAM['candidates_max#']) : break
+		# # Show all route candidates in one image
+		# with open(OFILE['progress'].format(stage='templates_{round:02d}'.format(round=rounds), ext='png'), 'wb') as fd :
+		# 	maps.write_track_img(waypoints=[], tracks=templates, fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
-		# Pick an edge to extend a route in both directions
-		root_edge = tuple(random.choice(list(chain.from_iterable(zip(gp, gp[1:]) for gp in geopaths))))
-		# Extended route
-		candidate = tuple(reversed(list(complete(tuple(reversed(root_edge)), node_back)))) + root_edge + tuple(complete(root_edge, node_forw))
-		if (len(candidate) < 2) : continue
-		# Record candidate
-		routes.append(candidate)
-		# #
-		# print("Progress: {}%".format(min(100, floor(100 * (len(routes) / len(set(routes)) / (1 + PARAM['candidates_oversampling']))))))
-		#
+		if (rounds >= PARAM['candidates_rounds']) :
+			return templates
 
-	assert(len(routes)), "No route candidates!"
+		if (len(set(templates)) < 2) :
+			return templates
 
-	# Show all route candidates in one image
-	with open(OFILE['progress'].format(stage='route-candidates', ext='png'), 'wb') as fd :
-		maps.write_track_img(waypoints=[], tracks=routes, fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
+		# commons.logger.info("Launched candidate round {} with {} templates...".format(rounds, len(templates)))
+
+		node_forw = predictor(templates)
+		node_back = predictor(map(reversed, templates))
+
+		# Collect route candidates, some of them multiple times
+		candidates = []
+		while (len(candidates) < PARAM['candidates_min#']) or (len(candidates) <= len(set(candidates)) * (1 + PARAM['candidates_oversampling'])) :
+
+			if (len(candidates) >= PARAM['candidates_max#']) : break
+
+			# Pick an edge to extend a route in both directions
+			root_edge = tuple(random.choice(list(chain.from_iterable(zip(gp, gp[1:]) for gp in templates))))
+
+			# Extended route
+			candidate = tuple(reversed(list(complete(tuple(reversed(root_edge)), node_back)))) + root_edge + tuple(complete(root_edge, node_forw))
+
+			# Record candidate
+			if (len(candidate) >= 2) :
+				candidates.append(candidate)
+
+		assert(len(candidates)), "No route candidates!"
+
+		# Next hierarchy round
+		return get_candidates_from(candidates, rounds + 1)
+
+	# COLLECT ALL CANDIDATES REPEATEDLY
+	commons.logger.info("Collecting candidates...")
+	candidates = list(chain.from_iterable(
+		Parallel(n_jobs=PARAM['#jobs'])(
+			delayed(get_candidates_from)(geopaths)
+			for __ in progressbar(range(PARAM['candidates_all_repeat']))
+		)
+	))
 
 	# Compute the relative frequency of the candidates, which we interpret as likelihood of being the correct route
-	route_freq = {route : (len(list(g)) / len(routes)) for (route, g) in groupby(sorted(routes))}
+	route_freq = {route : (len(list(g)) / len(candidates)) for (route, g) in groupby(sorted(candidates))}
 
 	# Keep only the most frequent candidates
 	route_freq = {r : f for (r, f) in route_freq.items() if (f >= min(sorted(route_freq.values(), reverse=True)[0:10]))}
 
+
 	# Q: individual coverage for each set of waypoints?
 
-	print("Computing metrics...")
+	commons.logger.info("Computing metrics...")
 
 	def compute_route_metrics(route) :
 		# Subdivide long edges
 		fine_route = refine_georoute(route)
 		# Collect the metrics
-		print("Total number of waypoints: {}, length of route candidate: {}".format(len(all_waypoints), len(fine_route)))
+		# commons.logger.debug("Total number of waypoints: {}, length of route candidate: {}".format(len(all_waypoints), len(fine_route)))
 		metrics = {
 			'path': route,
 			# (*): Less is better
@@ -278,20 +273,38 @@ def distill_geopath_ver2(sources) :
 
 		return metrics
 
-	def notification_filter(metrics) :
-		print("Candidate frequency rank #{}: CALL={}".format(metrics['rank'], metrics['CALL']))
-		with open(OFILE['progress'].format(stage='candidate-by-rank{}'.format(metrics['rank']), ext='png'), 'wb') as fd :
-			maps.write_track_img(waypoints=[], tracks=[metrics['path']], fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
-		return metrics
 
-	# Additional metrics, in the order of decreasing likelihood
-	routes_metrics = {
-		route : notification_filter({'rank': n, 'freq': route_freq[route], **compute_route_metrics(route)})
+	# COLLECT METRICS FOR EACH CANDIDATE
+	commons.logger.info("Computing candidate metrics...")
+	candidate_metrics = Parallel(n_jobs=PARAM['#jobs'])(
+		delayed(compute_route_metrics)(route)
+		for route in progressbar(route_freq)
+	)
+
+	# Rekey by route
+	candidate_metrics = { m['path']: m for m in candidate_metrics }
+
+	# Additional metrics, in the order of decreasing prior likelihood
+	candidate_metrics = {
+		route : {'rank': n, 'freq': route_freq[route], **candidate_metrics[route]}
 		for (n, route) in enumerate(sorted(route_freq, key=(lambda r : -route_freq[r])))
 	}
 
+
+	def observe(metrics) :
+		commons.logger.info("Candidate frequency rank #{}: CALL={}".format(metrics['rank'], metrics['CALL']))
+		fn = OFILE['progress'].format(stage='candidate_{rank:04d}'.format(rank=metrics['rank']), ext='png')
+		with open(fn, 'wb') as fd :
+			maps.write_track_img(waypoints=[], tracks=[metrics['path']], fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
+		return metrics
+
+	#
+	commons.logger.info("Candidates summary:")
+	for m in sorted(candidate_metrics.values(), key=(lambda m : m['CALL'])) :
+		observe(m)
+
 	# Winner candidate
-	route = min(routes_metrics, key=(lambda r : routes_metrics[r]['CALL']))
+	route = min(candidate_metrics, key=(lambda r : candidate_metrics[r]['CALL']))
 
 	return route
 
@@ -317,27 +330,27 @@ def map_routes() :
 	# case = (scenario, 'KHH16', '1')
 	# case = (scenario, 'KHH12', '1')
 	# case = (scenario, 'KHH100', '0')
-	# case = (scenario, 'KHH11', '1')
+	case = (scenario, 'KHH11', '1')
 	# case = (scenario, 'KHH116', '0')
 	# case = (scenario, 'KHH1221', '0')
 	# case = (scenario, 'KHH1221', '1')
 	# case = (scenario, 'KHH131', '0')
-	# case_files = { case : case_files[case] }
+	case_files = { case : case_files[case] }
 
 	for ((scenario, routeid, dir), files) in case_files.items() :
-		print("===")
-		print("Mapping route {}, direction {} (from scenario {})...".format(routeid, dir, scenario))
+		commons.logger.info("===")
+		commons.logger.info("Mapping route {}, direction {} (from scenario {})...".format(routeid, dir, scenario))
 
 		try :
 
 			if not files :
-				print("Warning: No mapmatch files to distill.")
+				commons.logger.warning("No mapmatch files to distill")
 				continue
 
 			# Load map-matched variants
 			sources = { fn : preprocess_source(commons.zipjson_load(fn)) for fn in files }
 
-			print("Number of sources before quality filter: {}".format(len(sources)))
+			commons.logger.info("Number of sources before quality filter: {}".format(len(sources)))
 
 			# Quality filter
 			def is_qualified(src) :
@@ -347,10 +360,10 @@ def map_routes() :
 			# Filter quality
 			sources = { fn : src for (fn, src) in sources.items() if is_qualified(src) }
 
-			print("Number of sources: {}".format(len(sources)))
+			commons.logger.info("Number of sources: {}".format(len(sources)))
 
 			if (len(sources) < PARAM['quality_min_src/route']) :
-				print("Warning: too few sources -- skipping.")
+				commons.logger.warning("too few sources -- skipping")
 				continue
 
 			# Combine map-matched variants
@@ -376,10 +389,9 @@ def map_routes() :
 				maps.write_track_img([], [src['geo_path'] for src in sources.values()], fd, PARAM['mapbox_api_token'])
 
 		except Exception as e :
-			print("Warning: Mapping failed ({}).".format(e))
-			print(traceback.format_exc())
+			commons.logger.warning("Mapping failed ({}). Traceback: \n{}".format(e, traceback.format_exc()))
 
-	print("Done.")
+	commons.logger.info("Done.")
 
 
 ## ==================== ENTRY :

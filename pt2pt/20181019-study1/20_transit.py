@@ -67,8 +67,8 @@ commons.makedirs(OFILE)
 
 PARAM.update({
 	'mapbox' : {
+		'style' : maps.MapBoxStyle.light,
 		'token' : commons.token_for('mapbox'),
-		'cachedir' : "helpers/maps_cache/UV/",
 	},
 })
 
@@ -119,9 +119,11 @@ def load_walkable_graph_with_knn() :
 	g = nx.Graph()
 	# Collapse DiGraph to an undirected graph
 	g.add_edges_from(G.edges(data=False))
+
 	# Copy desired node attributes
 	for attr in {'pos'} :
 		nx.set_node_attributes(g, nx.get_node_attributes(G, name=attr), name=attr)
+
 	# Copy desired edge attributes
 	for attr in {'highway'} :
 		nx.set_edge_attributes(g, nx.get_edge_attributes(G, name=attr), name=attr)
@@ -151,6 +153,7 @@ def map_transit_from(t: dt.datetime, x) :
 
 	graph_with_knn = load_walkable_graph_with_knn()
 
+	# Transit computation callback
 	def tr_callback(result) :
 		if (result['status'] in {"zero", "init"}) :
 			return
@@ -162,6 +165,7 @@ def map_transit_from(t: dt.datetime, x) :
 
 		g: nx.DiGraph
 		g = result['astar_graph']
+
 		J = {
 			'origin' : {
 				'x' : x,
@@ -191,6 +195,7 @@ def map_transit_from(t: dt.datetime, x) :
 		result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
 
 
+	# True/False filter for timetable files
 	def keep_ttfile(fn) :
 		return True
 
@@ -254,7 +259,7 @@ def make_transit_img(J, backend='Agg') -> bytes :
 	ax.autoscale(enable=False)
 
 	try :
-		background_map = maps.get_map_by_bbox(bbox, style=maps.MapBoxStyle.light, **PARAM['mapbox'])
+		background_map = maps.get_map_by_bbox(bbox, **PARAM['mapbox'])
 		ax.imshow(background_map, interpolation='quadric', extent=maps.mb2ax(*bbox), zorder=-100)
 	except Exception as e :
 		commons.logger.warning("No background map ({})".format(e))

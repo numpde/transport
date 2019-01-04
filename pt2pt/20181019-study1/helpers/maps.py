@@ -2,6 +2,7 @@
 # RA, 2018-11-07
 
 import io
+import os
 
 from enum import Enum
 from PIL import Image
@@ -15,6 +16,8 @@ from helpers import commons
 PARAM = {
 	'do_retina' : True,
 	'do_snap_to_dyadic' : False,
+
+	'default_cachedir' : os.path.join(os.path.dirname(__file__), "maps_cache/UV/"),
 }
 
 # Convert geographical coordinates to pixels
@@ -70,10 +73,16 @@ def bbox_for_points(pp) :
 	return (left, bottom, right, top)
 
 # bbox = (left, bottom, right, top) in degrees
-def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
+# Specify cachedir=None for no caching; cachedir="" for default directory
+def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir="") :
 
 	if not token :
 		raise RuntimeError("An API token is required")
+
+	if cachedir is None :
+		pass
+	elif (cachedir == "") :
+		cachedir = PARAM['default_cachedir']
 
 	# The region of interest in geo-coordinates in degrees
 	(left, bottom, right, top) = bbox
@@ -130,7 +139,7 @@ def get_map_by_bbox(bbox, token=None, style=MapBoxStyle.light, cachedir=None) :
 	(W, H) = I.size
 	assert((W, H) in [(w, h), (2*w, 2*h)])
 
-	# Extract the map of the region of interest from the covering map
+	# Extract the region of interest from the larger covering map
 	i = I.crop((
 		round(W * (left - LEFT) / (RIGHT - LEFT)),
         round(H * (top - TOP) / (BOTTOM - TOP)),
@@ -180,7 +189,7 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 		if mapbox_api_token :
 			ax.imshow(get_map_by_bbox(ax2mb(*axis), token=mapbox_api_token), extent=axis, interpolation='quadric', zorder=-100)
 	except URLError as e:
-		print("Warning: no background map (no internet connection?)")
+		commons.logger.warning("No background map (no internet connection?)")
 
 	fig.savefig(fd, dpi=dpi, bbox_inches='tight', pad_inches=0)
 	plt.close(fig)

@@ -3,6 +3,13 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+import multiprocessing
+import math
+
+def cpu_frac(f) :
+	assert(0 < f <= 1), "The fraction should be 0 < f <= 1"
+	return min(12, math.ceil(multiprocessing.cpu_count() * f))
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import os
@@ -64,6 +71,11 @@ import os.path
 import datetime as dt
 
 PARAM_LOGGER_OFILE = os.path.join(os.path.dirname(__file__), "logs/UV/{id}.log")
+
+# https://pypi.org/project/progressbar2/
+# "Progressbars with logging require stderr redirection _before_ the StreamHandler is initialized"
+import progressbar
+progressbar.streams.wrap_stderr()
 
 def initialize_logger() :
 	import logging.config
@@ -384,7 +396,7 @@ def geodesic(a, b) :
 
 # Print which files are opened
 def logged_open(filename, mode='r', *argv, **kwargs) :
-	logger.debug("({}):\t{}".format(mode, filename))
+	logger.debug("({m}):".format(m=mode).ljust(6) + filename)
 	return open(filename, mode, *argv, **kwargs)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #

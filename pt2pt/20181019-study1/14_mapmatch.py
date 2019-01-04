@@ -58,7 +58,7 @@ PARAM = {
 	# Example:
 	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
-	'min_runs_to_mapmatch' : 24,
+	'min_runs_to_mapmatch' : 2,
 	'max_runs_to_mapmatch' : 24,
 }
 
@@ -179,8 +179,8 @@ def mapmatch_runs(scenario, runs) :
 
 	commons.logger.info("Running mapmatch on {} runs".format(len(runs)))
 
-	for result in graph.mapmatch(waypoints_by_runid, g, kne, mm_callback, stubborn=0.2, many_partial=True) :
-		commons.logger.info("Got result for partial mapmatch with waypoints {}".format(result['waypoints_used']))
+	for result in graph.mapmatch(waypoints_by_runid, g, kne, callback=None, stubborn=0.2, many_partial=True) :
+		commons.logger.info("Got partial mapmatch with waypoints {}".format(result['waypoints_used']))
 
 		# The run on which mapmatch operated
 		run = runs_by_runid[result['waypoint_setid']]
@@ -196,8 +196,6 @@ def mapmatch_runs(scenario, runs) :
 		# Filename without the extension
 		fn = OFILE['mapmatched'].format(scenario=scenario, routeid=mapmatch_attempt[KEYS.routeid], direction=mapmatch_attempt[KEYS.dir], mapmatch_uuid=mapmatch_attempt['MapMatchUUID'], ext="{ext}")
 
-		#print("waypoints ({}): {}". format(len(waypoints), waypoints))
-
 		# Copy relevant fields from the mapmatcher result
 		for k in ['waypoints_used', 'path', 'geo_path', 'mapmatcher_version'] :
 			mapmatch_attempt[k] = result[k]
@@ -212,7 +210,7 @@ def mapmatch_runs(scenario, runs) :
 			with open(fn.format(ext="png"), 'wb') as fd :
 				fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 		except Exception as e :
-			print("Warning: Could not save figure {} ({})".format(fn.format(ext="png"), e))
+			commons.logger.warning("Could not save figure {} ({})".format(fn.format(ext="png"), e))
 
 		#  o) JSON
 
@@ -220,7 +218,7 @@ def mapmatch_runs(scenario, runs) :
 			with open(fn.format(ext="json"), 'w') as fd :
 				json.dump(mapmatch_attempt, fd)
 		except Exception as e :
-			print("Warning: Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
+			commons.logger.warning("Failed to write mapmatch file {} ({})".format(fn.format(ext="json"), e))
 
 		#  o) GPX
 
@@ -228,7 +226,7 @@ def mapmatch_runs(scenario, runs) :
 			with open(fn.format(ext="gpx"), 'w') as fd :
 				fd.write(graph.simple_gpx(mapmatch_attempt['waypoints_used'], [mapmatch_attempt['geo_path']]).to_xml())
 		except Exception as e :
-			print("Warning: Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
+			commons.logger.warning("Failed to write GPX file {} ({})".format(fn.format(ext="gpx"), e))
 
 		time.sleep(1)
 
@@ -247,37 +245,39 @@ def mapmatch_all() :
 	)
 
 	route_files = commons.ls(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"))
-	print("Found {} route files.".format(len(route_files)))
+	commons.logger.info("Found {} route files.".format(len(route_files)))
 
 	for route_file in route_files :
-		print("===")
-		print("Analyzing route file {}.".format(route_file))
+		time.sleep(2)
+
+		commons.logger.info("===")
+		commons.logger.info("Analyzing route file {}.".format(route_file))
 
 		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
 		dir = int(dir)
-		print("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
+		commons.logger.info("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
 
 		# Load all bus run segments for this case
 		runs = commons.zipjson_load(route_file)
-		print("Number of runs: {} ({})".format(len(runs), "total"))
+		commons.logger.info("Number of runs: {} ({})".format(len(runs), "total"))
 
 		# Check that the file indeed contains only one type of route
 		assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
 
 		# Remove runs that have a negative quality flag
 		runs = [run for run in runs if not (run.get('quality') == "-")]
-		print("Number of runs: {} ({})".format(len(runs), "not marked as bad quality"))
+		commons.logger.info("Number of runs: {} ({})".format(len(runs), "not marked as bad quality"))
 
 		# Keep only runs within the map
 		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
-		print("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
+		commons.logger.info("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
 
 		if (len(runs) > PARAM['max_runs_to_mapmatch']) :
-			print("Out of {} available runs, will mapmatch only random {}.".format(len(runs), PARAM['max_runs_to_mapmatch']))
+			commons.logger.info("Out of {} available runs, will mapmatch only random {}".format(len(runs), PARAM['max_runs_to_mapmatch']))
 			runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
 
 		if (len(runs) < PARAM['min_runs_to_mapmatch']) :
-			print("Skipping mapmatch: too few runs.")
+			commons.logger.warning("Skipping mapmatch: too few runs.")
 			continue
 
 		# Q: clustering here?
@@ -287,7 +287,7 @@ def mapmatch_all() :
 			return commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
 
 		if get_mapmatched_files() :
-			print("Skipping mapmatch: mapmatched files found.")
+			commons.logger.warning("Skipping mapmatch: mapmatched files found")
 			continue
 
 		try :
@@ -296,9 +296,8 @@ def mapmatch_all() :
 
 		except Exception as e :
 
-			print("Mapmatch failed ({}).".format(e))
-			print(traceback.format_exc())
-			print("Continuing...")
+			commons.logger.error("Mapmatch failed ({}) \n{}".format(e, traceback.format_exc()))
+			time.sleep(5)
 
 
 ## ==================== ENTRY :

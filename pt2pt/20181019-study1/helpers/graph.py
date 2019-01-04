@@ -15,9 +15,16 @@ import random
 import sklearn.neighbors
 import geopy.distance
 import gpxpy.gpx
+import traceback
+
 from copy import deepcopy
 from itertools import chain, groupby, product
 from sklearn.neighbors import NearestNeighbors
+
+from progressbar import progressbar
+
+from joblib import delayed, Parallel
+
 
 PARAM = {
 	'speed' : {
@@ -56,6 +63,12 @@ PARAM = {
 
 	# When mapmatching by subgroups...
 	'waypoints_groupsize' : 9,
+
+	# Mapmatch subgroups in random order?
+	'waypoints_mapmatch_shuffle' : True,
+
+	# Maximum number of subgroups to mapmatch (should enable shuffle)
+	'waypoints_mapmatch_max_groups' : 512,
 }
 
 
@@ -211,8 +224,8 @@ def partition_edges(g: nx.DiGraph, max_len=50, node_generator=None) :
 		except nx.NetworkXError :
 			pass
 
-		if 11172 in all_nodes :
-			commons.logger.debug("e = {}; all_nodes = {}; new_edges = {}".format(e, all_nodes, new_edges))
+		# if 11172 in all_nodes :
+		# 	commons.logger.debug("e = {}; all_nodes = {}; new_edges = {}".format(e, all_nodes, new_edges))
 
 	for ee in edges :
 		split(next(iter(ee)), bothways=(len(ee) == 2))
@@ -241,7 +254,7 @@ def mapmatch(
 	# waypoints = commons.remove_repeats(waypoints)
 
 	# Dictionary to pass to the callback function (updated below)
-	result = { 'waypoint_sets' : waypoint_sets, 'mapmatcher_version' : 11111129 }
+	result = { 'waypoint_sets' : waypoint_sets, 'mapmatcher_version' : 11111141 }
 
 	# Before doing anything
 	result['status'] = "zero"
@@ -285,24 +298,77 @@ def mapmatch(
 	}
 
 
-	# CHECK if nearest edges are implausibly far
-	# TODO: just discard those waypoints?
-	def check_dist(distdict: dict) :
-		if (min(distdict.values()) > PARAM['max_wp_to_graph_dist']) :
-			raise MapMatchingError("The graph does not seem to cover the waypoints")
-		else :
-			return distdict
+	commons.logger.debug("Computing waypoint nearest edges...")
 
 	# Waypoints' nearest edges: wp --> (dist_cloud : edge --> distance)
-	waypoints_kne = { wp: check_dist(dict(kne(wp))) for wp in set(chain.from_iterable(waypoint_sets.values())) }
+	def get_wp2ne(wpts) :
+		return {wp: dict(kne(wp)) for wp in set(wpts)}
+
+	# Compute the nearest edges map for each waypoint set
+	waypoints_kne = {
+		setid: get_wp2ne(wp2ne)
+		for (setid, wp2ne) in progressbar(waypoint_sets.items())
+	}
+
+	# Keep only those that are "inside" the graph
+	waypoints_kne = {
+		setid: wp2ne
+		for (setid, wp2ne) in waypoints_kne.items()
+		if (max(min(dd.values()) for dd in wp2ne.values()) <= PARAM['max_wp_to_graph_dist'])
+	}
 
 	# Waypoints from all sets
-	result['waypoints_all'] = list(waypoints_kne.keys())
+	result['waypoints_all'] = list(chain.from_iterable(wp2ne.keys() for wp2ne in waypoints_kne.values()))
 
 	# CHECK if there are edge repeats within clouds
 	for dc in waypoints_kne.values() :
 		if not commons.all_distinct(dc.keys()) :
 			commons.logger.warning("Repeated edges in cloud: {}".format(sorted(dc.keys())))
+
+	# Make pairs (setid, waypoint_group)
+	# using waypoints_kne and waypoint_sets
+	def split_into_groups() :
+		for (setid, wp2ne) in waypoints_kne.items() :
+
+			# Waypoints of this set w/o consecutive repeats
+			waypoints = commons.remove_repeats(waypoint_sets[setid])
+
+			if many_partial :
+				# Avoid getting stuck in places of dense waypoints
+				waypoints = list(sparsified(waypoints, dist=(PARAM['waypoints_min_distance'] / 10)))
+
+				# Extract groups of consecutive waypoints
+				groups = [
+					list(sparsified(waypoints[k:], dist=PARAM['waypoints_min_distance']))[0:PARAM['waypoints_groupsize']]
+					for k in range(0, len(waypoints), round(PARAM['waypoints_groupsize'] / 3))
+				]
+
+				# Remove too-small groups
+				groups = [ g for g in groups if (len(g) >= PARAM['waypoints_min_number']) ]
+
+				# Remove redundant groups
+				k = 1
+				while (k < len(groups)) :
+					if set(groups[k]).issubset(set(groups[k - 1])) :
+						groups.pop(k)
+					else :
+						k += 1
+
+				commons.logger.info("From set {}, extracted {} waypoint subgroups".format(setid, len(groups)))
+
+				# Mapmatch on the subgroups
+				# Note: the loop could be empty
+				for wpts in groups :
+					yield (setid, wpts)
+
+			else :
+				# Do not split waypoints into subgroups
+				yield (setid, sparsified(waypoints, dist=PARAM['waypoints_min_distance']))
+
+
+	# List of pairs (setid, waypoint_group)
+	commons.logger.debug("Grouping waypoints into subgroups...")
+	groups = list(split_into_groups())
 
 
 	# Main worker
@@ -311,6 +377,7 @@ def mapmatch(
 
 		result['status'] = "zero"
 		result['progress'] = 0
+
 		try :
 			del result['path']
 			del result['geo_path']
@@ -331,7 +398,7 @@ def mapmatch(
 		to_basenodes = (lambda edges : [tuple(g1.nodes[n]['basenode'] for n in e) for e in edges])
 
 		# A cloud of candidate edges for each waypoint
-		dist_clouds = [dict(waypoints_kne[wp]) for wp in result['waypoints_used']]
+		dist_clouds = [dict(waypoints_kne[result['waypoint_setid']][wp]) for wp in result['waypoints_used']]
 
 		# Initial likelihood prop to road class and inv-prop to the regularized distance (in meters) to the waypoint
 		def dist2prob(dc) :
@@ -502,8 +569,8 @@ def mapmatch(
 				# Normalize to avoid flop errors
 				prob_clouds = [{ e : (p / sum(pc.values())) for (e, p) in pc.items() } for pc in prob_clouds]
 
-				# Status
-				if callback:
+				# Intermediate status
+				if callback :
 					result['status'] = "opti"
 					result['progress'] = progress_reset * np.mean([min(1, max(pc.values()) / sum(pc.values()) / final_acceptance_threshold) for pc in prob_clouds])
 					(result['geo_path'], result['path'], _) = map(list, zip(*commons.remove_repeats(zip(*get_current_path(seledges)))))
@@ -520,63 +587,46 @@ def mapmatch(
 					# Revert to the best solution seen so far
 					seledges = list(elite[0][1])
 
-					# Remove transient indicators
-					result = { k : v for (k, v) in result.items() if not ((k[0] == "(") and (k[-1] == ")")) }
-
 					# Optimization finished
 					break
 
-		# Reconstruct the route from the selected edges
+		# Final status. Reconstruct the route from the selected edges
 		result['status'] = "done"
 		result['progress'] = 1
 		(result['geo_path'], result['path'], _) = map(list, zip(*commons.remove_repeats(zip(*get_current_path(seledges)))))
 
+		# Remove transient indicators
+		result = {k : v for (k, v) in result.items() if not ((k[0] == "(") and (k[-1] == ")"))}
+
 		if callback: callback(result)
 
-	# Mapmatch driver
-	for (setid, waypoints) in waypoint_sets.items() :
+		return result
 
-		waypoints = commons.remove_repeats(waypoints)
-		result['waypoint_setid'] = setid
+	incomplete = [
+		{**result, **{'waypoint_setid': si, 'waypoints_used': wu}}
+		for (si, wu) in groups
+	]
 
-		if many_partial :
-			# Avoid getting stuck in places of dense waypoints
-			waypoints = list(sparsified(waypoints, dist=(PARAM['waypoints_min_distance'] / 10)))
+	# Mapmatch groups in random order
+	if PARAM['waypoints_mapmatch_shuffle'] :
+		random.shuffle(incomplete)
 
-			# Extract groups of consecutive waypoints
-			groups = [
-				list(sparsified(waypoints[k:], dist=PARAM['waypoints_min_distance']))[0:PARAM['waypoints_groupsize']]
-				for k in range(0, len(waypoints), round(PARAM['waypoints_groupsize'] / 3))
-			]
+	# Mapmatch only so many groups
+	incomplete = incomplete[0:PARAM['waypoints_mapmatch_max_groups']]
 
-			# Remove too-small groups
-			groups = [ g for g in groups if (len(g) >= PARAM['waypoints_min_number']) ]
+	# MAPMATCH DRIVER
+	commons.logger.info("Starting mapmatch on {} subgroups".format(len(incomplete)))
 
-			# Remove redundant groups
-			k = 1
-			while (k < len(groups)) :
-				if set(groups[k]).issubset(set(groups[k - 1])) :
-					groups.pop(k)
-				else :
-					k += 1
+	for result in incomplete :
+		try :
+			result = mapmatch_complete_this(result)
+		except :
+			commons.logger.error("Group mapmatch failed within set #{} \n{}".format(result['waypoint_setid'], traceback.format_exc()))
+			continue
 
-			# Mapmatch groups in random order
-			random.shuffle(groups)
+		yield result
 
-			commons.logger.info("Number of waypoints groups is {}".format(len(groups)))
-
-			if not groups :
-				raise ValueError("Not enough waypoints for mapmatch")
-
-			# Mapmatch on the subgroups
-			for wpts in groups :
-				result['waypoints_used'] = wpts
-				mapmatch_complete_this(result)
-				yield result
-		else :
-			result['waypoints_used'] = sparsified(waypoints, dist=PARAM['waypoints_min_distance'])
-			mapmatch_complete_this(result)
-			yield result
+	# complete = Parallel(n_jobs=4, backend="threading")(delayed(mapmatch_complete_this)(result) for result in progressbar(incomplete))
 
 
 # node_pos is a dictionary node id -> (lat, lon)
@@ -592,36 +642,38 @@ def estimate_kne(g, knn, q, ke=10) :
 	assert('knn_tree' in knn)
 	assert('node_ids' in knn)
 
-	def nearest_nodes(q, kn=10) :
+	def nearest_nodes(q, kn) :
 		# Find nearest nodes using the KNN tree
-		(dist, ind) = (boo.reshape(-1) for boo in knn['knn_tree'].query(np.asarray(q).reshape(1, -1), k=kn))
+		(dist, ind) = (boo.reshape(-1) for boo in knn['knn_tree'].query([q], k=kn))
 		# Return pairs (graph-node-id, distance-to-q) sorted by distance
-		return list(zip([knn['node_ids'][i] for i in ind], dist))
+		for i in ind :
+			yield knn['node_ids'][i]
 
-	# Locate k nearest directed edges among a set of candidates
+	# Locate ke nearest directed edges among a set of candidates
 	# Return a list of pairs (edge, distance-to-q)
 	# Assumes node (lat, lon) coordinates in the node attribute 'pos'
-	def filter_nearest_edges(g, q, edges, k):
-		return list(heapq.nsmallest(
-			k,
-			[
-				# Attach distance from q
-				(e, dist_to_segment(q, (g.nodes[e[0]]['pos'], g.nodes[e[1]]['pos']))[0])
-				for e in edges
-			],
-			key=(lambda ed : ed[1])
-		))
+	def filter_nearest_edges(g, q, edges):
+		# Identify (a, b) and (b, a)
+		iso_edge = (lambda e : (min(e), max(e)))
+
+		# Distance of each (iso)edge to the point q
+		ie2d = {
+			ie: dist_to_segment(q, (g.nodes[ie[0]]['pos'], g.nodes[ie[1]]['pos']))[0]
+			for ie in set(map(iso_edge, edges))
+		}
+
+		return sorted([(e, ie2d[iso_edge(e)]) for e in edges], key=(lambda __ : __[1]))[0:ke]
 
 	for kn in range(ke, 20*ke, 5) :
-		# Get some closest nodes first, then their incident edges
-		ee = set(g.edges(nbunch=list(dict(nearest_nodes(q, kn=kn)).keys())))
-		# Append reverse edges, just in case
-		ee = set(list(ee) + [(b, a) for (a, b) in ee if g.has_edge(b, a)])
+		# Get some closest nodes first
+		nn = list(nearest_nodes(q, kn=kn))
+		# Get the adjacent edges
+		ee = set(g.in_edges(nbunch=nn)) | set(g.out_edges(nbunch=nn))
 		# Continue looking for more edges?
-		if (len(ee) < (4*ke)) : continue
-		# Filter down to the nearest ones
-		ee = filter_nearest_edges(g, q, ee, ke)
-		return ee
+		if (len(ee) >= (2*ke)) :
+			# Filter down to the nearest ones
+			ee = filter_nearest_edges(g, q, ee)
+			return ee
 
 	raise RuntimeError("Could not find enough nearest edges")
 

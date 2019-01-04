@@ -61,7 +61,7 @@ def get_neighbors(knn, x, radius=None, k=None) :
 		return [I[j] for j in tree.query_radius([x], r=radius)[0]]
 	if k :
 		return [I[j] for j in tree.query([x], k=k, return_distance=False)[0]]
-	raise ValueError("Either *radius* of *number of neighbors* should be provided")
+	raise ValueError("Either *radius* or *number of neighbors* should be provided")
 
 ## ========== BASIC DATATYPES :
 
@@ -367,15 +367,15 @@ class Transit :
 
 			# Collect potential next moves
 			leg_choices = set()
+			# From bus stop by bus to some other bus stop
 			with commons.Timer('astar_collect_choices_bb') :
 				leg_choices |= set(self.bb.where_can_i_go(C))
+			# From any location to nearby bus stop
 			with commons.Timer('astar_collect_choices_bw') :
 				leg_choices |= set(self.bw.where_can_i_go(C))
+			# From any location to nearby graph nodes, or from node to node along edge
 			with commons.Timer('astar_collect_choices_gw') :
 				leg_choices |= set(self.gw.where_can_i_go(C))
-
-			# with commons.Timer('astar_collect_choices') :
-			# 	leg_choices = set(chain.from_iterable(mode.where_can_i_go(C) for mode in [self.bb, self.bw]))
 
 			if PARAM['prefilter_legs'] :
 				# Keep only the most efficient candidate for each next destination
