@@ -82,7 +82,7 @@ PARAM = {
 	# Final candidate route score
 	'route_fitness' : (lambda m: (m['covr'] + m['miss'] + sqrt(m['dist']) + (m['turn'] / m['dist']))),
 
-	'#jobs' : commons.cpu_frac(0.7),
+	'#jobs' : 1 or commons.cpu_frac(0.7),
 }
 
 
@@ -187,8 +187,10 @@ def distill_geopath_ver2(sources) :
 
 	# Estimate path tail from an edge using a predictor
 	def complete(e, node_next) :
+		node_next = deepcopy(node_next)
 		while node_next.get(e) :
 			a = random.choices(list(node_next[e].keys()), weights=list(node_next[e].values()), k=1).pop()
+			node_next[e][a] *= 0.5 # Reduce the likelihood of this choice for next time
 			e = (e[1], a)
 			if a : yield a
 
@@ -205,7 +207,7 @@ def distill_geopath_ver2(sources) :
 		if (len(set(templates)) < 2) :
 			return templates
 
-		# commons.logger.info("Launched candidate round {} with {} templates...".format(rounds, len(templates)))
+		commons.logger.info("Launched candidate round {} with {} templates...".format(rounds, len(templates)))
 
 		node_forw = predictor(templates)
 		node_back = predictor(map(reversed, templates))
@@ -234,7 +236,7 @@ def distill_geopath_ver2(sources) :
 	# COLLECT ALL CANDIDATES REPEATEDLY
 	commons.logger.info("Collecting candidates...")
 	candidates = list(chain.from_iterable(
-		Parallel(n_jobs=PARAM['#jobs'])(
+		Parallel(n_jobs=PARAM['#jobs'], batch_size=1)(
 			delayed(get_candidates_from)(geopaths)
 			for __ in progressbar(range(PARAM['candidates_all_repeat']))
 		)
@@ -248,8 +250,6 @@ def distill_geopath_ver2(sources) :
 
 
 	# Q: individual coverage for each set of waypoints?
-
-	commons.logger.info("Computing metrics...")
 
 	def compute_route_metrics(route) :
 		# Subdivide long edges
@@ -276,7 +276,7 @@ def distill_geopath_ver2(sources) :
 
 	# COLLECT METRICS FOR EACH CANDIDATE
 	commons.logger.info("Computing candidate metrics...")
-	candidate_metrics = Parallel(n_jobs=PARAM['#jobs'])(
+	candidate_metrics = Parallel(n_jobs=PARAM['#jobs'], batch_size=1)(
 		delayed(compute_route_metrics)(route)
 		for route in progressbar(route_freq)
 	)
@@ -286,25 +286,28 @@ def distill_geopath_ver2(sources) :
 
 	# Additional metrics, in the order of decreasing prior likelihood
 	candidate_metrics = {
-		route : {'rank': n, 'freq': route_freq[route], **candidate_metrics[route]}
+		route : {'frrk': n, 'freq': route_freq[route], **candidate_metrics[route]}
 		for (n, route) in enumerate(sorted(route_freq, key=(lambda r : -route_freq[r])))
 	}
 
+	# Attach rank by CALL
+	for (r, m) in enumerate(sorted(candidate_metrics.values(), key=commons.inspect('CALL'))) :
+		m['rank'] = r
 
-	def observe(metrics) :
-		commons.logger.info("Candidate frequency rank #{}: CALL={}".format(metrics['rank'], metrics['CALL']))
-		fn = OFILE['progress'].format(stage='candidate_{rank:04d}'.format(rank=metrics['rank']), ext='png')
+	# WINNER CANDIDATE
+	route = min(candidate_metrics, key=(lambda r : candidate_metrics[r]['CALL']))
+
+	# Display metrics
+	commons.logger.info("Candidates summary:")
+	for m in sorted(candidate_metrics.values(), key=commons.inspect('rank')) :
+		commons.logger.info("Candidate #{rank:02d}: CALL={call:E}, freqrank={frrk}".format(rank=m['rank'], call=m['CALL'], frrk=m['frrk']))
+
+	# Make images
+	commons.logger.info("Making candidate images...")
+	for metrics in candidate_metrics.values() :
+		fn = OFILE['progress'].format(stage='candidate_{rank:02d}'.format(rank=metrics['rank']), ext='png')
 		with open(fn, 'wb') as fd :
 			maps.write_track_img(waypoints=[], tracks=[metrics['path']], fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
-		return metrics
-
-	#
-	commons.logger.info("Candidates summary:")
-	for m in sorted(candidate_metrics.values(), key=(lambda m : m['CALL'])) :
-		observe(m)
-
-	# Winner candidate
-	route = min(candidate_metrics, key=(lambda r : candidate_metrics[r]['CALL']))
 
 	return route
 
@@ -330,7 +333,8 @@ def map_routes() :
 	# case = (scenario, 'KHH16', '1')
 	# case = (scenario, 'KHH12', '1')
 	# case = (scenario, 'KHH100', '0')
-	case = (scenario, 'KHH11', '1')
+	case = (scenario, 'KHH122', '0')
+	# case = (scenario, 'KHH11', '1')
 	# case = (scenario, 'KHH116', '0')
 	# case = (scenario, 'KHH1221', '0')
 	# case = (scenario, 'KHH1221', '1')
