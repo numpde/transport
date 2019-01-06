@@ -21,6 +21,7 @@ import sklearn.neighbors
 import matplotlib as mpl
 # Note: do not import pyplot here -- may need to select renderer
 
+# from typing import Tuple
 
 ## ================= FILE I/O :
 
@@ -32,7 +33,10 @@ open = commons.logged_open
 IFILE = {
 	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
 
-	'segment_by_route' : "OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
+	'segment_by_route' : [
+		# "ORIGINALS/13/{scenario}/byroute/{routeid}-{dir}.json",
+		"OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
+	]
 }
 
 
@@ -58,8 +62,8 @@ PARAM = {
 	# Example:
 	#'graph_bbox' : (120.2593, 22.5828, 120.3935, 22.6886),
 
-	'min_runs_to_mapmatch' : 2,
-	'max_runs_to_mapmatch' : 24,
+	'min_runs_to_mapmatch' : 6,
+	'max_runs_to_mapmatch' : 128,
 }
 
 
@@ -111,7 +115,7 @@ def mapmatch_runs(scenario, runs) :
 
 	# Road network (main graph component) with nearest-neighbor tree for the nodes
 	g: nx.DiGraph
-	knn : sklearn.neighbors.NearestNeighbors
+
 	(g, knn) = commons.inspect(['g', 'knn'])(
 		pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['main_component_with_knn']
 	)
@@ -122,22 +126,20 @@ def mapmatch_runs(scenario, runs) :
 	kne = (lambda q: graph.estimate_kne(g, knn, q, ke=20))
 
 	mpl.use('Agg')
+	mpl.rcParams['figure.max_open_warning'] = 100
+
 	import matplotlib.pyplot as plt
 
-	def mm_callback(result) :
-		fig: plt.Figure
+	#
+	def make_figure(result) -> dict :
 		ax: plt.Axes
 
-		if not ('plt' in result) :
+		if ('plt' in result) :
+			(fig, ax) = commons.inspect({'plt' : ('fig', 'ax')})(result)
+		else :
 			(fig, ax) = plt.subplots()
 			result['plt'] = { 'fig' : fig, 'ax' : ax }
 			result['auto_close_fig'] = commons.UponDel(lambda : plt.close(fig))
-
-		if (result['status'] == "opti") :
-			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
-				return
-
-		(fig, ax) = commons.inspect({'plt' : ('fig', 'ax')})(result)
 
 		ax.cla()
 
@@ -145,21 +147,30 @@ def mapmatch_runs(scenario, runs) :
 
 		if ('waypoints_all' in result) :
 			(y, x) = zip(*result['waypoints_all'])
-			ax.plot(x, y, 'o', c='m', markersize=4)
+			ax.plot(x, y, 'o', c='m', markersize=2)
 
 		if ('geo_path' in result) :
 			(y, x) = zip(*result['geo_path'])
-			ax.plot(x, y, 'b--', linewidth=2, zorder=-50)
+			ax.plot(x, y, 'b--', linewidth=2, zorder=100)
 
-		# Display/save figure here
+		return result['plt']
 
-		with open(OFILE['progress'].format(ext="png"), 'wb') as fd :
-			fig.savefig(fd, bbox_inches='tight', pad_inches=0)
+	#
+	def mm_callback(result) -> None:
+
+		if (result['status'] == "opti") :
+			if (dt.datetime.now() < result.get('nfu', dt.datetime.min)) :
+				return
 
 		# Log into a GPX file
 		if ('waypoints_all' in result) :
 			with open(OFILE['progress'].format(ext="gpx"), 'w') as fd :
 				fd.write(graph.simple_gpx(result['waypoints_all'], [result.get('geo_path', [])]).to_xml())
+
+		# Save figure
+		make_figure(result)
+		with open(OFILE['progress'].format(ext="png"), 'wb') as fd :
+			fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 
 		# Next figure update
 		result['nfu'] = dt.datetime.now() + dt.timedelta(seconds=5)
@@ -179,8 +190,12 @@ def mapmatch_runs(scenario, runs) :
 
 	commons.logger.info("Running mapmatch on {} runs".format(len(runs)))
 
-	for result in graph.mapmatch(waypoints_by_runid, g, kne, callback=None, stubborn=0.2, many_partial=True) :
-		commons.logger.info("Got partial mapmatch with waypoints {}".format(result['waypoints_used']))
+	# MAPMATCH RUNS
+	results = graph.mapmatch(waypoints_by_runid, g, kne, knn=knn, callback=None, stubborn=0.2, many_partial=True)
+
+	for result in results :
+
+		commons.logger.info("Got mapmatch with waypoints {}".format(result['waypoints_used']))
 
 		# The run on which mapmatch operated
 		run = runs_by_runid[result['waypoint_setid']]
@@ -206,7 +221,8 @@ def mapmatch_runs(scenario, runs) :
 		#  o) Image
 
 		try :
-			fig = result['plt']['fig']
+			# Make and save the figure
+			fig = make_figure(result)['fig']
 			with open(fn.format(ext="png"), 'wb') as fd :
 				fig.savefig(fd, bbox_inches='tight', pad_inches=0)
 		except Exception as e :
@@ -244,60 +260,64 @@ def mapmatch_all() :
 		).values()
 	)
 
-	route_files = commons.ls(IFILE['segment_by_route'].format(scenario="**", routeid="*", dir="*"))
-	commons.logger.info("Found {} route files.".format(len(route_files)))
+	for route_file_template in IFILE['segment_by_route']:
 
-	for route_file in route_files :
-		time.sleep(2)
+		route_files = commons.ls(route_file_template.format(scenario="**", routeid="*", dir="*"))
 
-		commons.logger.info("===")
-		commons.logger.info("Analyzing route file {}.".format(route_file))
+		commons.logger.info("Route file template: {}".format(route_file_template))
+		commons.logger.info("Found {} route files".format(len(route_files)))
 
-		(scenario, routeid, dir) = re.fullmatch(IFILE['segment_by_route'].format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
-		dir = int(dir)
-		commons.logger.info("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
+		for route_file in route_files :
+			time.sleep(2)
 
-		# Load all bus run segments for this case
-		runs = commons.zipjson_load(route_file)
-		commons.logger.info("Number of runs: {} ({})".format(len(runs), "total"))
+			commons.logger.info("===")
+			commons.logger.info("Analyzing route file {}.".format(route_file))
 
-		# Check that the file indeed contains only one type of route
-		assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
+			(scenario, routeid, dir) = re.fullmatch(route_file_template.format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
+			dir = int(dir)
+			commons.logger.info("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
 
-		# Remove runs that have a negative quality flag
-		runs = [run for run in runs if not (run.get('quality') == "-")]
-		commons.logger.info("Number of runs: {} ({})".format(len(runs), "not marked as bad quality"))
+			# Load all bus run segments for this case
+			runs = commons.zipjson_load(route_file)
+			commons.logger.info("Number of runs: {} ({})".format(len(runs), "total"))
 
-		# Keep only runs within the map
-		runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
-		commons.logger.info("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
+			# Check that the file indeed contains only one type of route
+			assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
 
-		if (len(runs) > PARAM['max_runs_to_mapmatch']) :
-			commons.logger.info("Out of {} available runs, will mapmatch only random {}".format(len(runs), PARAM['max_runs_to_mapmatch']))
-			runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
+			# Remove runs that have a negative quality flag
+			runs = [run for run in runs if not (run.get('quality') == "-")]
+			commons.logger.info("Number of runs: {} ({})".format(len(runs), "not marked as bad quality"))
 
-		if (len(runs) < PARAM['min_runs_to_mapmatch']) :
-			commons.logger.warning("Skipping mapmatch: too few runs.")
-			continue
+			# Keep only runs within the map
+			runs = [run for run in runs if all(is_in_map(*p) for p in run[KEYS.pos])]
+			commons.logger.info("Number of runs: {} ({})".format(len(runs), "within the map bbox"))
 
-		# Q: clustering here?
+			if (len(runs) > PARAM['max_runs_to_mapmatch']) :
+				commons.logger.info("Out of {} available runs, will mapmatch only random {}".format(len(runs), PARAM['max_runs_to_mapmatch']))
+				runs = commons.random_subset(runs, k=PARAM['max_runs_to_mapmatch'])
 
-		# Existing mapmatched runs for this route
-		def get_mapmatched_files() :
-			return commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
+			if (len(runs) < PARAM['min_runs_to_mapmatch']) :
+				commons.logger.warning("Skipping mapmatch: too few runs.")
+				continue
 
-		if get_mapmatched_files() :
-			commons.logger.warning("Skipping mapmatch: mapmatched files found")
-			continue
+			# Q: clustering here?
 
-		try :
+			# Existing mapmatched runs for this route
+			existing = commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
 
-			mapmatch_runs(scenario, runs)
+			if existing :
+				commons.logger.warning("Skipping mapmatch: {} mapmatched files found".format(len(existing)))
+				continue
 
-		except Exception as e :
+			try :
 
-			commons.logger.error("Mapmatch failed ({}) \n{}".format(e, traceback.format_exc()))
-			time.sleep(5)
+				mapmatch_runs(scenario, runs)
+
+			except Exception as e :
+
+				commons.logger.error("Mapmatch failed ({}) \n{}".format(e, traceback.format_exc()))
+				commons.logger.warning("Mapmatch incomplete on route {}-{} from scenario '{}'".format(routeid, dir, scenario))
+				time.sleep(5)
 
 
 ## ==================== ENTRY :
