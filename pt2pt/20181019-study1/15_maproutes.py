@@ -77,12 +77,12 @@ PARAM = {
 	'candidates_max#' : 48,
 	'candidates_rounds' : 30,
 
-	'candidates_all_repeat' : 10,
+	'candidates_all_repeat' : 20,
 
 	# Final candidate route score
 	'route_fitness' : (lambda m: (m['covr'] + m['miss'] + sqrt(m['dist']) + (m['turn'] / m['dist']))),
 
-	'#jobs' : 1 or commons.cpu_frac(0.7),
+	'#jobs' : commons.cpu_frac(0.7),
 }
 
 
@@ -174,10 +174,12 @@ def distill_geopath_ver2(sources) :
 		knn = graph.compute_geo_knn(dict(enumerate(cloud)), leaf_size=20)['knn_tree']
 		return [np.min(knn.query(np.asarray(p).reshape(1, -1), k=1)[0]) for p in pp]
 
+	from collections import Counter
+
 	# Returns a dictionary
 	# Directed edge --> Counter of possible next points
 	def predictor(paths) :
-		from collections import defaultdict, Counter
+		from collections import defaultdict
 		node_next = defaultdict(Counter)
 		for p in paths :
 			p = list(p) + [None]
@@ -186,11 +188,17 @@ def distill_geopath_ver2(sources) :
 		return dict(node_next)
 
 	# Estimate path tail from an edge using a predictor
-	def complete(e, node_next) :
+	def complete(e, node_next, use_most_common=True) :
 		node_next = deepcopy(node_next)
 		while node_next.get(e) :
-			a = random.choices(list(node_next[e].keys()), weights=list(node_next[e].values()), k=1).pop()
-			node_next[e][a] *= 0.5 # Reduce the likelihood of this choice for next time
+			nn: Counter
+			nn = node_next[e]
+			if use_most_common :
+				a = nn.most_common(1).pop()[0]
+			else :
+				a = random.choices(list(nn.keys()), weights=list(nn.values()), k=1).pop()
+			# Reduce the likelihood of this choice for next time to avoid loops
+			nn[a] *= 0.5
 			e = (e[1], a)
 			if a : yield a
 
@@ -207,7 +215,7 @@ def distill_geopath_ver2(sources) :
 		if (len(set(templates)) < 2) :
 			return templates
 
-		commons.logger.info("Launched candidate round {} with {} templates...".format(rounds, len(templates)))
+		# commons.logger.info("Launched candidate round {} with {} templates...".format(rounds, len(templates)))
 
 		node_forw = predictor(templates)
 		node_back = predictor(map(reversed, templates))
@@ -320,7 +328,7 @@ def map_routes() :
 
 	# Dictionary of key-values like
 	# ('Kaohsiung/TIME', 'KHH144', '0') --> List of files [PATHTO]/Kaohsiung/TIME/KHH144/0/*.json
-	case_files = {
+	files_by_case = {
 		case : list(g)
 		for (case, g) in groupby(
 			commons.ls(IFILE['mapmatched'].format(scenario="**", routeid="*", direction="*", mapmatch_uuid="*", ext="json")),
@@ -328,22 +336,28 @@ def map_routes() :
 		)
 	}
 
+	# commons.logger.debug(commons.ls(IFILE['mapmatched'].format(scenario="**", routeid="*", direction="*", mapmatch_uuid="*", ext="json")))
+
 	# DEBUG
+	# commons.logger.debug(set(files_by_case))
 	scenario = "Kaohsiung/20181105-20181111"
+	# scenario = "testcases"
 	# case = (scenario, 'KHH16', '1')
 	# case = (scenario, 'KHH12', '1')
 	# case = (scenario, 'KHH100', '0')
-	case = (scenario, 'KHH122', '0')
-	# case = (scenario, 'KHH11', '1')
+	# case = (scenario, 'KHH122', '1')
+	# case = (scenario, 'KHH16', '1') # !
+	case = (scenario, 'KHH160', '0')
 	# case = (scenario, 'KHH116', '0')
-	# case = (scenario, 'KHH1221', '0')
+	# case = (scenario, 'KHH1431', '1')
 	# case = (scenario, 'KHH1221', '1')
 	# case = (scenario, 'KHH131', '0')
-	case_files = { case : case_files[case] }
+	#
+	files_by_case = { case : files_by_case[case] }
 
-	for ((scenario, routeid, dir), files) in case_files.items() :
+	for ((scenario, routeid, dir), files) in files_by_case.items() :
 		commons.logger.info("===")
-		commons.logger.info("Mapping route {}, direction {} (from scenario {})...".format(routeid, dir, scenario))
+		commons.logger.info("Mapping route {}, direction {} (from scenario '{}')...".format(routeid, dir, scenario))
 
 		try :
 
