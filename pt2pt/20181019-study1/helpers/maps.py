@@ -8,6 +8,7 @@ from enum import Enum
 from PIL import Image
 from math import pi, log, tan, exp, atan, log2, floor
 from urllib.error import URLError
+from socket import timeout as TimeoutError
 
 import matplotlib as mpl
 
@@ -188,7 +189,7 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 	try :
 		if mapbox_api_token :
 			ax.imshow(get_map_by_bbox(ax2mb(*axis), token=mapbox_api_token), extent=axis, interpolation='quadric', zorder=-100)
-	except URLError as e:
+	except (URLError, TimeoutError):
 		commons.logger.warning("No background map (no internet connection?)")
 
 	fig.savefig(fd, dpi=dpi, bbox_inches='tight', pad_inches=0)
