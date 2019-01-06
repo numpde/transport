@@ -3,13 +3,50 @@
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# https://stackoverflow.com/a/15573313/3609568
+
+from contextlib import contextmanager
+
+@contextmanager
+def ignored(*exceptions) :
+	try :
+		yield
+	except exceptions :
+		pass
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Return the iterable I in batches of size 'size'
+def batchup(I, size) :
+
+	i = iter(I)
+
+	while True :
+
+		def next_batch() :
+			try :
+				for __ in range(size) :
+					yield next(i)
+			except StopIteration :
+				pass
+
+		batch = list(next_batch())
+
+		if batch :
+			yield batch
+		else :
+			break
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 import multiprocessing
 import math
 
-def cpu_frac(f) :
+# Get the fraction 'f' of available CPUs, but at most 'maxn'
+def cpu_frac(f: float, maxn=12) :
 	assert(0 < f <= 1), "The fraction should be 0 < f <= 1"
-	ncpu = min(12, math.ceil(multiprocessing.cpu_count() * f))
-	logger.debug("Somebody inquired about {} #CPUs".format(ncpu))
+	ncpu = min(maxn, math.ceil(multiprocessing.cpu_count() * f))
+	logger.debug("{} CPUs".format(ncpu))
 	return ncpu
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -98,6 +135,7 @@ def initialize_logger() :
 				'class': "logging.StreamHandler",
 				'formatter': "forma",
 				'level': logging.DEBUG,
+				# Note: progressbar uses stderr
 				'stream': "ext://sys.stderr",
 			},
 			'f': {
@@ -255,8 +293,10 @@ import urllib.parse, urllib.request
 class wget :
 
 	number_of_calls = 0
+
 	THROTTLE_MAX_CALLS = 1000 # Max number of wget requests per session
 	THROTTLE_INBETWEEN = 1 # Throttle time in seconds
+	TIMEOUT = 20 # Timeout in seconds
 
 	def __init__(self, url: str, cachedir=None) :
 
@@ -290,7 +330,7 @@ class wget :
 
 		time.sleep(self.THROTTLE_INBETWEEN)
 
-		with urllib.request.urlopen(url) as response :
+		with urllib.request.urlopen(url, timeout=self.TIMEOUT) as response :
 
 			self.bytes = response.read()
 
