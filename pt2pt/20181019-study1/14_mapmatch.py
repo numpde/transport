@@ -34,8 +34,8 @@ IFILE = {
 	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
 
 	'segment_by_route' : [
-		# "ORIGINALS/13/{scenario}/byroute/{routeid}-{dir}.json",
-		"OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
+		"ORIGINALS/13/{scenario}/byroute/{routeid}-{dir}.json",
+		# "OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
 	]
 }
 

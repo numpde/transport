@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Download bus route info from https://ptx.transportdata.tw
 # RA, 2018-11-07
@@ -50,7 +50,7 @@ download() {
 		--header 'Authorization: hmac username="'"${KEY}"'", algorithm="hmac-sha1", headers="x-date", signature="'"${SIG}"'"' \
 		--header "${MSG}" \
 		--header 'Accept-Encoding: gzip' \
-		--compressed 'https://ptx.transportdata.tw/MOTC/v2/Bus/'"${X}"'/City/'"${CITY}"'?$format=JSON' \
+		--compressed 'https://ptx.transportdata.tw/MOTC/v2/Bus/'"${X}"'/City/'"${C}"'?$format=JSON' \
 		> $f
 
 	echo

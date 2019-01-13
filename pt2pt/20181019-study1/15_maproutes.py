@@ -347,7 +347,7 @@ def map_routes() :
 	# case = (scenario, 'KHH100', '0')
 	# case = (scenario, 'KHH122', '1')
 	# case = (scenario, 'KHH16', '1') # !
-	case = (scenario, 'KHH160', '0')
+	case = (scenario, 'KHH160', '1')
 	# case = (scenario, 'KHH116', '0')
 	# case = (scenario, 'KHH1431', '1')
 	# case = (scenario, 'KHH1221', '1')
