@@ -1,21 +1,26 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Script for downloading realtime bus information in Kaohsiung
+# Script for downloading realtime bus information
 # RA, 2018-10-31
 
-CITY=Kaohsiung
+# City
+C="Taipei"
+
+# MOTC data category
+Y="Bus/RealTimeByFrequency/City"
 
 # Root output directory
-OUT="OUTPUT/12/${CITY}/UV"
+OUT="OUTPUT/12/${C}/UV"
 
 while true; do
 
-	# Output directory for today
+	# Output directory: date stamp
 	d=${OUT}/$(date +"%Y%m%d")
 
 	# Create output directory, if needed
 	mkdir -p ${d}
 
+    # Output file: time stamp
 	f=${d}/$(date +"%H%M%S").json
 	echo "Downloading to file $f"
 
@@ -26,6 +31,8 @@ while true; do
 
 	#echo $MSG/$SIG
 
+	echo ----
+
 	sleep 1
 
 	# Command obtained from
@@ -35,13 +42,17 @@ while true; do
 		--header 'Authorization: hmac username="'"${KEY}"'", algorithm="hmac-sha1", headers="x-date", signature="'"${SIG}"'"' \
 		--header "${MSG}" \
 		--header 'Accept-Encoding: gzip' \
-		--compressed 'https://ptx.transportdata.tw/MOTC/v2/Bus/RealTimeByFrequency/City/'"${CITY}"'?$format=JSON' \
-		> $f
+		--compressed 'https://ptx.transportdata.tw/MOTC/v2/'"${Y}"'/'"${C}"'?$format=JSON' \
+		> $f \
+		&
 
-	echo ----
+	# Pause for a total of 30 seconds
 
-	# The API data is not updated very frequently
-	sleep 30
+	sleep 19
+
+	echo ====
+
+	sleep 10
 
 done
 
