@@ -39,7 +39,7 @@ OFILE = {
 ## ==================== PARAM :
 
 PARAM = {
-	'city' : "Kaohsiung",
+	'city' : "Taipei",
 
 	'uploads' : [
 		{
