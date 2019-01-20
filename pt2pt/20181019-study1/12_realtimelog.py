@@ -69,7 +69,7 @@ def download() :
 
 def compress() :
 	realtime_files = commons.ls(IFILE['realtime'].format(city=PARAM['city'], date="*", time="*"))
-	#print(realtime_files)
+	#commons.logger.debug(realtime_files)
 
 	# Allow for pending write operations
 	time.sleep(1)
@@ -77,7 +77,7 @@ def compress() :
 	# Compression 0:
 	# zip-base64 contents
 
-	print("COMPRESSION 0")
+	commons.logger.info("COMPRESSION 0")
 
 	# Brutal compression step
 	for fn in realtime_files :
@@ -85,139 +85,148 @@ def compress() :
 		#commons.zipjson_dump(commons.zipjson_load(fn), fn)
 
 
-	print("COMPRESSION I: Remove duplicates in back-to-back records")
+	commons.logger.info("COMPRESSION I: Remove duplicates in back-to-back records")
 
-	for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
-		def hashable(J) :
-			assert(type(J) is list)
-			return list(map(json.dumps, J))
+	if True :
 
-		def unhashable(J) :
-			assert(type(J) is list)
-			return list(map(json.loads, J))
+		for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
+			def hashable(J) :
+				assert(type(J) is list)
+				return list(map(json.dumps, J))
 
-		try :
-			J1 = set(hashable(commons.zipjson_load(fn1)))
-			J2 = set(hashable(commons.zipjson_load(fn2)))
-		except EOFError :
-			# Raised by zipjson_load if a file is empty
-			continue
-		except Exception as e :
-			print("Warning: Cannot open {}/{} ({}).".format(fn1, fn2, e))
-			continue
+			def unhashable(J) :
+				assert(type(J) is list)
+				return list(map(json.loads, J))
 
-		if not J1.intersection(J2) :
-			continue
+			try :
+				J1 = set(hashable(commons.zipjson_load(fn1)))
+				J2 = set(hashable(commons.zipjson_load(fn2)))
+			except EOFError :
+				# Raised by zipjson_load if a file is empty
+				continue
+			except Exception as e :
+				commons.logger.warning("Cannot open {}/{} ({}).".format(fn1, fn2, e))
+				continue
 
-		J1 = J1.difference(J2)
+			if not J1.intersection(J2) :
+				continue
 
-		J1 = list(unhashable(list(J1)))
-		J2 = list(unhashable(list(J2)))
+			J1 = J1.difference(J2)
 
-		print("Compressing", fn1)
-		commons.zipjson_dump(J1, fn1)
+			J1 = list(unhashable(list(J1)))
+			J2 = list(unhashable(list(J2)))
+
+			commons.logger.info("Compressing {}".format(fn1))
+			commons.zipjson_dump(J1, fn1)
 
 
-	print("COMPRESSION II: Remove redundancies from individual records")
+	commons.logger.info("COMPRESSION II: Remove redundancies from individual records")
 
-	# Route meta
-	R = commons.zipjson_load(IFILE['routes'].format(city=PARAM['city']))
+	if True :
 
-	# Reindex by subroute-direction
-	S = defaultdict(dict)
-	for r in R :
-		for s in r['SubRoutes'] :
-			sid = s['SubRouteUID']
-			dir = s['Direction']
-			assert(dir not in S[sid])
-			S[sid][dir] = s
-	#
-	S = dict(S)
+		unknown_subroutes = set()
 
-	# Reindex by RouteUID
-	assert(commons.all_distinct([g['RouteUID'] for g in R]))
-	R = { g['RouteUID'] : g for g in R }
+		# Route meta
+		R = commons.zipjson_load(IFILE['routes'].format(city=PARAM['city']))
 
-	def remove_single_route_redundancies(j) :
+		# Reindex by subroute-direction
+		S = defaultdict(dict)
+		for r in R :
+			for s in r['SubRoutes'] :
+				sid = s['SubRouteUID']
+				dir = s['Direction']
+				assert(dir not in S[sid])
+				S[sid][dir] = s
+		#
+		S = dict(S)
 
-		subroute_id = j['SubRouteUID']
+		# Reindex by RouteUID
+		assert(commons.all_distinct([g['RouteUID'] for g in R]))
+		R = { g['RouteUID'] : g for g in R }
 
-		if not (subroute_id in S) :
-			print("Warning: Unknown subroute {}".format(subroute_id))
-			return j
+		def remove_single_route_redundancies(j) :
 
-		assert(j['Direction'] in S[subroute_id])
-		s = S[subroute_id][j['Direction']]
+			subroute_id = j['SubRouteUID']
 
-		for key in ['SubRouteName', 'SubRouteID'] :
-			if key in j :
-				if not (j[key] == s[key]) :
-					print("Warning: Unexpected attribute value {}={}".format(key, j[key]))
-				else :
+			if not (subroute_id in S) :
+				if not (subroute_id in unknown_subroutes) :
+					commons.logger.warning("Unknown subroute {} [warning will not be repeated]".format(subroute_id))
+					unknown_subroutes.add(subroute_id)
+				return j
+
+			assert(j['Direction'] in S[subroute_id])
+			s = S[subroute_id][j['Direction']]
+
+			for key in ['SubRouteName', 'SubRouteID'] :
+				if key in j :
+					if (j[key] == s[key]) :
+						del j[key]
+					else :
+						# commons.logger.warning("Unexpected attribute value {}={}".format(key, j[key]))
+						pass
+
+			if ('RouteUID' in j) :
+				route_id = j['RouteUID']
+				assert(route_id in R)
+				r = R[route_id]
+
+				for key in ['RouteName', 'RouteID'] :
+					if key in j :
+						if not (j[key] == r[key]) :
+							commons.logger.warning("Unexpected attribute value {}={}".format(key, j[key]))
+						else :
+							del j[key]
+
+				if (j['RouteUID'] == j['SubRouteUID']) :
+					del j['RouteUID']
+
+			assert('GPSTime' in j)
+
+			for key in ['SrcUpdateTime', 'UpdateTime']:
+				if key in j:
 					del j[key]
 
-		if ('RouteUID' in j) :
-			route_id = j['RouteUID']
-			assert(route_id in R)
-			r = R[route_id]
+			# Note:
+			#  - we keep the 'OperatorID' field, even if s['OperatorIDs'] has length 1
+			#  - of the time stamps, we keep 'GPSTime' which is the bus on-board time
 
-			for key in ['RouteName', 'RouteID'] :
-				if key in j :
-					if not (j[key] == r[key]) :
-						print("Warning: Unexpected attribute value {}={}".format(key, j[key]))
-					else :
-						del j[key]
+			return j
 
-			assert(j['RouteUID'] == j['SubRouteUID'])
-			del j['RouteUID']
+		for fn in realtime_files :
+			try :
+				J = commons.zipjson_load(fn)
+			except EOFError :
+				commons.logger.warning("{} appears empty".format(fn))
+				continue
+			except Exception :
+				commons.logger.warning("Failed to open {}".format(fn))
+				continue
 
-		assert('GPSTime' in j)
+			b = len(json.dumps(J)) # Before compression
 
-		for key in ['SrcUpdateTime', 'UpdateTime']:
-			if key in j:
-				del j[key]
+			try :
+				J = list(map(remove_single_route_redundancies, J))
+			except ValueError as e :
+				commons.logger.exception("ValueError at {} -- {}".format(fn, e))
+				continue
+			except AssertionError as e :
+				commons.logger.exception("Assertion error at {} -- {}".format(fn, e))
+				continue
+			except Exception as e :
+				commons.logger.exception("Warning: Compression attempt failed for {} -- {}".format(fn, e))
+				continue
 
-		# Note:
-		#  - we keep the 'OperatorID' field, even if s['OperatorIDs'] has length 1
-		#  - of the time stamps, we keep 'GPSTime' which is the bus on-board time
+			# J = remove_global_route_redundancies(J)
+			a = len(json.dumps(J)) # After compression
 
-		return j
+			assert(a <= b)
+			if (a == b) : continue
 
-	for fn in realtime_files :
-		try :
-			J = commons.zipjson_load(fn)
-		except EOFError :
-			print("Warning: {} appears empty".format(fn))
-			continue
-		except Exception :
-			print("Warning: Failed to open {}".format(fn))
-			continue
-
-		b = len(json.dumps(J)) # Before compression
-
-		try :
-			J = list(map(remove_single_route_redundancies, J))
-		except ValueError as e :
-			print("Warning: ValueError at {} -- {}".format(fn, e))
-			continue
-		except AssertionError as e :
-			print("Warning: Assertion error at {} -- {}".format(fn, e))
-			continue
-		except Exception as e :
-			print("Warning: Compression attempt failed for {} -- {}".format(fn, e))
-			continue
-
-		# J = remove_global_route_redundancies(J)
-		a = len(json.dumps(J)) # After compression
-
-		assert(a <= b)
-		if (a == b) : continue
-
-		print("Compressing", fn)
-		commons.zipjson_dump(J, fn)
+			commons.logger.info("Compressing {}".format(fn))
+			commons.zipjson_dump(J, fn)
 
 
-	print("DONE")
+	commons.logger.info("DONE")
 
 
 ## ================== OPTIONS :
