@@ -287,6 +287,7 @@ def segment_by_route() :
 	print("Collecting cases...")
 
 	# Associate to each case a list of files that contain instances of it
+	# case_directory : run_key --> list of filenames
 	case_directory = {
 		case : set( r[1] for r in g )
 		for (case, g) in groupby(
@@ -299,6 +300,16 @@ def segment_by_route() :
 		)
 	}
 
+	# # Filter to specific routes (DEBUG)
+	# commons.logger.warning("Filtering the case directory")
+	# case_directory = {
+	# 	case : files
+	# 	for (case, files) in case_directory.items()
+	# 	# DEBUG:
+	# 	if (case[0] in ["KHH1221"])
+	# }
+
+	#
 	for (case, files) in sorted(case_directory.items(), key=(lambda cf : -len(cf[1]))) :
 		segments = [
 			{
@@ -321,6 +332,7 @@ def segment_by_route() :
 
 		with open(fn.format(ext="png"), 'wb') as fd :
 			waypoints_by_quality = { q : list(s[KEYS['pos']] for s in g) for (q, g) in groupby(segments, key=(lambda s : s[PARAM['quality_key']])) }
+			print(*list(waypoints_by_quality.items()), sep='\n')
 			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 

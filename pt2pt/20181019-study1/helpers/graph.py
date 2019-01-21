@@ -97,7 +97,7 @@ def angle(p, q, r) -> float :
 
 # Approximate distance to segment using flat geometry
 # Returns the distance d >= 0 and the relative coordinate 0 <= t <= 1 of the nearest point
-def dist_to_segment(x, ab, distance=geopy.distance.vincenty) -> Tuple[float, float] :
+def dist_to_segment(x, ab, distance=geopy.distance.great_circle) -> Tuple[float, float] :
 	# Compute lengths
 	xa = distance(x, ab[0]).m
 	xb = distance(x, ab[1]).m
@@ -166,11 +166,16 @@ class NodeGenerator :
 		return self.n
 
 
+# Return the largest connected component as a new graph
+# Uses the copy() method of the graph but does not deep-copy attributes
+def largest_component(g: nx.DiGraph, components=nx.strongly_connected_components) -> nx.DiGraph :
+	return nx.subgraph(g, max(list(components(g)), key=len)).copy()
+
 # Split long edges
 # Assumes edge length in the edge attribute 'len'
 # Assumes node geo-location in the node attribute 'pos'
 # Assumes len(u, v) == len(v, u)
-def partition_edges(g: nx.DiGraph, max_len=50, node_generator=None) -> None :
+def break_long_edges(g: nx.DiGraph, max_len=50, node_generator=None) -> None :
 
 	from math import ceil
 

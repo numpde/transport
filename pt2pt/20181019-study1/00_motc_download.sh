@@ -9,10 +9,10 @@ BASE_PATH="OUTPUT/00/ORIGINAL_MOTC"
 # Cities of interest
 declare -a CITIES=("Kaohsiung" "Taipei")
 
-
-which curl    1> /dev/null || (echo curl not found; exit)
-which base64  1> /dev/null || (echo base64 not found; exit)
-which openssl 1> /dev/null || (echo openssl not found; exit)
+# Do we have those?
+which curl    1> /dev/null || (echo curl not found    ; exit)
+which base64  1> /dev/null || (echo base64 not found  ; exit)
+which openssl 1> /dev/null || (echo openssl not found ; exit)
 
 download() {
 
@@ -56,10 +56,10 @@ download() {
 	echo
 }
 
-# Loop through items to download
-for CITY in "${CITIES[@]}" ; do
+# Loop through cities and items to download
+for C in "${CITIES[@]}" ; do
 	for X in Route Shape Station Stop StopOfRoute DisplayStopOfRoute Schedule Vehicle RouteFare Operator ; do
-		download $CITY $X
+		download $C $X
 		sleep 1
 	done
 done

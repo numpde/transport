@@ -5,7 +5,6 @@
 ## ================== IMPORTS :
 
 import datetime as dt
-import inspect
 import pytz
 import json
 import uuid
@@ -19,10 +18,16 @@ import io
 
 from helpers import commons, transit, maps, graph
 
+from itertools import product
+from typing import List, Tuple
+
 ## ==================== NOTES :
 
 pass
 
+# To generate the movie "Accessibility from KHH main station"
+# print(*map((lambda r : r['f']), sorted(filter((lambda r : (r['x'] == [22.63835, 120.3018])), ({**json.load(open(fn, 'r'))['origin'], 'f': fn.replace("json", "png")} for fn in list(glob("*.json")))), key=(lambda r : r['t']))), sep="\n")
+# convert -resize 100% -loop 10 `cat /tmp/movie1.txt` -set delay '%[fx:t==(n-1) || t==0 ? 400 : 40]' /tmp/movie1.gif
 
 
 
@@ -149,51 +154,9 @@ def load_walkable_graph_with_knn() :
 
 ## =================== SLAVES :
 
-def map_transit_from(t: dt.datetime, x) :
+def map_transit_from(tt: List[dt.datetime], xx: List[Tuple]) -> None :
 
 	graph_with_knn = load_walkable_graph_with_knn()
-
-	# Transit computation callback
-	def tr_callback(result) :
-		if (result['status'] in {"zero", "init"}) :
-			return
-
-		# Next callback update
-		if (result['status'] == "opti") :
-			if (result.get('ncu', dt.datetime.min) > dt.datetime.now()) :
-				return
-
-		g: nx.DiGraph
-		g = result['astar_graph']
-
-		J = {
-			'origin' : {
-				'x' : x,
-				't' : t.isoformat(),
-			},
-			'gohere' : [
-				{
-					'x' : g.nodes[n]['loc'].x,
-					's' : (g.nodes[n]['loc'].t - t.astimezone(dt.timezone.utc).replace(tzinfo=None)).total_seconds(),
-					'o' : (g.nodes[next(iter(g.pred[n]))]['loc'].x if g.pred[n] else None),
-				}
-				for n in list(g.nodes)
-			],
-		}
-
-		# Preserve the UUID and the filename between callbacks
-		fn = OFILE['transit_map'].format(uuid=result.setdefault('file_uuid', uuid.uuid4().hex), ext="json")
-
-		with open(fn, 'w') as fd :
-			json.dump(J, fd)
-
-		commons.logger.info("Number of locations mapped is {}".format(g.number_of_nodes()))
-
-		# make_transit_img(J, backend='TkAgg')
-
-		# Next callback update
-		result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
-
 
 	# True/False filter for timetable files
 	def keep_ttfile(fn) :
@@ -213,10 +176,54 @@ def map_transit_from(t: dt.datetime, x) :
 	with commons.Timer('transit_prepare') :
 		tr = transit.Transit(filter(keep_ttfile, commons.ls(IFILE['timetable_json'].format(routeid="*", dir="*"))), graph_with_knn=graph_with_knn)
 
-	# A* COMPUTE
-	commons.logger.info("Computing transit from {} at {}...".format(x, t))
-	with commons.Timer('transit_execute') :
-		tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
+	for (t, x) in product(tt, xx) :
+
+		# Transit computation callback
+		def tr_callback(result) :
+			if (result['status'] in {"zero", "init"}) :
+				return
+
+			# Next callback update
+			if (result['status'] == "opti") :
+				if (result.get('ncu', dt.datetime.min) > dt.datetime.now()) :
+					return
+
+			g: nx.DiGraph
+			g = result['astar_graph']
+
+			J = {
+				'origin' : {
+					'x' : x,
+					't' : t.isoformat(),
+				},
+				'gohere' : [
+					{
+						'x' : g.nodes[n]['loc'].x,
+						's' : (g.nodes[n]['loc'].t - t.astimezone(dt.timezone.utc).replace(
+							tzinfo=None)).total_seconds(),
+						'o' : (g.nodes[next(iter(g.pred[n]))]['loc'].x if g.pred[n] else None),
+					}
+					for n in list(g.nodes)
+				],
+			}
+
+			# Preserve the UUID and the filename between callbacks
+			fn = OFILE['transit_map'].format(uuid=result.setdefault('file_uuid', uuid.uuid4().hex), ext="json")
+
+			with open(fn, 'w') as fd :
+				json.dump(J, fd)
+
+			commons.logger.info("Number of locations mapped is {}".format(g.number_of_nodes()))
+
+			# make_transit_img(J, backend='TkAgg')
+
+			# Next callback update
+			result['ncu'] = dt.datetime.now() + dt.timedelta(seconds=10)
+
+		# A* COMPUTE
+		commons.logger.info("Computing transit from {} at {}...".format(x, t))
+		with commons.Timer('transit_execute') :
+			tr.connect(transit.Loc(t=t, x=x), callback=tr_callback)
 
 	commons.Timer.report()
 
@@ -224,6 +231,7 @@ def map_transit_from(t: dt.datetime, x) :
 def make_transit_img(J, backend='Agg') -> bytes :
 	import matplotlib as mpl
 	mpl.use(backend)
+	mpl.rcParams['figure.max_open_warning'] = 100
 
 	import dateutil.parser as dateparser
 	import matplotlib.pyplot as plt
@@ -318,18 +326,28 @@ def make_transit_img(J, backend='Agg') -> bytes :
 ## =================== MASTER :
 
 def map_transit() :
-	t = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
-
-	# HonDo
-	x = (22.63121, 120.32742)
-
-	# Unknown location
-	x = (22.63322, 120.33468)
+	# t = PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13, minute=15))
+	#
+	# # HonDo
+	# x = (22.63121, 120.32742)
+	#
+	# # Unknown location
+	# x = (22.63322, 120.33468)
+	#
+	# # Kaohsiung train station
+	# x = (22.63835, 120.30180)
+	#
+	# map_transit_from(t=t, x=x)
 
 	# Kaohsiung train station
 	x = (22.63835, 120.30180)
 
-	map_transit_from(t=t, x=x)
+	tt = [
+		PARAM['TZ'].localize(dt.datetime(year=2018, month=11, day=6, hour=13) + dt.timedelta(minutes=minute))
+		for minute in range(0, 61)
+	]
+
+	map_transit_from(tt=tt, xx=[x])
 
 
 def img_transit() :

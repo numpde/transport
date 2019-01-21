@@ -1,6 +1,15 @@
 
 # RA, 2018-11-01
 
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
+# https://docs.python.org/3/library/inspect.html
+def this_module_body(goback=1) :
+	import inspect
+	return inspect.getsource(inspect.getmodule(inspect.stack()[goback].frame))
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # https://stackoverflow.com/a/15573313/3609568
@@ -431,7 +440,9 @@ import geopy.distance
 
 # Metric for (lat, lon) coordinates
 def geodesic(a, b) :
-	return geopy.distance.vincenty(a, b).m
+	# https://geopy.readthedocs.io/
+	# https://stackoverflow.com/a/43211266
+	return geopy.distance.great_circle(a, b).m
 	#return geopy.distance.geodesic(a, b).m
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -484,7 +495,7 @@ def all_samesame(L) :
 
 import os, json, zlib, base64
 
-class ZIPJSON :
+class ZipJSON :
 
 	TAGS = ['base64(zip(o))', 'base64zip']
 
@@ -553,7 +564,7 @@ def zipjson_load(fn, opener=open) :
 		raise
 
 	try :
-		J = ZIPJSON(J).try_dec()
+		J = ZipJSON(J).try_dec()
 	except :
 		print("Exception while decoding {}".format(fn))
 		raise
@@ -562,7 +573,7 @@ def zipjson_load(fn, opener=open) :
 
 def zipjson_dump(J, fn, opener=open) :
 	assert(type(fn) is str)
-	E = ZIPJSON(J).enc()
+	E = ZipJSON(J).enc()
 	assert(json.dumps(E))
 	return json.dump(E, opener(fn, 'w'))
 

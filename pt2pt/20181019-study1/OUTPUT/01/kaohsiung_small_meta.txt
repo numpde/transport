@@ -1,0 +1,11 @@
+# File location:
+FILE=OUTPUT/01/UV/kaohsiung_small.osm
+# Bounding box:
+l=120.2206
+b=22.4827
+r=120.4308
+t=22.7578
+# Source:
+URL=https://overpass-api.de/api/map?bbox=120.2206,22.4827,120.4308,22.7578
+# Retrieval time:
+UTC=2018-11-18T04:13:44.770630

@@ -168,9 +168,11 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 			ax.plot(x[0], y[0], 'o', c='g', markersize=3)
 			ax.plot(x[-1], y[-1], 'o', c='r', markersize=3)
 		else :
+			# Plot each track as a line
 			for track in tracks :
 				(y, x) = zip(*track)
 				ax.plot(x, y, '-', linewidth=1, alpha=0.3, markersize=1.5)
+			# Plot start and end points
 			for track in tracks :
 				(y, x) = zip(*track)
 				ax.plot(x[0], y[0], 'o', c='g', markersize=1)
@@ -178,7 +180,7 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 
 		if waypoints :
 			for (y, x) in waypoints :
-				ax.plot(x, y, 'o', alpha=0.3, c='k', markersize=0.3)
+				ax.plot(x, y, 'o', alpha=0.3, c='k', markersize=0.3, zorder=100)
 
 	(plotter or default_plotter)(fig, ax)
 

@@ -1,0 +1,11 @@
+# File location:
+FILE=OUTPUT/01/UV/TPE101.osm
+# Bounding box:
+l=121.556
+b=25.0245
+r=121.5746
+t=25.0409
+# Source:
+URL=https://overpass-api.de/api/map?bbox=121.556,25.0245,121.5746,25.0409
+# Retrieval time:
+UTC=2019-01-19T10:26:10.298652
