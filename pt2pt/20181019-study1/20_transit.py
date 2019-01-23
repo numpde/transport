@@ -121,8 +121,8 @@ def load_walkable_graph_with_knn() :
 	G: nx.DiGraph
 	G = pickle.load(open(IFILE['OSM_graph_file'], 'rb'))['G']
 
-	g = nx.Graph()
 	# Collapse DiGraph to an undirected graph
+	g = nx.Graph()
 	g.add_edges_from(G.edges(data=False))
 
 	# Copy desired node attributes
@@ -169,7 +169,7 @@ def map_transit_from(tt: List[dt.datetime], xx: List[Tuple]) -> None :
 		(left, bottom, right, top) = bbox
 
 		(lat, lon) = map(np.asarray, zip(*map(commons.inspect({'StopPosition' : ('PositionLat', 'PositionLon')}), J['route']['Stops'])))
-		return all(map(all, [bottom <= lat, lat <= top, left <= lon, lon <= right]))
+		return all([bottom <= lat, lat <= top, left <= lon, lon <= right])
 
 	# A* INITIALIZE
 	commons.logger.info("Initializing transit...")
@@ -231,7 +231,7 @@ def map_transit_from(tt: List[dt.datetime], xx: List[Tuple]) -> None :
 def make_transit_img(J, backend='Agg') -> bytes :
 	import matplotlib as mpl
 	mpl.use(backend)
-	mpl.rcParams['figure.max_open_warning'] = 100
+	mpl.rcParams['figure.max_open_warning'] = 10
 
 	import dateutil.parser as dateparser
 	import matplotlib.pyplot as plt
@@ -320,6 +320,8 @@ def make_transit_img(J, backend='Agg') -> bytes :
 		plt.show()
 		plt.pause(0.1)
 
+	plt.close(fig)
+
 	return buffer.read()
 
 
@@ -381,7 +383,7 @@ def debug_compare_two() :
 	assert (set(H1) == set(H2))
 
 	X = sorted([x for x in H1 if (set(H1[x]) != set(H2[x]))], key=(lambda x : sum(H1[x]) + sum(H2[x])))
-	# commons.logger.debug("Earliest differing location: {}".format(X[0]))
+	# commons.logger.debug("Earliest differing location: {}".format(items[0]))
 
 	for x in X[0:4] :
 
@@ -417,8 +419,8 @@ def debug_compare_two() :
 		# ax.axis(maps.mb2ax(*bbox))
 		# ax.autoscale(enable=False)
 
-		nx.draw_networkx(g1, pos=nx.get_node_attributes(g1, 'xy'), edge_color='b', node_size=1, with_labels=False)
-		nx.draw_networkx(g2, pos=nx.get_node_attributes(g2, 'xy'), edge_color='g', node_size=1, with_labels=False)
+		nx.draw_networkx(g1, ax=ax, pos=nx.get_node_attributes(g1, 'xy'), edge_color='b', node_size=1, with_labels=False)
+		nx.draw_networkx(g2, ax=ax, pos=nx.get_node_attributes(g2, 'xy'), edge_color='g', node_size=1, with_labels=False)
 
 		plt.show()
 

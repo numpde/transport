@@ -34,8 +34,8 @@ IFILE = {
 	'OSM_graph_file' : "OUTPUT/02/UV/kaohsiung.pkl",
 
 	'segment_by_route' : [
-		"ORIGINALS/13/{scenario}/byroute/{routeid}-{dir}.json",
-		# "OUTPUT/13/{scenario}/byroute/UV/{routeid}-{dir}.json",
+		# "ORIGINALS/13/{scenario}/byroute/{routeid}-{direction}.json",
+		"OUTPUT/13/{scenario}/byroute/UV/{routeid}-{direction}.json",
 	]
 }
 
@@ -188,6 +188,8 @@ def mapmatch_runs(scenario, runs) :
 		for (runid, run) in runs_by_runid.items()
 	}
 
+	commons.logger.debug(json.dumps(runs, indent=2))
+
 	commons.logger.info("Running mapmatch on {} runs".format(len(runs)))
 
 	# MAPMATCH RUNS
@@ -262,27 +264,30 @@ def mapmatch_all() :
 
 	for route_file_template in IFILE['segment_by_route']:
 
-		route_files = commons.ls(route_file_template.format(scenario="**", routeid="*", dir="*"))
+		route_files = commons.ls(route_file_template.format(scenario="**", routeid="*", direction="*"))
 
 		commons.logger.info("Route file template: {}".format(route_file_template))
 		commons.logger.info("Found {} route files".format(len(route_files)))
 
 		for route_file in route_files :
-			time.sleep(2)
+			# time.sleep(2)
 
 			commons.logger.info("===")
 			commons.logger.info("Analyzing route file {}.".format(route_file))
 
-			(scenario, routeid, dir) = re.fullmatch(route_file_template.format(scenario="(.*)", routeid="(.*)", dir="(.*)"), route_file).groups()
-			dir = int(dir)
-			commons.logger.info("Route: {}, direction: {} (from scenario: {})".format(routeid, dir, scenario))
+			case = commons.unformat(route_file_template, route_file)
+			commons.logger.info("Route: {routeid}, direction: {direction} (from scenario: {scenario})".format(**case))
+
+			# # DEBUG
+			# if not ("KHH239-0" == "{routeid}-{direction}".format(**case)) :
+			# 	continue
 
 			# Load all bus run segments for this case
 			runs = commons.zipjson_load(route_file)
 			commons.logger.info("Number of runs: {} ({})".format(len(runs), "total"))
 
 			# Check that the file indeed contains only one type of route
-			assert({(routeid, dir)} == set(RUN_KEY(r) for r in runs))
+			assert({(case['routeid'], int(case['direction']))} == set(RUN_KEY(r) for r in runs))
 
 			# Remove runs that have a negative quality flag
 			runs = [run for run in runs if not (run.get('quality') == "-")]
@@ -303,7 +308,7 @@ def mapmatch_all() :
 			# Q: clustering here?
 
 			# Existing mapmatched runs for this route
-			existing = commons.ls(OFILE['mapmatched'].format(scenario=scenario, routeid=routeid, direction=dir, mapmatch_uuid="*", ext="json"))
+			existing = commons.ls(OFILE['mapmatched'].format(**case, mapmatch_uuid="*", ext="json"))
 
 			if existing :
 				commons.logger.warning("Skipping mapmatch: {} mapmatched files found".format(len(existing)))
@@ -311,12 +316,12 @@ def mapmatch_all() :
 
 			try :
 
-				mapmatch_runs(scenario, runs)
+				mapmatch_runs(case['scenario'], runs)
 
 			except Exception as e :
 
 				commons.logger.error("Mapmatch failed ({}) \n{}".format(e, traceback.format_exc()))
-				commons.logger.warning("Mapmatch incomplete on route {}-{} from scenario '{}'".format(routeid, dir, scenario))
+				commons.logger.warning("Mapmatch incomplete on route {routeid}-{direction} from scenario '{scenario}'".format(**case))
 				time.sleep(5)
 
 

@@ -70,7 +70,7 @@ exit
 # https://ptx.transportdata.tw/MOTC#!/CityBusApi/CityBusApi_RealTimeByFrequency
 
 # Example generated headers
-# curl -X GET --header 'Accept: application/json' --header 'Authorization: hmac username="FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", algorithm="hmac-sha1", headers="x-date", signature="nUZfcRh631qkDEVdMCeMFXvbV8I="' --header 'x-date: Wed, 31 Oct 2018 10:22:54 GMT' --header 'Accept-Encoding: gzip' --compressed  'https://ptx.transportdata.tw/MOTC/v2/Bus/RealTimeByFrequency/City/Kaohsiung?$top=3&$format=JSON'
+# curl -items GET --header 'Accept: application/json' --header 'Authorization: hmac username="FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", algorithm="hmac-sha1", headers="x-date", signature="nUZfcRh631qkDEVdMCeMFXvbV8I="' --header 'x-date: Wed, 31 Oct 2018 10:22:54 GMT' --header 'Accept-Encoding: gzip' --compressed  'https://ptx.transportdata.tw/MOTC/v2/Bus/RealTimeByFrequency/City/Kaohsiung?$top=3&$format=JSON'
 
 # Excerpt from the webpage source
 function l() {

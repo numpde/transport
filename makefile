@@ -1,5 +1,15 @@
-default:
-	@echo Hello!
+help:
+	@echo Put this script at the root of the git project.
+	@echo
+	@echo Add the following lines to the .gitignore file:
+	@echo "    ""**/UV/**"
+	@echo "    ""!**/UV/unversioned"
+	@echo
+	@echo Run
+	@echo "    ""make unversioned"
+	@echo to create the listings of unversioned files in
+	@echo "    ""**/UV/unversioned"
+	@echo and stage these for commit.
 
 mark_unversioned:
 	@echo -----------
@@ -8,7 +18,7 @@ mark_unversioned:
 	@echo -----------
 	git status
 
-fill_unversioned:
+unversioned:
 	make mark_unversioned
 	
 	for f in $$(find -name 'unversioned' -type f); do \

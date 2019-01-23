@@ -545,7 +545,7 @@ def mapmatch(
 	}
 
 
-	commons.logger.debug("Computing waypoint nearest edges...")
+	commons.logger.debug("Computing waypoint nearest edges for each run...")
 
 	# Waypoints' nearest edges: wp --> (dist_cloud : edge --> distance)
 	def get_wp2ne(wpts) :
@@ -623,6 +623,8 @@ def mapmatch(
 	if not groups :
 		raise MapMatchingError("No waypoint groups to mapmatch")
 
+	commons.logger.debug("Got {} subgroups".format(len(groups)))
+
 	# Takes waypoints from presult['waypoints_used']
 	# Extracts a neighborhood graph of the waypoints
 	def mapmatch_prepare_subgraph(presult: dict) -> dict :
@@ -654,9 +656,15 @@ def mapmatch(
 				for dc in dist_clouds
 			]
 
-			# Remove possible empty edges clouds
-			(waypoints, dist_clouds) = zip(*((wp, dc) for (wp, dc) in zip(waypoints, dist_clouds) if dc))
-			#
+			if any(dist_clouds) :
+				# Now some of dist_clouds are empty, remove those
+				(waypoints, dist_clouds) = zip(*((wp, dc) for (wp, dc) in zip(waypoints, dist_clouds) if dc))
+			else :
+				# All dist_clouds are empty
+				waypoints = []
+				dist_clouds = []
+
+			# Did graph truncation render some waypoints unusable?
 			if (len(waypoints) < len(presult['waypoints_used'])) :
 				commons.logger.warning("Number of waypoints reduced from {} to {}".format(len(presult['waypoints_used']), len(waypoints)))
 				presult['waypoints_used'] = waypoints
@@ -709,8 +717,8 @@ def mapmatch(
 
 		# Mapmatch -- batch-parallel version
 		# Note: 'Parallel' does not yield until all tasks are complete
-		for presult_batch in commons.batchup(presults, 5 * PARAM['#jobs']) :
-			yield from Parallel(n_jobs=PARAM['#jobs'])(delayed(mapmatch_complete_this)(presult) for presult in presult_batch)
+		for presult_batch in commons.batchup(presults, 5 * commons.PARALLEL_MAP_CPUS) :
+			yield from commons.parallel_map(mapmatch_complete_this, presult_batch)
 
 		# # Mapmatch -- serial version
 		# for result in incomplete :
@@ -726,7 +734,7 @@ def mapmatch(
 		# # Mapmatch -- parallel version
 		# yield from Parallel(n_jobs=8)(delayed(mapmatch_complete_this_2)(result) for result in incomplete)
 
-	yield from progressbar(complete_all(presults), min_value=1, max_value=len(presults))
+	yield from complete_all(progressbar(presults))
 
 
 # node_pos is a dictionary node id -> (lat, lon)

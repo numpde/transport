@@ -159,8 +159,6 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 	fig : plt.Figure
 	(fig, ax) = plt.subplots()
 
-	ax.tick_params(axis='both', which='both', labelsize='xx-small')
-
 	def default_plotter(fig, ax) :
 		if (len(tracks) == 1) :
 			(y, x) = zip(*tracks[0])
@@ -184,8 +182,18 @@ def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, 
 
 	(plotter or default_plotter)(fig, ax)
 
+
+	# # https://stackoverflow.com/questions/14711655/how-to-prevent-numbers-being-changed-to-exponential-form-in-python-matplotlib-fi
+	# ax.get_xaxis().get_major_formatter().set_scientific(False)
+	# ax.get_yaxis().get_major_formatter().set_scientific(False)
+	# https://matplotlib.org/api/_as_gen/matplotlib.axes.Axes.ticklabel_format.html
+	ax.ticklabel_format(axis='both', style='plain', useOffset=False)
+
+	# Set small font size for tick labels
+	ax.tick_params(axis='both', which='both', labelsize='xx-small')
+	# [i.set_fontsize(5) for i in ax.get_xticklabels() + ax.get_yticklabels()]
+
 	axis = commons.niceaxis(ax.axis(), expand=1.1)
-	[i.set_fontsize(8) for i in ax.get_xticklabels() + ax.get_yticklabels()]
 	ax.axis(axis)
 
 	try :

@@ -1,63 +1,6 @@
 
 # RA, 2018-11-01
 
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-# https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
-# https://docs.python.org/3/library/inspect.html
-def this_module_body(goback=1) :
-	import inspect
-	return inspect.getsource(inspect.getmodule(inspect.stack()[goback].frame))
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-# https://stackoverflow.com/a/15573313/3609568
-
-from contextlib import contextmanager
-
-@contextmanager
-def ignored(*exceptions) :
-	try :
-		yield
-	except exceptions :
-		pass
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-# Return the iterable I in batches of size 'size'
-def batchup(I, size) :
-
-	i = iter(I)
-
-	while True :
-
-		def next_batch() :
-			try :
-				for __ in range(size) :
-					yield next(i)
-			except StopIteration :
-				pass
-
-		batch = list(next_batch())
-
-		if batch :
-			yield batch
-		else :
-			break
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-import multiprocessing
-import math
-
-# Get the fraction 'f' of available CPUs, but at most 'maxn'
-def cpu_frac(f: float, maxn=12) :
-	assert(0 < f <= 1), "The fraction should be 0 < f <= 1"
-	ncpu = min(maxn, math.ceil(multiprocessing.cpu_count() * f))
-	logger.debug("{} CPUs".format(ncpu))
-	return ncpu
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 import os
@@ -77,35 +20,6 @@ def makedirs(OFILE) :
 	else :
 		for f in OFILE : makedirs(f)
 		return OFILE
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-import time
-
-# https://stackoverflow.com/questions/5849800/tic-toc-functions-analog-in-python
-class Timer :
-	# Shared variable
-	accumulated = {}
-
-	def __init__(self, name) :
-		self.name = name
-	def __enter__(self) :
-		self._start = time.time()
-	def __exit__(self, exc_type, exc_value, exc_traceback) :
-		Timer.accumulated[self.name] = (time.time() - self._start) + Timer.accumulated.get(self.name, 0)
-		self._start = time.time()
-
-	@staticmethod
-	def report() :
-		for (name, t) in sorted(Timer.accumulated.items()) :
-			logger.debug("|{}|: {}s".format(name, t))
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-from itertools import groupby
-
-def sort_and_group(C, key=None) :
-	return groupby(sorted(C, key=key), key=key)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
@@ -174,6 +88,100 @@ def test_logger() :
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+# https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
+# https://docs.python.org/3/library/inspect.html
+def this_module_body(goback=1) :
+	import inspect
+	return inspect.getsource(inspect.getmodule(inspect.stack()[goback].frame))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# https://stackoverflow.com/a/15573313/3609568
+
+from contextlib import contextmanager
+
+@contextmanager
+def ignored(*exceptions) :
+	try :
+		yield
+	except exceptions :
+		pass
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Return the iterable I in batches of size 'size'
+def batchup(I, size) :
+
+	i = iter(I)
+
+	while True :
+
+		def next_batch() :
+			try :
+				for __ in range(size) :
+					yield next(i)
+			except StopIteration :
+				pass
+
+		batch = list(next_batch())
+
+		if batch :
+			yield batch
+		else :
+			break
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import time
+
+# https://stackoverflow.com/questions/5849800/tic-toc-functions-analog-in-python
+class Timer :
+	# Shared variable
+	accumulated = {}
+
+	def __init__(self, name) :
+		self.name = name
+	def __enter__(self) :
+		self._start = time.time()
+	def __exit__(self, exc_type, exc_value, exc_traceback) :
+		Timer.accumulated[self.name] = (time.time() - self._start) + Timer.accumulated.get(self.name, 0)
+		self._start = time.time()
+
+	@staticmethod
+	def report() :
+		for (name, t) in sorted(Timer.accumulated.items()) :
+			logger.debug("|{}|: {}s".format(name, t))
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+from itertools import groupby
+
+def sort_and_group(C, key=None) :
+	return groupby(sorted(C, key=key), key=key)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import multiprocessing
+import math
+
+# Get the fraction 'f' of available CPUs, but at most 'maxn'
+def cpu_frac(f: float, maxn=12) :
+	assert(0 < f <= 1), "The fraction should be 0 < f <= 1"
+	ncpu = min(maxn, math.ceil(multiprocessing.cpu_count() * f))
+	logger.debug("{} CPUs".format(ncpu))
+	return ncpu
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import joblib
+
+PARALLEL_MAP_CPUS = cpu_frac(0.7)
+
+def parallel_map(f, items, cpus=PARALLEL_MAP_CPUS) :
+	return joblib.Parallel(n_jobs=cpus)(joblib.delayed(f)(item) for item in items)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
 class UponDel :
 	def __init__(self, action) :
 		self.action = action
@@ -185,14 +193,15 @@ class UponDel :
 import re
 
 # Reverse a str.format operation, for example:
-# from template="abc {x} def {y}" and instance="abc X def Y"
-# make a dictionary {'x': X, 'y': Y}
+# from template="abc {x} def {y}" and instance="abc items def Y"
+# make a dictionary {'x': items, 'y': Y}
 def unformat(template: str, instance: str) :
 	from string import Formatter
 	K = [ bit[1] for bit in Formatter().parse(template) ]
 	K = [ k for k in K if k ]
 	template = template.replace(".", "\.")
-	return dict(zip(K, re.fullmatch(template.format(**{k: "(.*)" for k in K}), instance).groups()))
+	KV = dict(zip(K, re.fullmatch(template.format(**{k: "(.*)" for k in K}), instance).groups()))
+	return KV
 
 # Undo a str.format operation, then redo it using the dict 'replace'
 def reformat(template: str, instance: str, replace={}) :
@@ -205,6 +214,9 @@ def token_for(service: str) :
 
 	if ("mapbox" in service) :
 		return open(".credentials/UV/mapbox-token.txt", 'r').readline().strip()
+
+	if ("osf" in service) :
+		return open(".credentials/UV/osf-token.txt", 'r').readline().strip(),
 
 	raise ValueError("No token for service '{}'".format(service))
 
@@ -493,89 +505,54 @@ def all_samesame(L) :
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-import os, json, zlib, base64
+import json, zlib, base64
 
-class ZipJSON :
+ZIPJSON_KEY = 'base64(zip(o))'
 
-	TAGS = ['base64(zip(o))', 'base64zip']
+def json_zip(J) :
 
-	def __init__(self, data) :
-
-		try :
-			json.dumps(data)
-		except :
-			raise RuntimeError("The passed object not recognized as JSON")
-
-		self.data = data
-
-	def enc(self):
-
-		if not self.data : return self.data
-
-		if (type(self.data) is dict) :
-			if (1 == len(self.data)) :
-				if set.intersection(set(self.data.keys()), set(self.TAGS)) :
-					print(self.data)
-					raise RuntimeError("It appears that the input is compressed already")
-
-		C = {
-			self.TAGS[0] : base64.b64encode(
-				zlib.compress(
-					json.dumps(self.data).encode('utf-8')
-				)
-			).decode('ascii')
-		}
-
-		return C
-
-	def try_dec(self) :
-
-		if not (type(self.data) is dict) : return self.data
-
-		def dec(D) :
-			for (k, v) in D.items() :
-				if k in self.TAGS :
-					v = json.loads( zlib.decompress( base64.b64decode( v ) ) )
-				yield (k, v)
-
-		J = dict(dec(self.data))
-
-		if (1 == len(J)) :
-			if set.intersection(set(J.keys()), set(self.TAGS)) :
-				(_, J) = J.popitem()
-
-		return J
-
-def zipjson_load(fn, opener=open) :
-
-	assert(type(fn) is str), "This expects a file name"
-
-	if not os.path.isfile(fn) :
-		raise FileNotFoundError("File not found: {}".format(fn))
-
-	if not os.stat(fn).st_size :
-		# The file is empty. Choose not to return an empty JSON.
-		raise EOFError("File {} is empty".format(fn))
-
-	try :
-		J = json.loads(opener(fn, 'rb').read())
-	except :
-		#print("Exception while loading {}".format(fn))
-		raise
-
-	try :
-		J = ZipJSON(J).try_dec()
-	except :
-		print("Exception while decoding {}".format(fn))
-		raise
+	J = {
+		ZIPJSON_KEY : base64.b64encode(
+			zlib.compress(
+				json.dumps(J).encode('utf-8')
+			)
+		).decode('ascii')
+	}
 
 	return J
 
-def zipjson_dump(J, fn, opener=open) :
-	assert(type(fn) is str)
-	E = ZipJSON(J).enc()
-	assert(json.dumps(E))
-	return json.dump(E, opener(fn, 'w'))
+def json_unzip(J, insist=True) :
+
+	try :
+		assert(J[ZIPJSON_KEY])
+		assert(set(J.keys()) == {ZIPJSON_KEY})
+	except :
+		if insist :
+			raise RuntimeError("JSON not in the expected format {" + str(ZIPJSON_KEY) + ": zipstring}")
+		else :
+			return J
+
+	try :
+		J = zlib.decompress(base64.b64decode(J[ZIPJSON_KEY]))
+	except :
+		raise RuntimeError("Could not decode/unzip the contents")
+
+	try :
+		J = json.loads(J)
+	except :
+		raise RuntimeError("Could interpret the unzipped contents")
+
+	return J
+
+def zipjson_load(filename, opener=open, insist=False) :
+	assert(type(filename) is str), "This expects a file name"
+	J = json.loads(opener(filename, 'rb').read())
+	return json_unzip(J, insist=insist)
+
+def zipjson_dump(J, filename, opener=open) :
+	assert(type(filename) is str), "This expects a file name"
+	J = json_zip(J)
+	return json.dump(J, opener(filename, 'w'))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 

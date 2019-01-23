@@ -197,7 +197,7 @@ def insert_arrivals(calId) :
 	# lang=eng
 	# rane=1002904011039
 	#
-	# Response: _|205_,China University of Science and Tec._,Dongyuan_,3_,0_&_|China U. of Science Technology(Main Entrance)_,0_,-1_,2_|China U. of Science Technology_,1_,-1_,2_|Soldiers Public Cemetry_,2_,-1_,2_|Academia Rd. Sec. 3_,3_,-1_,2_|Jiuru Li 2_,4_,-1_,2_|Lingyun Village 5_,5_,-1_,2_|Jiuru Li 1_,6_,-1_,2_|Hushih Park_,7_,-1_,2_|Academia Sinica_,8_,-1_,2_|Zhongyan New Village_,9_,-1_,2_| ..........
+	# Response: _|205_,China University of Science and Tec._,Dongyuan_,3_,0_&_|China unzipped. of Science Technology(Main Entrance)_,0_,-1_,2_|China unzipped. of Science Technology_,1_,-1_,2_|Soldiers Public Cemetry_,2_,-1_,2_|Academia Rd. Sec. 3_,3_,-1_,2_|Jiuru Li 2_,4_,-1_,2_|Lingyun Village 5_,5_,-1_,2_|Jiuru Li 1_,6_,-1_,2_|Hushih Park_,7_,-1_,2_|Academia Sinica_,8_,-1_,2_|Zhongyan New Village_,9_,-1_,2_| ..........
 
 
 def delete_past_events(calId, margin=-1) :

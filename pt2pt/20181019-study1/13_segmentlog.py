@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/evn python3
 
 # RA, 2018-10-31
 
@@ -13,7 +13,6 @@ import datetime as dt
 import dateutil.parser
 import requests, io, zipfile
 from itertools import chain, groupby, product
-from joblib import Parallel, delayed
 from progressbar import progressbar
 
 ## ==================== NOTES :
@@ -77,12 +76,12 @@ PARAM = {
 		'func': (lambda t : (t.year == 2018) and (t.month == 11) and (5 <= t.day <= 11)),
 	},
 
-	'mapbox_api_token' : open(".credentials/UV/mapbox-token.txt", 'r').readline().strip(),
+	'mapbox_api_token' : commons.token_for('mapbox'),
 
 	'osf_dump' : {
 		'web' : "https://osf.io/nr2yz/",
 		'base_url' : "https://files.osf.io/v1/resources/nr2yz/providers/osfstorage/",
-		'token' : open(".credentials/UV/osf-token.txt", 'r').readline().strip(),
+		'token' : commons.token_for('osf'),
 		'a' : "a_realtime-logs.zip",
 		'b' : "b_segmented-by-bus.zip",
 		'c' : "c_segmented-by-route.zip",
@@ -91,8 +90,8 @@ PARAM = {
 	# Sort snapshots by GPS time
 	'segment_sort_by_gpstime' : True,
 
-	# Execute run segmentation in parallel
-	'segment_parallel_jobs' : 4,
+	# Execute run segmentation in parallel?
+	'segment_in_parallel' : True,
 
 	# Segment runs whenever the timegap between measurements is large
 	'segment_timegap_minutes': 5,
@@ -124,7 +123,7 @@ PARAM = {
 OFILE = {
 	'segment_by_bus' :   "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/bybus/UV/{busid}.json",
 
-	'segment_by_route' : "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/byroute/UV/{routeid}-{dir}.{{ext}}",
+	'segment_by_route' : "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/byroute/UV/{routeid}-{dir}.{ext}",
 }
 
 commons.makedirs(OFILE)
@@ -138,9 +137,6 @@ IFILE.update({
 
 
 ## ====================== AUX :
-
-# https://stackoverflow.com/questions/34491808/how-to-get-the-current-scripts-code-in-python
-THIS = inspect.getsource(inspect.getmodule(inspect.currentframe()))
 
 # Collect realtime log filenames
 def get_all_logs() :
@@ -257,15 +253,15 @@ def segment_by_bus() :
 				for r in commons.zipjson_load(fn) :
 					yield r
 			except json.decoder.JSONDecodeError as e :
-				print("Warning: could not read {} ({})".format(fn, e))
+				commons.logger.warning("Could not read {} ({})".format(fn, e))
 
 	# Collect realtime log filenames
 	logs = get_all_logs()
 
-	print("Collecting bus ids...")
+	commons.logger.info("Collecting bus ids...")
 
-	busids = set(map(BUSID_OF, read_realtime_logs(logs)))
-	print("{} buses: {}".format(len(busids), busids))
+	busids = sorted(map(BUSID_OF, read_realtime_logs(logs)))
+	commons.logger.info("{} buses: {}".format(len(busids), busids))
 
 	def process_busid(busid) :
 
@@ -277,14 +273,14 @@ def segment_by_bus() :
 		with open(OFILE['segment_by_bus'].format(busid=busid), 'w') as fd :
 			json.dump(J, fd)
 
-	Parallel(n_jobs=PARAM['segment_parallel_jobs'])(delayed(process_busid)(busid) for busid in sorted(busids))
+	(commons.parallel_map if PARAM['segment_in_parallel'] else map)(process_busid, busids)
 
 
 def segment_by_route() :
 
 	# A "case" is the result of "RUN_KEY", i.e. a pair (routeid, direction)
 
-	print("Collecting cases...")
+	commons.logger.info("Collecting cases...")
 
 	# Associate to each case a list of files that contain instances of it
 	# case_directory : run_key --> list of filenames
@@ -306,7 +302,7 @@ def segment_by_route() :
 	# 	case : files
 	# 	for (case, files) in case_directory.items()
 	# 	# DEBUG:
-	# 	if (case[0] in ["KHH1221"])
+	# 	if (case[0] in ["KHH239"])
 	# }
 
 	#
@@ -322,25 +318,33 @@ def segment_by_route() :
 		]
 
 		if not segments :
-			print("Warning: No valid bus runs found for {}".format(case))
+			commons.logger.warning("No valid bus runs found for {}".format(case))
 			continue
 
-		fn = OFILE['segment_by_route'].format(**{k : segments[0].get(K) for (k, K) in KEYS.items()})
+		fn = OFILE['segment_by_route'].format(**{k : segments[0].get(K) for (k, K) in KEYS.items()}, ext="json")
 
-		with open(fn.format(ext="json"), 'w') as fd :
+		with open(fn, 'w') as fd :
 			json.dump(segments, fd)
 
-		with open(fn.format(ext="png"), 'wb') as fd :
+def segment_by_route_img() :
+	for fn in progressbar(commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*", ext="json"))) :
+		with open(fn, 'r') as fd :
+			segments = json.load(fd)
+
+		with open(commons.reformat(OFILE['segment_by_route'], fn, {'ext': "png"}), 'wb') as fd :
 			waypoints_by_quality = { q : list(s[KEYS['pos']] for s in g) for (q, g) in groupby(segments, key=(lambda s : s[PARAM['quality_key']])) }
-			print(*list(waypoints_by_quality.items()), sep='\n')
+			#commons.logger.debug("\n".join(waypoints_by_quality.items()))
 			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 
 def osf_upload() :
 	file_lists = {
+		# Downloaded real-time logs
 		'a' : get_all_logs(),
+		# Segmented by bus
 		'b' : commons.ls(OFILE['segment_by_bus'].format(busid="*")),
-		'c' : commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*").format(ext="*")),
+		# Segmented by route
+		'c' : commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*", ext="*")),
 	}
 
 	# 1. Create new folder in the OSF repo
@@ -359,8 +363,6 @@ def osf_upload() :
 
 	response = requests.put(PARAM['osf_dump']['base_url'], headers=headers, params=params)
 
-	#print(commons.pretty_json(response.json()))
-
 	# https://waterbutler.readthedocs.io/en/latest/api.html#actions
 	upload_url = response.json()['data']['links']['upload']
 
@@ -368,24 +370,24 @@ def osf_upload() :
 
 	for (k, file_list) in file_lists.items() :
 
-		print("Step {}".format(k).upper())
+		commons.logger.info("Step {}".format(k).upper())
 
 		params = {
 			'name' : PARAM['osf_dump'][k],
 		}
 
-		print("Archiving...")
+		commons.logger.info("Archiving...")
 
 		s = io.BytesIO()
 		with zipfile.ZipFile(file=s, mode='a', compression=zipfile.ZIP_DEFLATED) as z :
 			for f in progressbar(file_list) :
 				z.write(f)
 
-		print("Uploading...")
+		commons.logger.info("Uploading...")
 
 		response = requests.put(upload_url, data=s.getvalue(), headers=headers, params=params)
 
-		print("Response:", response.json())
+		commons.logger.info("Response: {}".format(response.json()))
 
 
 def osf_download() :
@@ -405,6 +407,7 @@ OPTIONS = {
 	'SEGMENT' : segment_logs,
 	'SEGMENT_BY_BUS' : segment_by_bus,
 	'SEGMENT_BY_ROUTE' : segment_by_route,
+	'SEGMENT_BY_ROUTE_IMG' : segment_by_route_img,
 
 	'OSF_UPLOAD' : osf_upload,
 	'OSF_DOWNLOAD' : osf_download,

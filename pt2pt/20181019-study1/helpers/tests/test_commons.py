@@ -37,5 +37,6 @@ class TestJsonZipMethods(unittest.TestCase) :
 	def test_json_unzip_noinsist_unjustified(self) :
 		self.assertEqual(self.unzipped, commons.json_unzip(self.zipped, insist=False))
 
+
 if __name__ == '__main__' :
 	unittest.main()
