@@ -121,7 +121,7 @@ PARAM = {
 ## =================== OUTPUT :
 
 OFILE = {
-	'segment_by_bus' :   "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/bybus/UV/{busid}.json",
+	'segment_by_bus' :   "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/bybus/UV/{busid}.{ext}",
 
 	'segment_by_route' : "OUTPUT/13/" + PARAM['datetime_filter']['path'] + "/byroute/UV/{routeid}-{dir}.{ext}",
 }
@@ -162,7 +162,7 @@ def drop_fields(b) :
 
 
 # Segment a list-like bb of bus records by route/direction
-def segments(bb):
+def segment_stream(bb):
 	# Sort records by GPS time
 	if PARAM['segment_sort_by_gpstime'] :
 		bb = sorted(bb, key=gpstime)
@@ -172,14 +172,14 @@ def segments(bb):
 
 	while bb :
 		# Initiate a new segment
-		s = [bb.pop()]
+		segment = [bb.pop()]
 
 		# Build segment while no indicators change
-		while bb and all((bb[-1].get(k, '?') == s[-1].get(k, '?')) for k in PARAM['segment_indicators']) :
+		while bb and all((bb[-1].get(k, '?') == segment[-1].get(k, '?')) for k in PARAM['segment_indicators']) :
 
 			# None of the indicators have changed: continue the segment record
 
-			(t0, t1) = (gpstime(b) for b in [s[-1], bb[-1]])
+			(t0, t1) = (gpstime(b) for b in [segment[-1], bb[-1]])
 			assert(t0 <= t1), "The records should be sorted by GPS time"
 
 			# ... unless there is a large time gap
@@ -194,15 +194,15 @@ def segments(bb):
 			# possibly due to the GPS-time field precision of 1 sec
 			if (t0 == t1): continue
 
-			s.append(b)
+			segment.append(b)
 
 		# Sanity check: only one bus tracked in the segment
-		assert(1 == len(set(map(BUSID_OF, s))))
+		assert(1 == len(set(map(BUSID_OF, segment))))
 
 		# Collapse into one record
 		run = next(iter(
 			commons.index_dicts_by_key(
-				s, BUSID_OF, keys_dont_collapse=PARAM['keys_dont_collapse'], keys_singletons_ok=PARAM['keys_singletons_ok']
+				segment, BUSID_OF, keys_dont_collapse=PARAM['keys_dont_collapse'], keys_singletons_ok=PARAM['keys_singletons_ok']
 			).values()
 		))
 
@@ -265,16 +265,24 @@ def segment_by_bus() :
 
 	def process_busid(busid) :
 
-		J = list(segments(drop_fields(r) for r in read_realtime_logs(logs) if (BUSID_OF(r) == busid)))
+		J = list(segment_stream(drop_fields(r) for r in read_realtime_logs(logs) if (BUSID_OF(r) == busid)))
 
 		# Note: A segment looks like this (some fields omitted)
 		# {'PlateNumb': '159-XH', 'SubRouteUID': 'KHH1421', 'Direction': 1, 'Speed': [0.0, 0.0, 0.0, 24.0, 35.0, 0.0, 6.0, 54.0, 0.0, 9.0, 42.0, 0.0, 0.0, 0.0, 0.0, 6.0, 13.0, 0.0, 0.0, 0.0, 18.0, 22.0, 6.0, 0.0, 23.0, 35.0, 0.0, 17.0, 6.0, 0.0, 9.0, 13.0, 0.0, 18.0, 25.0, 14.0, 0.0, 9.0, 5.0, 0.0, 0.0, 13.0, 5.0, 21.0, 8.0, 0.0, 21.0, 29.0, 38.0, 0.0, 0.0, 8.0, 39.0, 0.0, 0.0, 25.0, 0.0, 17.0, 31.0, 38.0, 6.0, 0.0, 5.0, 0.0, 0.0], 'Azimuth': [81.0, 81.0, 81.0, 70.0, 72.0, 70.0, 53.0, 70.0, 69.0, 70.0, 70.0, 78.0, 78.0, 78.0, 76.0, 11.0, 65.0, 71.0, 67.0, 72.0, 68.0, 75.0, 91.0, 94.0, 71.0, 70.0, 66.0, 28.0, 355.0, 6.0, 7.0, 267.0, 258.0, 261.0, 23.0, 21.0, 22.0, 353.0, 329.0, 323.0, 323.0, 352.0, 334.0, 329.0, 342.0, 355.0, 348.0, 321.0, 306.0, 299.0, 299.0, 36.0, 31.0, 30.0, 30.0, 4.0, 357.0, 352.0, 351.0, 1.0, 279.0, 279.0, 277.0, 331.0, 331.0], 'GPSTime': ['2018-11-05T09:59:35+08:00', '2018-11-05T09:59:55+08:00', '2018-11-05T10:00:35+08:00', '2018-11-05T10:01:15+08:00', '2018-11-05T10:01:39+08:00', '2018-11-05T10:01:55+08:00', '2018-11-05T10:02:57+08:00', '2018-11-05T10:03:55+08:00', '2018-11-05T10:04:35+08:00', '2018-11-05T10:05:35+08:00', '2018-11-05T10:05:55+08:00', '2018-11-05T10:06:15+08:00', '2018-11-05T10:06:55+08:00', '2018-11-05T10:07:35+08:00', '2018-11-05T10:07:55+08:00', '2018-11-05T10:08:23+08:00', '2018-11-05T10:09:15+08:00', '2018-11-05T10:09:35+08:00', '2018-11-05T10:09:55+08:00', '2018-11-05T10:10:55+08:00', '2018-11-05T10:11:03+08:00', '2018-11-05T10:11:35+08:00', '2018-11-05T10:12:15+08:00', '2018-11-05T10:12:35+08:00', '2018-11-05T10:13:25+08:00', '2018-11-05T10:13:39+08:00', '2018-11-05T10:14:15+08:00', '2018-11-05T10:18:35+08:00', '2018-11-05T10:21:03+08:00', '2018-11-05T10:21:35+08:00', '2018-11-05T10:22:15+08:00', '2018-11-05T10:22:40+08:00', '2018-11-05T10:22:55+08:00', '2018-11-05T10:23:35+08:00', '2018-11-05T10:24:00+08:00', '2018-11-05T10:24:55+08:00', '2018-11-05T10:25:15+08:00', '2018-11-05T10:25:55+08:00', '2018-11-05T10:26:15+08:00', '2018-11-05T10:26:35+08:00', '2018-11-05T10:27:35+08:00', '2018-11-05T10:27:55+08:00', '2018-11-05T10:28:35+08:00', '2018-11-05T10:29:00+08:00', '2018-11-05T10:29:19+08:00', '2018-11-05T10:29:55+08:00', '2018-11-05T10:30:15+08:00', '2018-11-05T10:30:43+08:00', '2018-11-05T10:33:01+08:00', '2018-11-05T10:33:35+08:00', '2018-11-05T10:33:55+08:00', '2018-11-05T10:34:39+08:00', '2018-11-05T10:34:59+08:00', '2018-11-05T10:35:55+08:00', '2018-11-05T10:36:15+08:00', '2018-11-05T10:36:57+08:00', '2018-11-05T10:37:15+08:00', '2018-11-05T10:38:05+08:00', '2018-11-05T10:38:16+08:00', '2018-11-05T10:38:39+08:00', '2018-11-05T10:39:15+08:00', '2018-11-05T10:39:35+08:00', '2018-11-05T10:40:35+08:00', '2018-11-05T10:40:55+08:00', '2018-11-05T10:41:35+08:00'], 'BusPosition': [(22.615449, 120.298779), (22.615449, 120.298779), (22.615449, 120.298779), (22.615909, 120.300139), (22.616379, 120.30158), (22.61655, 120.302109), (22.6168, 120.302549), (22.61792, 120.306129), (22.618179, 120.30695), (22.618539, 120.30812), (22.61899, 120.30951), (22.61923, 120.310299), (22.61923, 120.310299), (22.619579, 120.31152), (22.619659, 120.311819), (22.619879, 120.31198), (22.620149, 120.312939), (22.62046, 120.31389), (22.620499, 120.314049), (22.62058, 120.31443), (22.62065, 120.314729), (22.62142, 120.316739), (22.62169, 120.317409), (22.621719, 120.317599), (22.622309, 120.318939), (22.62264, 120.32008), (22.62311, 120.32161), (22.629729, 120.32777), (22.63231, 120.328199), (22.632509, 120.32818), (22.632699, 120.328239), (22.63294, 120.32792), (22.632899, 120.32742), (22.632799, 120.32657), (22.633639, 120.326419), (22.63803, 120.32765), (22.63812, 120.32769), (22.63997, 120.32786), (22.64025, 120.327789), (22.640619, 120.327569), (22.640619, 120.327569), (22.64175, 120.327129), (22.643129, 120.32653), (22.644439, 120.32598), (22.645409, 120.32563), (22.64553, 120.32563), (22.64656, 120.325509), (22.64882, 120.325059), (22.651849, 120.321129), (22.65296, 120.31946), (22.65296, 120.31946), (22.654109, 120.319339), (22.65536, 120.320199), (22.6569, 120.321259), (22.6569, 120.321259), (22.65991, 120.322019), (22.66066, 120.322069), (22.661239, 120.322029), (22.661999, 120.321929), (22.664059, 120.32182), (22.66559, 120.3216), (22.66559, 120.321579), (22.66562, 120.32138), (22.665659, 120.3212), (22.665659, 120.3212)], 'RunUUID': '2f9611d6ceb241558c2903e644ace77c'}
 
-		with open(OFILE['segment_by_bus'].format(busid=busid), 'w') as fd :
+		with open(OFILE['segment_by_bus'].format(busid=busid, ext="json"), 'w') as fd :
 			json.dump(J, fd)
 
 	(commons.parallel_map if PARAM['segment_in_parallel'] else map)(process_busid, busids)
 
+def segment_by_bus_img() :
+
+	for fn in progressbar(commons.ls(OFILE['segment_by_bus'].format(busid="*", ext="json"))) :
+		with open(fn, 'r') as fd :
+			tracks = [b[KEYS['pos']] for b in json.load(fd)]
+		commons.logger.debug(tracks)
+		with open(commons.reformat(OFILE['segment_by_bus'], fn, {'ext': "png"}), 'wb') as fd :
+			maps.write_track_img(waypoints=[], tracks=tracks, fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 def segment_by_route() :
 
@@ -289,7 +297,7 @@ def segment_by_route() :
 		for (case, g) in groupby(
 			sorted(
 				(RUN_KEY(s), busfile)
-				for busfile in commons.ls(IFILE['segment_by_bus'].format(busid="*"))
+				for busfile in commons.ls(IFILE['segment_by_bus'].format(busid="*", ext="json"))
 				for s in commons.zipjson_load(busfile)
 			),
 			key=(lambda r : r[0])
@@ -342,7 +350,7 @@ def osf_upload() :
 		# Downloaded real-time logs
 		'a' : get_all_logs(),
 		# Segmented by bus
-		'b' : commons.ls(OFILE['segment_by_bus'].format(busid="*")),
+		'b' : commons.ls(OFILE['segment_by_bus'].format(busid="*", ext="json")),
 		# Segmented by route
 		'c' : commons.ls(OFILE['segment_by_route'].format(routeid="*", dir="*", ext="*")),
 	}
@@ -406,6 +414,7 @@ def segment_logs() :
 OPTIONS = {
 	'SEGMENT' : segment_logs,
 	'SEGMENT_BY_BUS' : segment_by_bus,
+	'SEGMENT_BY_BUS_IMG' : segment_by_bus_img,
 	'SEGMENT_BY_ROUTE' : segment_by_route,
 	'SEGMENT_BY_ROUTE_IMG' : segment_by_route_img,
 
