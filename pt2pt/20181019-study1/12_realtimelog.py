@@ -97,7 +97,7 @@ def compress() :
 					commons.logger.exception("File {}: unexpected error".format(fn))
 
 			except :
-				commons.logger.exception("File {}: reading error".format(fn))
+				commons.logger.warning("File {}: reading error".format(fn))
 	else :
 		commons.logger.info("Skipping")
 
