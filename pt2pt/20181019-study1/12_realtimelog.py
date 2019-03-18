@@ -88,6 +88,8 @@ def compress() :
 			except RuntimeError :
 				commons.zipjson_dump(commons.zipjson_load(fn), fn)
 				commons.logger.info("File {}: compressed".format(fn))
+			except json.decoder.JSONDecodeError :
+				commons.logger.debug("File {}: JSONDecodeError".format(fn))
 	else :
 		commons.logger.info("Skipping.")
 
