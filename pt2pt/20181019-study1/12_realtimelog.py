@@ -81,17 +81,25 @@ def compress() :
 
 	if True :
 		# Brutal compression step
+
 		for fn in realtime_files :
 			try :
-				commons.zipjson_load(fn, insist=True)
-				# commons.logger.info("File {}: compressed already".format(fn))
-			except RuntimeError :
-				commons.zipjson_dump(commons.zipjson_load(fn), fn)
-				commons.logger.info("File {}: compressed".format(fn))
-			except json.decoder.JSONDecodeError :
-				commons.logger.debug("File {}: JSONDecodeError".format(fn))
+				# See if file is in a valid format
+				commons.zipjson_load(fn)
+
+				try :
+					commons.zipjson_load(fn, insist=True)
+					# commons.logger.info("File {}: compressed already".format(fn))
+				except RuntimeError :
+					commons.zipjson_dump(commons.zipjson_load(fn), fn)
+					commons.logger.info("File {}: compressed".format(fn))
+				except :
+					commons.logger.exception("File {}: unexpected error".format(fn))
+
+			except :
+				commons.logger.exception("File {}: reading error".format(fn))
 	else :
-		commons.logger.info("Skipping.")
+		commons.logger.info("Skipping")
 
 
 	commons.logger.info("COMPRESSION I: Remove duplicates in back-to-back records")
