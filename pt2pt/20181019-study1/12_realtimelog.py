@@ -82,7 +82,7 @@ def compress() :
 	if True :
 		# Brutal compression step
 
-		for fn in realtime_files :
+		for fn in commons.progressbar(realtime_files) :
 			try :
 				# See if file is in a valid format
 				commons.zipjson_load(fn)

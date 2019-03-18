@@ -39,6 +39,8 @@ PARAM_LOGGER_OFILE = os.path.join(os.path.dirname(__file__), "logs/UV/{id}.log")
 import progressbar
 progressbar.streams.wrap_stderr()
 
+from progressbar import progressbar
+
 def initialize_logger() :
 	import logging.config
 
