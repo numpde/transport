@@ -77,12 +77,19 @@ def compress() :
 	# Compression 0:
 	# zip-base64 contents
 
-	commons.logger.info("COMPRESSION 0")
+	commons.logger.info("COMPRESSION 0: Zip all")
 
-	# Brutal compression step
-	for fn in realtime_files :
-		continue
-		#commons.zipjson_dump(commons.zipjson_load(fn), fn)
+	if True :
+		# Brutal compression step
+		for fn in realtime_files :
+			try :
+				commons.zipjson_load(fn, insist=True)
+				# commons.logger.info("File {}: compressed already".format(fn))
+			except RuntimeError :
+				commons.zipjson_dump(commons.zipjson_load(fn), fn)
+				commons.logger.info("File {}: compressed".format(fn))
+	else :
+		commons.logger.info("Skipping.")
 
 
 	commons.logger.info("COMPRESSION I: Remove duplicates in back-to-back records")
@@ -105,7 +112,7 @@ def compress() :
 				# Raised by zipjson_load if a file is empty
 				continue
 			except Exception as e :
-				commons.logger.warning("Cannot open {}/{} ({}).".format(fn1, fn2, e))
+				commons.logger.warning("Cannot open {}/{} ({})".format(fn1, fn2, e))
 				continue
 
 			if not J1.intersection(J2) :
