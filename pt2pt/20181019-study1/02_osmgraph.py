@@ -56,7 +56,10 @@ PARAM = {
 	# Construct the road graph from these tags only
 	# https://wiki.openstreetmap.org/wiki/Key:highway
 	'osm_way_keep_if_has' : {
-		'highway' : ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service"] + ["motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"],
+		'highway' : [
+			"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service",
+			"motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link",
+		],
 	},
 
 	'osm_rel_keep_if_has' : {

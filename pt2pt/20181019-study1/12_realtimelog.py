@@ -47,7 +47,7 @@ PARAM = {
 			'basepath' : IFILE['realtime'].format(city="Kaohsiung", date="?", time="?").split('?')[0],
 			'repo_url' : "https://osf.io/bwcyv/download",
 		},
-	]
+	],
 }
 
 
@@ -74,13 +74,11 @@ def compress() :
 	# Allow for pending write operations
 	time.sleep(1)
 
-	# Compression 0:
-	# zip-base64 contents
-
-	commons.logger.info("COMPRESSION 0: Zip all")
 
 	if True :
+
 		# Brutal compression step
+		commons.logger.info("COMPRESSION 0: Zip all")
 
 		for fn in commons.progressbar(realtime_files) :
 			try :
@@ -98,13 +96,11 @@ def compress() :
 
 			except :
 				commons.logger.warning("File {}: reading error".format(fn))
-	else :
-		commons.logger.info("Skipping")
 
 
-	commons.logger.info("COMPRESSION I: Remove duplicates in back-to-back records")
+	if False :
 
-	if True :
+		commons.logger.info("COMPRESSION I: Remove duplicates in back-to-back records")
 
 		for (fn1, fn2) in zip(realtime_files[:-1], realtime_files[1:]) :
 			def hashable(J) :
@@ -137,9 +133,9 @@ def compress() :
 			commons.zipjson_dump(J1, fn1)
 
 
-	commons.logger.info("COMPRESSION II: Remove redundancies from individual records")
+	if False :
 
-	if True :
+		commons.logger.info("COMPRESSION II: Remove redundancies from individual records")
 
 		unknown_subroutes = set()
 
