@@ -188,7 +188,7 @@ def mapmatch_runs(scenario, runs) :
 		for (runid, run) in runs_by_runid.items()
 	}
 
-	commons.logger.debug(json.dumps(runs, indent=2))
+	#commons.logger.debug(json.dumps(runs, indent=2))
 
 	commons.logger.info("Running mapmatch on {} runs".format(len(runs)))
 

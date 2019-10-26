@@ -339,10 +339,19 @@ def segment_by_route_img() :
 		with open(fn, 'r') as fd :
 			segments = json.load(fd)
 
+		waypoints_by_quality = {
+			q : list(s[KEYS['pos']] for s in g)
+			for (q, g) in groupby(segments, key=(lambda s : s[PARAM['quality_key']]))
+		}
+
+		assert ({'-', '+'}.issuperset(waypoints_by_quality.keys()))
+		# commons.logger.debug("\n".join(waypoints_by_quality.items()))
+
+		waypoints = [] + list(chain.from_iterable(waypoints_by_quality.get('-', [])))
+		tracks = [[]] + waypoints_by_quality.get('+', [])
+
 		with open(commons.reformat(OFILE['segment_by_route'], fn, {'ext': "png"}), 'wb') as fd :
-			waypoints_by_quality = { q : list(s[KEYS['pos']] for s in g) for (q, g) in groupby(segments, key=(lambda s : s[PARAM['quality_key']])) }
-			#commons.logger.debug("\n".join(waypoints_by_quality.items()))
-			maps.write_track_img(waypoints=list(chain.from_iterable(waypoints_by_quality.get('-', []))), tracks=waypoints_by_quality.get('+', []), fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
+			maps.write_track_img(waypoints=waypoints, tracks=tracks, fd=fd, mapbox_api_token=PARAM['mapbox_api_token'])
 
 
 def osf_upload() :
