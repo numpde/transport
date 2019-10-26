@@ -56,7 +56,7 @@ transfers = [
 database = os.path.join(data_path, "sqlite/UV/db.db")
 os.makedirs(os.path.dirname(database), exist_ok=True)
 
-bboxfile = os.path.join(data_path, "bbox.json")
+# bboxfile = os.path.join(data_path, "bbox.json")
 
 
 def src_trg_tbl():
