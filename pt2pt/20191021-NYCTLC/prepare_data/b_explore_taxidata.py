@@ -3,13 +3,19 @@
 
 import os
 from sqlite3 import connect
+
+import calendar
+
+import numpy as np
 import pandas as pd
 
 import inspect
 
+from itertools import groupby
+from collections import Counter
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-mpl.use("Agg")
 
 import logging as logger
 logger.basicConfig(level=logger.DEBUG, format="%(levelname)-8s [%(asctime)s] : %(message)s", datefmt="%Y%m%d %H:%M:%S %Z")
@@ -48,6 +54,8 @@ def query(sql) -> pd.DataFrame:
 
 
 def trip_distance_histogram(table_name):
+	mpl.use("Agg")
+
 	col_name = 'trip_distance'
 	sql = F"SELECT [{col_name}] FROM [{table_name}]"
 	trip_distance = query(sql)[col_name]
@@ -66,6 +74,8 @@ def trip_distance_histogram(table_name):
 
 
 def trip_trajectories_plot(table_name):
+	mpl.use("Agg")
+
 	cols = ["pickup_latitude", "pickup_longitude", "dropoff_latitude", "dropoff_longitude"]
 
 	sql = F"SELECT {(', '.join(cols))} FROM [{table_name}] ORDER BY RANDOM() LIMIT 10000"
@@ -90,12 +100,45 @@ def trip_trajectories_plot(table_name):
 	fig.savefig(makedirs(fn), **PARAM['savefig_args'])
 
 
+def trip_hour_histogram(table_name):
+	mpl.use("TkAgg")
+
+	col_name = 'pickup_datetime'
+	sql = F"SELECT [{col_name}] FROM [{table_name}]" # ORDER BY RANDOM() LIMIT 100000"
+	pickup = pd.to_datetime(query(sql)[col_name])
+	df: pd.DataFrame
+	df = pd.DataFrame({'d': pickup.dt.weekday, 'h': pickup.dt.hour})
+	day_count = pd.Series(Counter(d for (d, g) in groupby(pickup.sort_values().dt.weekday)))
+	df = df.groupby(['d', 'h']).size().reset_index()
+	df = df.pivot(index='d', columns='h', values=0)
+	# Average number of rides initiated
+	df = df.div(day_count, axis='index')
+	df = df.sort_index()
+
+	fig: plt.Figure
+	ax1: plt.Axes
+	(fig, ax1) = plt.subplots()
+	ax1.imshow(df, cmap=plt.get_cmap("Blues"), origin="upper")
+
+	(xlim, ylim) = (ax1.get_xlim(), ax1.get_ylim())
+	ax1.set_xticks(np.linspace(-0.5, 23.5, 25))
+	ax1.set_xticklabels(range(0, 25))
+	ax1.set_yticks(ax1.get_yticks(minor=False), minor=False)
+	ax1.set_yticklabels([dict(enumerate(calendar.day_abbr)).get(int(t), "") for t in ax1.get_yticks(minor=False)])
+	ax1.set_xlim(*xlim)
+	ax1.set_ylim(*ylim)
+
+	fn = os.path.join(PARAM['out_images_path'], F"{myname()}/{table_name}.png")
+	fig.savefig(makedirs(fn), **PARAM['savefig_args'])
+
+
 def main():
 	tables = {"green_tripdata_2016-05", "yellow_tripdata_2016-05"}
 
-	for table_name in tables:
-		trip_distance_histogram(table_name)
-		trip_trajectories_plot(table_name)
+	for table_name in sorted(tables):
+		# trip_distance_histogram(table_name)
+		# trip_trajectories_plot(table_name)
+		trip_hour_histogram(table_name)
 
 
 if __name__ == '__main__':

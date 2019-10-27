@@ -56,8 +56,6 @@ transfers = [
 database = os.path.join(data_path, "sqlite/UV/db.db")
 os.makedirs(os.path.dirname(database), exist_ok=True)
 
-# bboxfile = os.path.join(data_path, "bbox.json")
-
 
 def src_trg_tbl():
 	for transfer in transfers:
@@ -68,6 +66,13 @@ def src_trg_tbl():
 
 
 def data_clean(df: pd.DataFrame) -> pd.DataFrame:
+	# Lowercase column names
+	df.columns = map(str.strip, map(str.lower, df.columns))
+
+	# Remove prefixes from pickup/dropoff datetimes
+	for e in ["pickup_datetime", "dropoff_datetime"]:
+		df.columns = map(lambda c: (e if c.endswith(e) else c), df.columns)
+
 	# Omit rows with bogus lat/lon entries
 	for spot in ["pickup", "dropoff"]:
 		for coor in ["latitude", "longitude"]:
@@ -76,6 +81,11 @@ def data_clean(df: pd.DataFrame) -> pd.DataFrame:
 	# Omit rows with large trip distance (in miles)
 	MAX_TRIP_DISTANCE_MILES = 50
 	df = df[df['trip_distance'] <= MAX_TRIP_DISTANCE_MILES]
+
+	# Convert travel distance to meters
+	METERS_PER_MILE = 1609.34
+	df['trip_distance'] *= METERS_PER_MILE
+	df = df.rename(columns={"trip_distance": "trip_distance[m]"})
 
 	return df
 
@@ -113,9 +123,6 @@ def tosqlite():
 			con.cursor().execute("DROP TABLE IF EXISTS [{}]".format(table))
 
 			for df in pd.read_csv(file, chunksize=(1024 * 1024)):
-
-				# Lowercase column names
-				df.columns = map(str.strip, map(str.lower, df.columns))
 
 				df = data_clean(df)
 				df = data_in_polygon(df, manhattan)

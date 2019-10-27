@@ -13,6 +13,8 @@ from collections import Counter
 from itertools import chain
 from more_itertools import pairwise
 
+import pickle
+
 import json
 from zipfile import ZipFile
 
@@ -32,6 +34,10 @@ PARAM = {
 	'osm_archive': "data/osm/manhattan/osm_json.zip",
 
 	'hw_matrix': pd.read_csv("data/osm/highways/highway_matrix.csv", index_col="highway"),
+
+	'way_tags_we_like': ["name", "highway", "sidewalk", "private", "bus", "cycleway", "oneway", "foot", "pedestrian", "turn"],
+
+	'out_road_graph': makedirs("data/road_graph/UV/nx_digraph_naive.pkl"),
 
 	'out_road_graph_sketch': makedirs("data/road_graph/sketch.png"),
 	'savefig_args': dict(bbox_inches='tight', pad_inches=0, dpi=300),
@@ -63,6 +69,10 @@ ways = ways.loc[(drivable[tags.get('highway')] for tags in ways['tags']), :]
 # Retain only nodes that support any remaining ways
 nodes = nodes.loc[set(chain.from_iterable(ways.nodes.values)), :]
 
+# Keep only useful tags
+# print(set(chain.from_iterable(ways.tags)))
+ways.tags = [{k: v for (k ,v) in tags.items() if (k in PARAM['way_tags_we_like'])} for tags in ways.tags]
+
 #
 nodes['pos'] = list(zip(nodes['lon'], nodes['lat']))
 nodes['loc'] = list(zip(nodes['lat'], nodes['lon']))
@@ -80,6 +90,11 @@ nx.set_edge_attributes(G, name="len", values=dict(Pool().map(edge_len, G.edges))
 
 nx.set_node_attributes(G, name="pos", values=dict(nodes['pos']))
 nx.set_node_attributes(G, name="loc", values=dict(nodes['loc']))
+
+
+# Save the graph
+
+pickle.dump(G, open(PARAM['out_road_graph'], 'wb'))
 
 
 # Plot
@@ -105,3 +120,4 @@ ax1.imshow(maps.get_map_by_bbox(maps.ax2mb(*extent)), extent=extent, interpolati
 # Save image
 fig.savefig(PARAM['out_road_graph_sketch'], **PARAM['savefig_args'])
 plt.close(fig)
+
