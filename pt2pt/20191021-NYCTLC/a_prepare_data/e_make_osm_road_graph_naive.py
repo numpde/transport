@@ -70,7 +70,7 @@ ways = ways.loc[(drivable[tags.get('highway')] for tags in ways['tags']), :]
 nodes = nodes.loc[set(chain.from_iterable(ways.nodes.values)), :]
 
 # Keep only useful tags
-# print(set(chain.from_iterable(ways.tags)))
+assert("oneway" in PARAM['way_tags_we_like'])
 ways.tags = [{k: v for (k ,v) in tags.items() if (k in PARAM['way_tags_we_like'])} for tags in ways.tags]
 
 #
@@ -82,6 +82,9 @@ G = nx.DiGraph()
 
 for (osm_id, way) in ways.iterrows():
 	G.add_edges_from(pairwise(way['nodes']), osm_id=osm_id, **way['tags'])
+	if not ("yes" == str.lower(way['tags'].get('oneway', "no"))):
+		# https://wiki.openstreetmap.org/wiki/Key:oneway
+		G.add_edges_from(pairwise(reversed(way['nodes'])), osm_id=osm_id, **way['tags'])
 
 def edge_len(uv):
 	return (uv, distance(nodes['loc'][uv[0]], nodes['loc'][uv[1]]).m)

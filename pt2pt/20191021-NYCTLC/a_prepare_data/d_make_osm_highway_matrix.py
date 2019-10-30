@@ -56,7 +56,7 @@ nodes = nodes.loc[set(chain.from_iterable(ways.nodes.values)), :]
 # Collect values of "highway=*"
 highway_matrix = pd.DataFrame(index=pd.Index(ways[HW].unique(), name=HW), columns=["drivable", "cyclable", "walkable"])
 #
-highway_matrix['drivable'][{'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential'}] = True
+highway_matrix['drivable'][{'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'unclassified', 'residential', 'pedestrian', 'living_street', 'service'}] = True
 highway_matrix['drivable'][{'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'}] = True
 #
 highway_matrix['cyclable'][{'cycleway'}] = True

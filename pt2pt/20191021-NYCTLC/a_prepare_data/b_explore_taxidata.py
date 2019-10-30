@@ -1,6 +1,9 @@
 
 # RA, 2019-10-24
 
+#
+from helpers import maps
+
 import os
 import math
 
@@ -27,8 +30,6 @@ logger.getLogger('PIL').setLevel(logger.WARNING)
 import percache
 cache = percache.Cache("/tmp/percache_" + os.path.basename(__file__), livesync=True)
 
-#
-import maps
 
 
 PARAM = {
@@ -159,9 +160,8 @@ def pickup_hour_heatmap(table_name):
 
 def trip_speed_histogram(table_name):
 	mpl.use("Agg")
-	# logger.warning("TkAgg is used")
 
-	sql = F"SELECT pickup_datetime as a, dropoff_datetime as b, [trip_distance/m] as m FROM [{table_name}]"
+	sql = F"SELECT [pickup_datetime] as a, [dropoff_datetime] as b, [trip_distance/m] as m FROM [{table_name}]"
 	# sql += "ORDER BY RANDOM() LIMIT 1000"  # DEBUG
 	df: pd.DataFrame
 	df = query(sql)
@@ -220,28 +220,67 @@ def trip_speed_histogram(table_name):
 
 
 def running_number_of_trips(table_name):
-	sql = F"SELECT pickup_datetime as a, dropoff_datetime as b FROM [{table_name}]"
-	# sql += "ORDER BY RANDOM() LIMIT 1000"  # DEBUG
+	mpl.use("Agg")
+
+	sql = F"""
+		SELECT [pickup_datetime] as t, +1 as n FROM [{table_name}]
+		UNION ALL
+		SELECT [dropoff_datetime] as t, -1 as n FROM [{table_name}]
+	"""
+
 	df: pd.DataFrame
-	df = query(sql).apply(pd.to_datetime, axis=0)
+	df = query(sql)
+	df.t = pd.to_datetime(df.t)
+	df = df.sort_values(by='t')
+	df.n = np.cumsum(df.n)
 
-	logger.debug(df['b'].sort_values())
-	raise NotImplementedError
+	df['d'] = df.t.dt.floor('1d')
+	df['h'] = df.t.dt.hour
 
+	df = df.groupby(['d', 'h']).mean().reset_index()
+	df = df.pivot(index='d', columns='h', values='n').fillna(0).sort_index()
 
-def x():
-	pass
+	style = {
+		'font.size': 3,
+		'xtick.major.size': 2,
+		'ytick.major.size': 0,
+		'xtick.major.pad': 1,
+		'ytick.major.pad': 1,
+	}
+
+	with plt.style.context(style):
+		fig: plt.Figure
+		ax1: plt.Axes
+		(fig, ax1) = plt.subplots()
+
+		im = ax1.imshow(df, cmap=plt.get_cmap("Blues"), origin="upper")
+
+		(xlim, ylim) = (ax1.get_xlim(), ax1.get_ylim())
+		ax1.set_xticks(np.linspace(-0.5, 23.5, 25))
+		ax1.set_xticklabels(range(25))
+		ax1.set_yticks(range(len(df.index)))
+		ax1.set_yticklabels(df.index.date)
+		ax1.set_xlim(*xlim)
+		ax1.set_ylim(*ylim)
+
+		for (j, c) in enumerate(df.columns):
+			for (i, x) in enumerate(df[c]):
+				im.axes.text(j, i, int(x), ha="center", va="center")
+
+		fn = os.path.join(PARAM['out_images_path'], F"{myname()}/{table_name}.png")
+		fig.savefig(makedirs(fn), **PARAM['savefig_args'])
+
 
 
 def main():
 	tables = {"green_tripdata_2016-05", "yellow_tripdata_2016-05"}
 
 	for table_name in sorted(tables):
-		trip_distance_histogram(table_name)
-		trip_trajectories_initial(table_name)
-		pickup_hour_heatmap(table_name)
-		trip_speed_histogram(table_name)
-		running_number_of_trips(table_name)
+		# trip_distance_histogram(table_name)
+		# trip_trajectories_initial(table_name)
+		# pickup_hour_heatmap(table_name)
+		# trip_speed_histogram(table_name)
+		# running_number_of_trips(table_name)
 		pass
 
 
