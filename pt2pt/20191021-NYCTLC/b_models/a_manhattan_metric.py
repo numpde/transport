@@ -51,7 +51,7 @@ PARAM = {
 	# Tolerance for accepting a nearest node (distance in meters)
 	'tol_nearest_nodes/m': 20,
 
-	'out_manhattan_metric_path': makedirs(os.path.join(os.path.dirname(__file__), "manhattan_metric/")),
+	'out_metric': makedirs(os.path.join(os.path.dirname(__file__), "manhattan_metric/")),
 	'savefig_args': dict(bbox_inches='tight', pad_inches=0, jpeg_quality=0.9, dpi=300),
 }
 
@@ -190,6 +190,8 @@ def get_trips(table_name, graph, where="") -> pd.DataFrame:
 	return trips
 
 
+# ~~~~ TOOLS ~~~~ #
+
 def project(trips: pd.DataFrame, graph: nx.DiGraph):
 	# Nearest-node computer
 	logger.debug("Computing nearest in-graph nodes")
@@ -206,8 +208,6 @@ def project(trips: pd.DataFrame, graph: nx.DiGraph):
 
 	return projected
 
-
-# ~~~~ #
 
 def compute_metric(graph: nx.DiGraph, trips: pd.DataFrame, callback=None):
 	nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
@@ -259,7 +259,9 @@ def compute_metric(graph: nx.DiGraph, trips: pd.DataFrame, callback=None):
 	return edges
 
 
-def manhattan_metric(table_name):
+# ~~~~ WORKER ~~~~ #
+
+def compute_metric_for_table(table_name):
 
 	# Load and sanitize the road graph
 	graph = get_road_graph()
@@ -271,58 +273,59 @@ def manhattan_metric(table_name):
 
 	#
 	for ((weekday, days), hour) in product(dates.groupby(dates.weekday).items(), range(0, 24)):
-		logger.debug(F"weekday/hour/#days = {weekday}/{hour}/{len(days)}")
+		logger.debug(F"weekday/hour = {weekday}/{hour} over {len(days)} days")
 
-		# Output filename
-		output_path = makedirs(os.path.join(PARAM['out_manhattan_metric_path'], F"{table_name}/{weekday}/{hour:02}/"))
+		# Filenames for output
+		output_path = makedirs(os.path.join(PARAM['out_metric'], F"{table_name}/{weekday}/{hour:02}/"))
 		output_edges_fn = os.path.join(output_path, "edges_met.pkl")
 		output_about_fn = os.path.join(output_path, "edges_met.json")
-
-		if os.path.isfile(output_about_fn):
-			# Info file exists, assume that the job is being done
-			logger.info(F"File {output_about_fn} exists -- skipping")
-			continue
-		else:
-			# Touch info file to reserve the job
-			with open(output_about_fn, 'w'):
-				pass
-
-		where = "WHERE ({})".format(
-			" OR ".join(
-				"(('{}' <= pickup_datetime) AND (dropoff_datetime < '{}'))".format(
-					day + pd.Timedelta(hour + 0, unit='h'),
-					day + pd.Timedelta(hour + 1, unit='h')
-				)
-				for day in days
-			)
-		)
-
-		trips = get_trips(table_name, graph, where=where)
 
 		def manhattan_metric_callback(info: SimpleNamespace):
 			with open(output_edges_fn, 'wb') as fd:
 				pickle.dump(info.edges['met'], fd)
-			with open(output_about_fn, 'w') as fd:
-				json.dump({'days': list(map(str, days)), 'weekday': weekday, 'hour': hour, '#trips': len(info.trips), 'round': info.round}, fd)
 			with nx_draw_met_by_len(info.graph, info.nodes, info.edges) as (fig, ax1):
 				fig.savefig(makedirs(os.path.join(output_path, F"UV/{info.round:04}.jpg")), **{**PARAM['savefig_args'], 'dpi': 180})
+			with open(output_about_fn, 'w') as fd:
+				json.dump({'days': list(map(str, days)), 'weekday': weekday, 'hour': hour, '#trips': len(info.trips), 'round': info.round}, fd)
 
-		compute_metric(graph, trips, manhattan_metric_callback)
+		try:
+			if os.path.isfile(output_about_fn):
+				# Info file exists, the job is being processed elsewhere
+				logger.info(F"File {output_about_fn} exists -- skipping")
+				continue
+			else:
+				# Touch info file to reserve the job
+				with open(output_about_fn, 'w'):
+					pass
+
+			where = "WHERE ({})".format(" OR ".join(
+				"(('{a}' <= pickup_datetime) AND (dropoff_datetime < '{b}'))".format(
+					a=(day + pd.Timedelta(hour + 0, unit='h')),
+					b=(day + pd.Timedelta(hour + 1, unit='h')),
+				)
+				for day in days
+			))
+
+			trips = get_trips(table_name, graph, where=where)
+			compute_metric(graph, trips, manhattan_metric_callback)
+
+		except:
+			logger.warning(F"Integrity compromised; deleting jobfile {output_about_fn}")
+			os.rename(output_about_fn, (output_about_fn + ".bak"))
+			raise
 
 
 # ~~~~ ENTRY ~~~~ #
 
 def main():
-	manhattan_metric("yellow_tripdata_2016-05")
+	compute_metric_for_table("yellow_tripdata_2016-05")
 	return
 
 	tables = {"green_tripdata_2016-05", "yellow_tripdata_2016-05"}
 
 	for table_name in sorted(tables):
 		logger.info("Table {table_name}")
-
-		iterate(table_name)
-		# trip_trajectories_ingraph(table_name)
+		compute_metric_for_table(table_name)
 
 
 if __name__ == '__main__':
