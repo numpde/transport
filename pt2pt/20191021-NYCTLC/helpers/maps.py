@@ -50,12 +50,16 @@ MAPBOX_ZOOM0_SIZE = 512  # Not 256
 
 # https://www.mapbox.com/api-documentation/#styles
 class MapBoxStyle(Enum):
-	streets = 'streets-v10'
-	outdoors = 'outdoors-v10'
-	light = 'light-v9'
-	dark = 'dark-v9'
+	streets = 'streets-v11'
+	outdoors = 'outdoors-v11'
+	light = 'light-v10'
+	dark = 'dark-v10'
 	satellite = 'satellite-v9'
-	satellite_streets = 'satellite-streets-v10'
+	satellite_streets = 'satellite-streets-v11'
+	navi_preview_day = 'navigation-preview-day-v4'
+	navi_preview_night = 'navigation-preview-night-v4'
+	navi_guide_day = 'navigation-guidance-day-v4'
+	navi_guide_night = 'navigation-guidance-night-v4'
 
 
 # Geo-coordinate in degrees => Pixel coordinate
