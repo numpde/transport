@@ -1,6 +1,7 @@
 
 from a_manhattan_metric import refine_effective_metric, options_refine_effective_metric
-from helpers.commons import makedirs, section, parallel_map, this_module_body, range, slice
+from helpers.commons import makedirs, section, parallel_map, this_module_body
+from inclusive import range
 
 import os
 import json
@@ -62,41 +63,7 @@ class GraphPath:
 
 # ~~~~ DATA SOURCE ~~~~ #
 
-def odd_king_graph(xn=8, yn=8, scale=1.0) -> nx.DiGraph:
-	"""
-	Constructs a Manhattan-like chessboard directed graph.
-
-	Example:
-		import networkx as nx
-		import matplotlib.pyplot as plt
-		g = king_graph(xn=4, yn=8, scale=2)
-		nx.draw(g, pos=nx.get_node_attributes(g, "pos"))
-		plt.show()
-	"""
-
-	g = nx.DiGraph()
-
-	for i in range(xn):
-		for (a, b) in pairwise(range(yn)):
-			if (i % 2):
-				g.add_edge((i, b), (i, a))
-			else:
-				g.add_edge((i, a), (i, b))
-
-	for j in range(yn):
-		for (a, b) in pairwise(range(xn)):
-			if (j % 2):
-				g.add_edge((a, j), (b, j))
-			else:
-				g.add_edge((b, j), (a, j))
-
-	nx.set_node_attributes(g, name="pos", values={n: (n[0] * scale, n[1] * scale) for n in g.nodes})
-	nx.set_node_attributes(g, name="loc", values={n: (n[1] * scale, n[0] * scale) for n in g.nodes})
-	nx.set_edge_attributes(g, name="len", values=scale)
-
-	g = nx.convert_node_labels_to_integers(g)
-
-	return g
+from helpers.graphs import odd_king_graph
 
 
 # ~~~~ EXPERIMENTS ~~~~ #
@@ -167,8 +134,8 @@ def run_experiments() -> pd.DataFrame:
 	aliquot = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 
 	setups = pd.DataFrame(
-		# data=list(product([32, 64], [0.1, 0.2, 0.3, 0.4, 0.5], [(2 ** n) for n in range[7, 13]])),
-		data=list(product([32, 64], [0.1, 0.2, 0.3, 0.4, 0.5], [(2 ** n) for n in range[7, 10]])),
+		# data=list(product([32, 64], [0.1, 0.2, 0.4, 0.8], [(2 ** n) for n in range[7, 13]])),
+		data=list(product([32, 64], [0.1, 0.2, 0.4, 0.8], [(2 ** n) for n in range[7, 10]])),
 		# data=list(product([64], [0.5], [2 ** 13])),
 		# data=list(product([(2 ** n) for n in range[2, 6]], [0.1, 0.2, 0.4], [100, 1000, 10000])),
 		# data=list(product([4, 8, 16], [0.1], [10, 100])),
@@ -209,6 +176,8 @@ def run_experiments() -> pd.DataFrame:
 # ~~~~ PLOTS ~~~~ #
 
 def plot_results():
+	mpl.use("Agg")
+
 	def summary(history: pd.DataFrame):
 		history = history.div(history['secret'], axis=0).drop(columns=['secret', 0])
 		history = (100 * history.transform(np.log10).mean(axis=0)).transform(np.abs)
@@ -227,7 +196,7 @@ def plot_results():
 		df = pd.DataFrame()
 		with open(meta['.pkl'], 'rb') as fd:
 			with suppress(EOFError):
-				while 1:
+				while df is not None:
 					df = df.append(pickle.load(fd), ignore_index=True)
 
 		df = df[df.ntrips > 10]
@@ -235,21 +204,20 @@ def plot_results():
 
 		df = df.astype({'noise': float, 'graph_size': int, 'ntrips': int})
 
-		for (noise, df0) in df.groupby(df['noise']):
-			df0 = df0.copy()
-			for (graph_size, df1) in df0.groupby(df0.graph_size):
+		for (graph_size, df1) in df.groupby(df.graph_size):
+			for (noise, df2) in df1.groupby(df1.noise):
 
-				image_file = makedirs(os.path.join(folder, "images", F"noise={noise}".replace(".", "p"), F"graph_size={graph_size}", "convergence.{ext}"))
+				image_file = makedirs(os.path.join(folder, "images", F"graph_size={graph_size}", F"noise={noise}".replace(".", "p"), "round.{ext}"))
 
 				fig: plt.Figure
 				ax1: plt.Axes
 				(fig, ax1) = plt.subplots()
-				for (ntrips, history) in zip(df1['ntrips'], map(summary, df1['history'])):
+				for (ntrips, history) in zip(df2['ntrips'], map(summary, df2['history'])):
 					ax1.plot(history, marker='.', ls='--', label=ntrips)
 				ax1.set_xscale("log")
 				ax1.set_yscale("log")
 				ax1.set_ylabel("Geometric average relative error, %")
-				# ax1.set_ylim(1e-2, 1e0)
+				ax1.set_ylim(1e-1, 1e1)
 				ax1.grid()
 				ax1.set_title(F"Graph size: {graph_size}, noise: {noise}")
 				ax1.legend()
@@ -258,6 +226,29 @@ def plot_results():
 
 				plt.close(fig)
 
+		for (graph_size, df1) in df.groupby(df.graph_size):
+			image_file = makedirs(os.path.join(folder, "images", F"graph_size={graph_size}", "ntrips.{ext}"))
+
+			fig: plt.Figure
+			ax1: plt.Axes
+			(fig, ax1) = plt.subplots()
+
+			for (noise, df2) in df1.groupby(df1.noise):
+				history = pd.Series(index=df2['ntrips'], data=list(map(min, map(summary, df2['history']))))
+				ax1.plot(history, marker='.', ls='--', label=noise)
+
+			ax1.set_xlabel("Number of trips")
+			ax1.set_ylabel("Geometric average of relative error, %")
+			ax1.set_xscale("log")
+			ax1.set_yscale("log")
+			ax1.set_ylim(1e-1, 1e1)
+			ax1.grid()
+			ax1.set_title(F"Graph size: {graph_size}")
+			ax1.legend()
+
+			fig.savefig(image_file.format(ext="png"), **PARAM['savefig_args'])
+
+			plt.close(fig)
 
 # ~~~~ ENTRY ~~~~ #
 

@@ -6,7 +6,7 @@ service,True,,
 motorway_link,True,,
 footway,,,True
 motorway,True,,
-pedestrian,True,,True
+pedestrian,,,True
 cycleway,,True,
 tertiary,True,,
 primary,True,,

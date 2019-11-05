@@ -2,7 +2,7 @@
 
 # Local
 from helpers import maps
-from helpers.commons import myname, makedirs, parallel_map
+from helpers.commons import myname, makedirs, parallel_map, section
 
 import os
 import math
@@ -15,6 +15,7 @@ import networkx as nx
 import sqlite3
 
 from sklearn.neighbors import BallTree
+from geopy.distance import great_circle
 
 from collections import Counter
 from more_itertools import pairwise
@@ -60,19 +61,24 @@ class NearestNode:
 		return s
 
 
-class GraphDistance:
+class GraphHelper:
 	def __init__(self, graph):
 		self.graph = graph
+		self.nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
 
+	def dist(self, u, v):
+		return great_circle(self.nodes.loc[u], self.nodes.loc[v]).m
+
+
+class GraphDistance(GraphHelper):
 	def __call__(self, uv):
+		# return nx.astar_path_length(self.graph, source=uv[0], target=uv[1], heuristic=self.dist, weight="len")
 		return nx.shortest_path_length(self.graph, source=uv[0], target=uv[1], weight="len")
 
 
-class GraphTrajectory:
-	def __init__(self, graph):
-		self.graph = graph
-
+class GraphTrajectory(GraphHelper):
 	def __call__(self, uv):
+		# return nx.astar_path(self.graph, source=uv[0], target=uv[1], heuristic=self.dist,  weight="len")
 		return nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight="len")
 
 
@@ -129,8 +135,8 @@ def trip_distance_vs_shortest(table_name):
 	trips = get_trip_data(table_name, graph)
 
 	# On-graph distance between those
-	logger.debug("Computing shortest distance")
-	trips['shortest'] = parallel_map(GraphDistance(graph), zip(trips.u, trips.v))
+	with section("Computing shortest distances", print=logger.debug):
+		trips['shortest'] = parallel_map(GraphDistance(graph), zip(trips.u, trips.v))
 
 	# On-graph distance vs reported distance [meters]
 	df: pd.DataFrame
@@ -233,10 +239,10 @@ def main():
 	tables = {"green_tripdata_2016-05", "yellow_tripdata_2016-05"}
 
 	for table_name in sorted(tables):
-		logger.info("Table {table_name}")
+		logger.info(F"Table {table_name}")
 
-		# trip_distance_vs_shortest(table_name)
-		# trip_trajectories_ingraph(table_name)
+		trip_distance_vs_shortest(table_name)
+		trip_trajectories_ingraph(table_name)
 
 
 if __name__ == '__main__':

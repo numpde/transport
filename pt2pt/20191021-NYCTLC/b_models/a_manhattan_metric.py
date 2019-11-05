@@ -4,6 +4,8 @@
 from helpers import maps
 from helpers.commons import myname, makedirs, section, parallel_map
 
+from inclusive import range
+
 import os
 import sys
 import math
@@ -17,7 +19,9 @@ import networkx as nx
 
 from scipy.sparse import dok_matrix, coo_matrix, csc_matrix, csr_matrix
 
-from dataclasses import dataclass
+from geopy.distance import great_circle
+
+from dataclasses import dataclass as struct
 
 from time import time as tic
 from datetime import datetime, timezone
@@ -88,20 +92,38 @@ class GraphPathDist:
 	def __init__(self, graph, weight="len"):
 		self.graph = graph
 		self.weight = weight
+		self.nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
+		self.lens = nx.get_edge_attributes(graph, name=weight)
+
+	def distance(self, u, v):
+		(p, q) = 2 * self.nodes.loc[[u, v]].to_numpy()
+		return great_circle(p, q).m
+
+	def length(self, path):
+		return sum(self.lens[e] for e in pairwise(path))
 
 	def __call__(self, uv):
 		self.graph: nx.DiGraph
-		path = nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight=self.weight)
-		dist = nx.shortest_path_length(self.graph, source=uv[0], target=uv[1], weight=self.weight)
+
+		# path = nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight=self.weight)
+		path = nx.astar_path(self.graph, source=uv[0], target=uv[1], heuristic=self.distance, weight=self.weight)
+
+		dist = self.length(path)
 		return (path, dist)
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		return False
 
 
 # ~~~~ GRAPHICS ~~~~ #
 
 @contextmanager
 @retry(KeyboardInterrupt, tries=2, delay=1)
-def nx_draw_met_by_len(graph, edges_met=None):
-	mpl.use("Agg")
+def nx_draw_met_by_len(graph, edges_met=None, backend="Agg"):
+	mpl.use(backend)
 
 	logger.debug("Preparing to draw graph")
 
@@ -224,12 +246,12 @@ def project(trips: pd.DataFrame, graph: nx.DiGraph):
 	return projected
 
 
-@dataclass
+@struct
 class options_refine_effective_metric:
 	num_rounds: int = 70
 	temp_graph_metric_attr_name: str = "_met"
-	min_trip_distance_m: float = 300  # meters
-	max_trip_distance_m: float = 7e3  # meters
+	min_trip_distance_m: float = 0.1  # meters
+	max_trip_distance_m: float = 1e9  # meters
 	correction_factor_moderation: float = 0.8  # learning rate
 	random_state: np.random.RandomState = np.random.RandomState(11)
 
@@ -246,7 +268,7 @@ def refine_effective_metric(
 	"""
 	Returns a pandas series edges_met such that edges_met[E] is the effective length of edge E.
 	If edges_met is provided it is used as the initial guess (but not modified).
-	Invalidates the edge attribute temp_graph_metric_attr_name in the graph if present.
+	Invalidates the edge attribute opt.temp_graph_metric_attr_name in the graph if present.
 	"""
 
 	if nx.get_edge_attributes(graph, name=opt.temp_graph_metric_attr_name):
@@ -272,7 +294,7 @@ def refine_effective_metric(
 		edges_met = pd.Series(name="met", copy=True, data=nx.get_edge_attributes(graph, name="len"))
 		skip_rounds = 0
 
-	for r in range(1 + skip_rounds, 1 + opt.num_rounds):
+	for r in range[1 + skip_rounds, opt.num_rounds]:
 		logger.debug(F"Round {r}")
 
 		if any(~edges_met.notna()):
@@ -282,12 +304,13 @@ def refine_effective_metric(
 
 			nx.set_edge_attributes(graph, name=opt.temp_graph_metric_attr_name, values=dict(edges_met))
 
-			# Estimated trajectories of trips
-			traj = pd.DataFrame(
-				data=parallel_map(GraphPathDist(graph, weight=opt.temp_graph_metric_attr_name), zip(trips.u, trips.v)),
-				index=trips.index,
-				columns=["path", "dist"],
-			)
+			with GraphPathDist(graph, weight=opt.temp_graph_metric_attr_name) as gpd:
+				# Estimated trajectories of trips
+				traj = pd.DataFrame(
+					data=parallel_map(gpd, zip(trips.u, trips.v)),
+					index=trips.index,
+					columns=["path", "dist"],
+				)
 
 			# Per-trajectory correction factor
 			traj['f'] = trips['trip_distance/m'] / traj['dist']
@@ -363,7 +386,7 @@ def compute_metric_for_table(table_name):
 		dates = pd.date_range(*pd.read_sql_query(sql=sql, con=con).iloc[0])
 
 	#
-	for ((weekday, days), hour) in product(dates.groupby(dates.weekday).items(), range(0, 24)):
+	for ((weekday, days), hour) in product(dates.groupby(dates.weekday).items(), range[0, 23]):
 		logger.debug(F"weekday/hour = {weekday}/{hour} over {len(days)} days")
 
 		# Filenames for output
@@ -444,12 +467,17 @@ def compute_metric_for_table(table_name):
 			# Attach nearest nodes
 			trips = trips.join(project(trips, graph), how="inner")
 
+			#
+			opt = options_refine_effective_metric()
+			opt.min_trip_distance_m = 200
+			opt.max_trip_distance_m = 7e3
+			opt.num_rounds = 100
+
 			# Run the metric computation loop
 			# Note: The callback function records the results
-			refine_effective_metric(graph, trips, callback=manhattan_metric_callback, skip_rounds=skip_rounds, edges_met=edges_met)
+			refine_effective_metric(graph, trips, opt=opt, callback=manhattan_metric_callback, skip_rounds=skip_rounds, edges_met=edges_met)
 
 		except:
-			logger.exception("Failed")
 			(exc_type, value, traceback) = sys.exc_info()
 			aboutfile_write({**aboutfile_read(), 'exception': (exc_type.__name__)})
 			raise
