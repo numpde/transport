@@ -3,6 +3,7 @@
 
 from helpers import maps
 from helpers.commons import myname, makedirs, section, parallel_map
+from helpers.graphs import ApproxGeodistance
 
 from inclusive import range
 
@@ -35,6 +36,8 @@ from contextlib import contextmanager
 from retry import retry
 
 from sklearn.neighbors import BallTree as Neighbors
+
+from progressbar import progressbar
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -89,26 +92,28 @@ class NearestNode:
 
 
 class GraphPathDist:
-	def __init__(self, graph, weight="len"):
-		self.graph = graph
-		self.weight = weight
-		self.nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
-		self.lens = nx.get_edge_attributes(graph, name=weight)
+	def __init__(self, graph: nx.DiGraph, edge_weight="len"):
+		self.i2n = pd.Series(index=range(len(graph.nodes)), data=graph.nodes)
+		self.n2i = pd.Series(data=range(len(graph.nodes)), index=graph.nodes)
+		self.graph = nx.convert_node_labels_to_integers(graph)
+		self.edge_weight = edge_weight
+		self.lens = nx.get_edge_attributes(self.graph, name=edge_weight)
+		self.approx_geodist = ApproxGeodistance(self.graph)
 
-	def distance(self, u, v):
-		(p, q) = 2 * self.nodes.loc[[u, v]].to_numpy()
-		return great_circle(p, q).m
+	def astar_heuristic(self, u, v):
+		return 2 * self.approx_geodist.node_dist_est(u, v)
 
-	def length(self, path):
+	def length_of(self, path):
 		return sum(self.lens[e] for e in pairwise(path))
 
 	def __call__(self, uv):
 		self.graph: nx.DiGraph
 
 		# path = nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight=self.weight)
-		path = nx.astar_path(self.graph, source=uv[0], target=uv[1], heuristic=self.distance, weight=self.weight)
+		path = nx.astar_path(self.graph, source=self.n2i[uv[0]], target=self.n2i[uv[1]], heuristic=self.astar_heuristic, weight=self.edge_weight)
+		dist = self.length_of(path)
 
-		dist = self.length(path)
+		path = tuple(self.i2n[n] for n in path)
 		return (path, dist)
 
 	def __enter__(self):
@@ -189,7 +194,7 @@ def get_road_graph() -> nx.DiGraph:
 	return g
 
 
-def get_taxidata_trips(table_name, where="") -> pd.DataFrame:
+def get_taxidata_trips(table_name, where="", orderby="", limit=111111) -> pd.DataFrame:
 	# Load taxi trips from the database
 	columns = {
 		'locs': ["_".join(c) for c in product(["pickup", "dropoff"], ["latitude", "longitude"])],
@@ -197,20 +202,21 @@ def get_taxidata_trips(table_name, where="") -> pd.DataFrame:
 		'dist': ["trip_distance/m"],
 	}
 
-	# Sanity/safety queryset limit
-	query_limit = 111111
-
 	# Comma-separated list of all [column]s
 	columns_as_sql = ", ".join(("[" + c + "]") for c in chain.from_iterable(columns.values()))
 
 	if where:
 		where = F"WHERE ({where})"
 
+	if orderby:
+		orderby = F"ORDER BY {orderby}"
+
 	sql = F"""
 		SELECT {columns_as_sql} 
 		FROM [{table_name}] 
 		{where}
-		LIMIT {query_limit}
+		{orderby}
+		LIMIT {limit}
 	"""
 
 	logger.debug("Reading the database")
@@ -221,7 +227,7 @@ def get_taxidata_trips(table_name, where="") -> pd.DataFrame:
 			parse_dates=["pickup_datetime", "dropoff_datetime"],
 		)
 
-	if (len(trips) >= query_limit):
+	if (len(trips) >= limit):
 		logger.warning(F"SQL query limit hit ({len(trips)} records)?")
 
 	return trips
@@ -304,10 +310,10 @@ def refine_effective_metric(
 
 			nx.set_edge_attributes(graph, name=opt.temp_graph_metric_attr_name, values=dict(edges_met))
 
-			with GraphPathDist(graph, weight=opt.temp_graph_metric_attr_name) as gpd:
+			with GraphPathDist(graph, edge_weight=opt.temp_graph_metric_attr_name) as gpd:
 				# Estimated trajectories of trips
 				traj = pd.DataFrame(
-					data=parallel_map(gpd, zip(trips.u, trips.v)),
+					data=parallel_map(gpd, progressbar(list(zip(trips.u, trips.v)))),
 					index=trips.index,
 					columns=["path", "dist"],
 				)
@@ -323,22 +329,22 @@ def refine_effective_metric(
 		with section("Computing correction factors", print=logger.debug):
 
 			with section("Edges of trajectories"):
-				edges_loci = pd.Series(data=range(len(edges_met)), index=edges_met.index)
-				edges_of_traj = list(map(list, map(edges_loci.__getitem__, map(list, map(pairwise, traj.path)))))
-				# Note: parallel_map used here ^^^ blows up memory usage
+				edges_loci = dict(zip(edges_met.index, range(len(edges_met))))
+				edges_of_traj = list(tuple(edges_loci[e] for e in pairwise(path)) for path in progressbar(traj.path))
 
-			with section("Incidence matrix [trips x edges]", print=logger.debug):
+			with section("Incidence matrix [trips x edges]"):
 				M = dok_matrix((len(traj), len(edges_met)), dtype=float)
 				for (t, edges, f) in zip(range(M.shape[0]), edges_of_traj, traj.f):
 					M[t, edges] = f
-
 				del edges_of_traj
 
 			with section("Subsample trips"):
 				I = pd.Series(range(M.shape[0])).sample(frac=0.5, random_state=opt.random_state)
-				M = csc_matrix(csr_matrix(M)[I, :])
+				M = csr_matrix(M)[I, :]
 
 			with section("Compute correction"):
+				M = csc_matrix(M)
+
 				correction = pd.Series(
 					index=edges_met.index,
 					data=[
@@ -386,6 +392,8 @@ def compute_metric_for_table(table_name):
 		dates = pd.date_range(*pd.read_sql_query(sql=sql, con=con).iloc[0])
 
 	#
+	# for ((weekday, days), hour) in product(dates.groupby(dates.weekday).items(), [8]):
+
 	for ((weekday, days), hour) in product(dates.groupby(dates.weekday).items(), range[0, 23]):
 		logger.debug(F"weekday/hour = {weekday}/{hour} over {len(days)} days")
 
@@ -441,7 +449,7 @@ def compute_metric_for_table(table_name):
 
 		if about.get('valid'):
 			logger.info(F"Trying to resume {output_about_fn}")
-			skip_rounds = about['round'] + 1
+			skip_rounds = about['round']
 			with open(output_edges_fn, 'rb') as fd:
 				edges_met = pickle.load(fd)
 

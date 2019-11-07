@@ -3,7 +3,12 @@
 from math import ceil
 
 import numpy as np
+import pandas as pd
 import networkx as nx
+
+from inclusive import range
+
+from geopy.distance import distance as geodistance
 
 from itertools import groupby
 from more_itertools import pairwise
@@ -73,6 +78,7 @@ def break_long_edges(graph: nx.DiGraph, max_edge_len=50, node_generator=None) ->
 	# Edges are identified and grouped if they connect the same nodes
 	iso = (lambda e: (min(e), max(e)))
 	edges = [list(g) for (__, g) in groupby(sorted(edges, key=iso), key=iso)]
+
 	# commons.logger.debug("Number of edge groups to split is {}".format(len(edges)))
 
 	class NodeGenerator:
@@ -142,3 +148,41 @@ def break_long_edges(graph: nx.DiGraph, max_edge_len=50, node_generator=None) ->
 
 	for ee in edges:
 		split(next(iter(ee)), bothways=(len(ee) == 2))
+
+
+class ApproxGeodistance:
+	"""
+	Compute the geographic distance between graph nodes approximately but quickly.
+	Assumes that the `loc` attribute of graph nodes contains (lat, lon) tuples.
+	"""
+
+	def __init__(self, graph: nx.DiGraph, location_attr="loc"):
+		self.node_loc = pd.DataFrame(data=nx.get_node_attributes(graph, name=location_attr), index=["lat", "lon"]).T
+
+		# Compute a2 and b2 such that
+		# a2 * dlat^2 + b2 * dlon^2  ~  distance^2
+		N = [self.node_loc.sample(2).to_numpy() for __ in range[min(33, len(self.node_loc))]]
+		X2 = np.vstack([((p[0] - q[0]) ** 2, (p[1] - q[1]) ** 2) for (p, q) in N])
+		d2 = np.vstack([(self.loc_dist_acc(p, q) ** 2) for (p, q) in N])
+		(self.a2, self.b2) = np.linalg.solve(np.dot(X2.T, X2), np.dot(X2.T, d2)).flatten()
+
+		# Check accuracy
+		N = [self.node_loc.sample(2, replace=True).to_numpy() for __ in range[111]]
+		rel_acc = max(((self.loc_dist_acc(*pq) - self.loc_dist_est(*pq)) / (self.loc_dist_acc(*pq) or 1)) for pq in N)
+		if (rel_acc > 1e-2):
+			raise RuntimeWarning(F"Weak relative accuracy (~{rel_acc}) in {type(self)}")
+
+		# Convert to dictionary for easier access
+		self.node_loc = dict(zip(self.node_loc.index, self.node_loc.to_numpy()))
+
+	def loc_dist_acc(self, p, q):
+		return geodistance(p, q).m
+
+	def loc_dist_est(self, p, q):
+		return ((self.a2 * ((p[0] - q[0]) ** 2) + self.b2 * (p[1] - q[1]) ** 2) ** (1 / 2))
+
+	def node_dist_acc(self, u, v):
+		return self.loc_dist_acc(self.node_loc[u], self.node_loc[v])
+
+	def node_dist_est(self, u, v):
+		return self.loc_dist_est(self.node_loc[u], self.node_loc[v])
