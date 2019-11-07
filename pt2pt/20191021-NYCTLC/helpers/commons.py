@@ -37,7 +37,7 @@ def makedirs(filename) -> str:
 # Parallel computation map
 def parallel_map(func, generator) -> list:
 	with Pool(6) as pool:
-		return list(pool.imap(func, generator, chunksize=100))
+		return list(pool.imap(func, generator, chunksize=1000))
 		# return list(pool.map(func, generator))
 
 
