@@ -1,6 +1,6 @@
 # RA, 2019-10-26
 
-from helpers.commons import parallel_map, section
+from helpers.commons import parallel_map, Section
 from helpers.graphs import break_long_edges
 
 import os
@@ -49,7 +49,7 @@ PARAM = {
 	'savefig_args': dict(bbox_inches='tight', pad_inches=0, dpi=300),
 }
 
-with section("Loading OSM archive", print=print):
+with Section("Loading OSM archive", out=print):
 	with ZipFile(PARAM['osm_archive'], mode='r') as archive:
 		J = {
 			name: json.load(archive.open("data"))
@@ -69,7 +69,7 @@ with section("Loading OSM archive", print=print):
 		for t in ["node", "way"]
 	]
 
-with section("Filtering", print=print):
+with Section("Filtering", out=print):
 	# Keep only useful tags
 	assert ("oneway" in PARAM['way_tags_we_like'])
 	ways.tags = [{k: v for (k, v) in tags.items() if (k in PARAM['way_tags_we_like'])} for tags in ways.tags]
@@ -81,7 +81,7 @@ with section("Filtering", print=print):
 	# Retain only nodes that support any remaining ways
 	nodes = nodes.loc[set(chain.from_iterable(ways.nodes.values)), :]
 
-with section("Making the graph", print=print):
+with Section("Making the graph", out=print):
 	nodes['loc'] = list(zip(nodes['lat'], nodes['lon']))
 	nodes['pos'] = list(zip(nodes['lon'], nodes['lat']))
 
@@ -103,7 +103,7 @@ with section("Making the graph", print=print):
 	nx.set_node_attributes(G, name="loc", values=dict(nodes['loc']))
 	nx.set_node_attributes(G, name="pos", values=dict(nodes['pos']))
 
-with section("Breaking down long edges", print=print):
+with Section("Breaking down long edges", out=print):
 	print(F"Before: {G.number_of_nodes()} nodes / {G.number_of_edges()} edges")
 	break_long_edges(G, max_edge_len=PARAM['max_graph_edge_len'])
 	print(F"After:  {G.number_of_nodes()} nodes / {G.number_of_edges()} edges")
@@ -116,10 +116,10 @@ with section("Breaking down long edges", print=print):
 	# Node position for plotting
 	nx.set_node_attributes(G, name="pos", values=dict(nodes['pos']))
 
-with section("Saving graph", print=print):
+with Section("Saving graph", out=print):
 	pickle.dump(G, open(PARAM['out_road_graph'], 'wb'))
 
-with section("Making figure", print=print):
+with Section("Making figure", out=print):
 	fig: plt.Figure
 	ax1: plt.Axes
 	(fig, ax1) = plt.subplots()

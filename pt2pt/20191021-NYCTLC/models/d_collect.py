@@ -43,7 +43,7 @@ logger.getLogger('PIL').setLevel(logger.WARNING)
 # ~~~~ NOTATION ~~~~ #
 
 def datapath(fn):
-	return os.path.join(os.path.dirname(__file__), "../a_prepare_data/data/", fn)
+	return os.path.join(os.path.dirname(__file__), "../data_preparation/data/", fn)
 
 
 # ~~~~ SETTINGS ~~~~ #
@@ -51,7 +51,7 @@ def datapath(fn):
 PARAM = {
 	'road_graph': datapath("road_graph/UV/nx_digraph_naive.pkl"),
 
-	'hourly_metrics': "*/{table_name}/{weekday}/{hour}/edges_met.{ext}",
+	'hourly_graph_metric': "*/{table_name}/{weekday}/{hour}/edges_met.{ext}",
 }
 
 
@@ -86,7 +86,7 @@ table_name = "yellow_tripdata_2016-05"
 files = pd.DataFrame(
 	data=[
 		(os.path.dirname(file), last(os.path.splitext(file)), file)
-		for file in glob(PARAM['hourly_metrics'].format(table_name=table_name, weekday="*", hour="*", ext="*"))
+		for file in glob(PARAM['hourly_graph_metric'].format(table_name=table_name, weekday="*", hour="*", ext="*"))
 	],
 	columns=["path", "ext", "file"]
 ).pivot(
@@ -168,7 +168,7 @@ def nx_draw(graph, nodes=None, edges=None):
 		graph,
 		ax=ax1,
 		pos=nx.get_node_attributes(graph, name="pos"),
-		edges=list(edges.index),
+		edge_list=list(edges.index),
 		edge_color=list(edges.color),
 		edge_cmap=cmap,
 		with_labels=False, arrows=False, node_size=0, alpha=1, width=2

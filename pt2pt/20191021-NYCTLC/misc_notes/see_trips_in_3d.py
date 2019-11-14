@@ -1,9 +1,9 @@
 # RA, 2019-11-05
 
-from helpers.commons import parallel_map
-from helpers.graphs import largest_component, ApproxGeodistance
+from helpers.commons import parallel_map, Section
+from helpers.graphs import largest_component, ApproxGeodistance, GraphPathDist
 
-from b_models import a_manhattan_metric
+from models import a_effective_metric_manhattan
 
 import pickle
 
@@ -12,7 +12,7 @@ import pandas as pd
 import networkx as nx
 
 from itertools import product
-from more_itertools import pairwise
+from more_itertools import pairwise, first, last
 
 from progressbar import progressbar
 
@@ -24,26 +24,28 @@ import seaborn as sb
 
 
 PARAM = {
-	'road_graph': "../a_prepare_data/data/road_graph/UV/nx_digraph_naive.pkl",
-	# 'taxidata': "../a_prepare_data/data/taxidata/sqlite/UV/db.db",
+	'road_graph': "../data_preparation/data/road_graph/UV/nx_digraph_naive.pkl",
+	# 'taxidata': "../data_preparation/data/taxidata/sqlite/UV/db.db",
 
-	'edges_met': "../b_models/manhattan_metric/yellow_tripdata_2016-05/1/08/edges_met.pkl",
+	'edges_met': "../models/manhattan_metric/yellow_tripdata_2016-05/1/08/edges_met.pkl",
 }
 
-graph = largest_component(pickle.load(open(PARAM['road_graph'], 'rb')))
-nx.set_edge_attributes(graph, name="met", values=dict(pd.read_pickle(PARAM['edges_met'])))
+with Section("Get graph"):
+	graph = largest_component(pickle.load(open(PARAM['road_graph'], 'rb')))
+	nx.set_edge_attributes(graph, name="met", values=dict(pd.read_pickle(PARAM['edges_met'])))
 
-sql = dict(
-	table_name="yellow_tripdata_2016-05",
-	where="('2016-05-02 08:00' <= pickup_datetime) and (pickup_datetime <= '2016-05-02 08:20')",
-	limit=100,
-)
+with Section("Get trips"):
+	sql = dict(
+		table_name="yellow_tripdata_2016-05",
+		where="('2016-05-02 08:00' <= pickup_datetime) and (dropoff_datetime <= '2016-05-02 08:30')",
+		limit=200,
+	)
 
-trips = a_manhattan_metric.get_taxidata_trips(**sql)
-trips = trips.join(a_manhattan_metric.project(trips, graph), how="inner")
+	trips = a_effective_metric_manhattan.get_taxidata_trips(**sql)
+	trips = trips.join(a_effective_metric_manhattan.project(trips, graph), how="inner")
 
 # Attach estimated trajectories of trips
-with a_manhattan_metric.GraphPathDist(graph, edge_weight="met") as gpd:
+with a_effective_metric_manhattan.GraphPathDist(graph, edge_weight="met") as gpd:
 	trips = trips.join(
 		pd.DataFrame(
 			data=parallel_map(gpd, progressbar(list(zip(trips.u, trips.v)))),
@@ -58,7 +60,11 @@ class SpaceTimeTraj:
 	def __init__(self, graph: nx.DiGraph):
 		self.nodes_loc = nx.get_node_attributes(graph, name="loc")
 		self.edges_met = nx.get_edge_attributes(graph, name="met")
+		self.pathdist = GraphPathDist(graph, edge_weight="met")
 		self.approx_dist = ApproxGeodistance(graph, location_attr="loc")
+
+	def length(self, path):
+		return sum(self.edges_met[e] for e in pairwise(path))
 
 	def __call__(self, path, tspan):
 		path = tuple(path)
@@ -77,6 +83,7 @@ class SpaceTimeTraj:
 		# coo = np.hstack([np.array(tt).reshape(-1, 1), nn])
 
 		coo = pd.DataFrame(index=pd.to_datetime(tt), data=nn, columns=["lat", "lon"])
+		coo['node'] = list(path)
 
 		return coo
 
@@ -86,9 +93,24 @@ class SpaceTimeTraj:
 	def __exit__(self, exc_type, exc_val, exc_tb):
 		return False
 
-	def proximity0(self, traj3a: pd.DataFrame, traj3b: pd.DataFrame):
-		# assert (traj3a.shape == (len(traj3a), 3))
-		# assert (traj3b.shape == (len(traj3b), 3))
+	def proximity1(self, traj1: pd.DataFrame, traj2: pd.DataFrame):
+		(a1, b1) = [first(traj1.node), last(traj1.node)]
+		(a2, b2) = [first(traj2.node), last(traj2.node)]
+
+		len1 = self.pathdist.dist_only((a1, b1))
+		len2 = self.pathdist.dist_only((a2, b2))
+		len3 = min(
+			sum(self.pathdist.dist_only(uv) for uv in pairwise(inout_sequence))
+			for inout_sequence in [
+				(a1, a2, b2, b1),
+				(a1, a2, b1, b2),
+			]
+		)
+		savings = (len1 + len2) - len3
+		savings = savings if (savings > 0) else np.nan
+		return savings
+
+	def proximity0(self, traj1: pd.DataFrame, traj2: pd.DataFrame):
 
 		# pd.merge(df1, df2, how="outer", suffixes=["_1", "_2"], left_index=True, right_index=True)
 		# pd.concat([df1, df2], axis=1).sort_index().interpolate(limit_area='inside')
@@ -97,9 +119,9 @@ class SpaceTimeTraj:
 		# traj3a = pd.Series(index=traj3a.index, data=list(traj3a.to_numpy()), name="loc")
 		# traj3b = pd.Series(index=traj3b.index, data=list(traj3b.to_numpy()), name="loc")
 
-
 		traj3: pd.DataFrame
-		traj3 = pd.merge(traj3a, traj3b, how="outer", suffixes=["_a", "_b"], left_index=True, right_index=True)
+		cols = ['lat', 'lon']
+		traj3 = pd.merge(traj1[cols], traj2[cols], how="outer", suffixes=["_1", "_2"], left_index=True, right_index=True)
 		traj3 = traj3.interpolate('linear')
 		traj3 = traj3.dropna()
 
@@ -126,9 +148,10 @@ with SpaceTimeTraj(graph) as spacetime_traj:
 		for (__, trip) in trips.iterrows()
 	]
 
-	M = np.zeros((len(traj3), len(traj3)))
+	M = np.nan * np.empty((len(traj3), len(traj3)))
 	for ((i, ta), (j, tb)) in progressbar(list(product(enumerate(traj3), repeat=2))):
-		M[i, j] = spacetime_traj.proximity0(ta, tb)
+		if (i != j):
+			M[i, j] = spacetime_traj.proximity1(ta, tb)
 
 	sb.heatmap(M)
 	plt.show()

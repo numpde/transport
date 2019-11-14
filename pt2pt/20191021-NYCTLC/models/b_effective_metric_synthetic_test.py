@@ -1,6 +1,9 @@
 
-from a_manhattan_metric import refine_effective_metric, options_refine_effective_metric
-from helpers.commons import makedirs, section, parallel_map, this_module_body
+from a_effective_metric_manhattan import refine_effective_metric, options_refine_effective_metric
+
+from helpers.commons import makedirs, Section, parallel_map, this_module_body
+from helpers.graphs import GraphPathDist
+
 from inclusive import range
 
 import os
@@ -25,12 +28,14 @@ from more_itertools import pairwise, first, last
 
 from contextlib import suppress
 
+from progressbar import progressbar
+
 import seaborn as sb
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from percache import Cache
-cache = Cache(makedirs("synthetic/UV/percache_runs"), livesync=True)
+cache = Cache(makedirs(os.path.join(os.path.dirname(__file__), "synthetic/UV/percache_runs")), livesync=True)
 
 # ~~~~ LOGGING ~~~~ #
 
@@ -49,16 +54,6 @@ PARAM = {
 
 
 # ~~~ HELPERS ~~~~ #
-
-class GraphPath:
-	def __init__(self, graph, weight="len"):
-		self.graph = graph
-		self.weight = weight
-
-	def __call__(self, uv):
-		self.graph: nx.DiGraph
-		path = nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight=self.weight)
-		return path
 
 
 # ~~~~ DATA SOURCE ~~~~ #
@@ -93,20 +88,23 @@ def experiment(graph_size=32, ntrips=1000, noise=0.2, num_rounds=64):
 	# logger.warning("Invoking trips.drop_duplicates")
 	# trips = trips.drop_duplicates()
 
-	with section(F"Collecting {len(trips)} secret trips", print=logger.debug):
-		secret_paths = parallel_map(GraphPath(graph, weight="met"), zip(trips.u, trips.v))
+	with Section(F"Collecting {len(trips)} secret trips", out=logger.debug):
+		with GraphPathDist(graph, edge_weight="met") as pathdist:
+			# Estimated trajectories of trips
+			trips = trips.join(
+				pd.DataFrame(
+					data=parallel_map(pathdist, progressbar(list(zip(trips.u, trips.v)))),
+					index=trips.index,
+					columns=["secret_path", "distance"],
+				)
+			)
 
-	coverage = pd.Series(dict(Counter(e for path in secret_paths for e in pairwise(path))))
+	coverage = pd.Series(dict(Counter(e for path in trips['secret_path'] for e in pairwise(path))))
 
 	logger.debug([
 		F"{nedges} edges x{cov}"
 		for (cov, nedges) in sorted(Counter(coverage).items(), key=first)
 	])
-
-	def secret_path_length(path):
-		return sum(secret_met[e] for e in pairwise(path))
-
-	trips['trip_distance/m'] = [secret_path_length(path) for path in secret_paths]
 
 	# nx.draw(graph, pos=nx.get_node_attributes(graph, name="pos"))
 	# for (__, trip) in trips.iterrows():
@@ -114,6 +112,7 @@ def experiment(graph_size=32, ntrips=1000, noise=0.2, num_rounds=64):
 	# 	plt.plot(nodes.lon[path], nodes.lat[path], 'b-')
 	# plt.show()
 
+	# Initial metric guess is given by "len"
 	history = pd.DataFrame({'secret': secret_met, 0: pd.Series(nx.get_edge_attributes(graph, name="len"))})
 
 	def cb(info):
@@ -148,10 +147,11 @@ def run_experiments() -> pd.DataFrame:
 
 		# Preserve datatypes
 		setup = dict(setup._asdict())
-
+		# Alternative:
 		# setup = setup.astype({'graph_size': int, 'noise': float, 'ntrips': int})
 
-		with section(F"Experiment {setup} is on", print=logger.info):
+		with Section(F"Experiment {setup} is on", out=logger.info):
+			# https://www.dataquest.io/blog/settingwithcopywarning/
 			with pd.option_context('mode.chained_assignment', None):
 				history = experiment(**setup, num_rounds=64)
 
@@ -178,7 +178,7 @@ def run_experiments() -> pd.DataFrame:
 def plot_results():
 	mpl.use("Agg")
 
-	def summary(history: pd.DataFrame):
+	def summary(history: pd.DataFrame) -> pd.DataFrame:
 		history = history.div(history['secret'], axis=0).drop(columns=['secret', 0])
 		history = (100 * history.transform(np.log10).mean(axis=0)).transform(np.abs)
 		return history
@@ -253,18 +253,18 @@ def plot_results():
 # ~~~~ ENTRY ~~~~ #
 
 def main():
-		with section("Plotting past results", print=logger.info):
-			try:
-				logger.debug("Press CTRL+C to skip and rerun the experiments instead...")
-				sleep(5)
-				plot_results()
-				return
-			except KeyboardInterrupt:
-				pass
+	with Section("Plotting past results", out=logger.info):
+		try:
+			logger.debug("Press CTRL+C to skip and rerun the experiments instead...")
+			sleep(5)
+			plot_results()
+			return
+		except KeyboardInterrupt:
+			pass
 
-		with section("Running new set of experiments", print=logger.info):
-			sleep(4)
-			run_experiments()
+	with Section("Running new set of experiments", out=logger.info):
+		sleep(4)
+		run_experiments()
 
 if __name__ == '__main__':
 	main()

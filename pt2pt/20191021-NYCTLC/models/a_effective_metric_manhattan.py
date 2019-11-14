@@ -1,9 +1,8 @@
-
 # RA, 2019-10-29
 
 from helpers import maps
-from helpers.commons import myname, makedirs, section, parallel_map
-from helpers.graphs import ApproxGeodistance
+from helpers.commons import makedirs, Section, parallel_map
+from helpers.graphs import GraphPathDist, GraphNearestNode
 
 from inclusive import range
 
@@ -18,7 +17,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
-from scipy.sparse import dok_matrix, coo_matrix, csc_matrix, csr_matrix
+from scipy.sparse import dok_matrix, csc_matrix, csr_matrix
 
 from geopy.distance import great_circle
 
@@ -28,6 +27,7 @@ from time import time as tic
 from datetime import datetime, timezone
 
 from types import SimpleNamespace
+from typing import Tuple
 
 from itertools import product, chain
 from more_itertools import pairwise, first
@@ -46,7 +46,12 @@ from matplotlib.colors import LinearSegmentedColormap
 # ~~~~ LOGGING ~~~~ #
 
 import logging as logger
-logger.basicConfig(level=logger.DEBUG, format="%(levelname)-8s [%(asctime)s] @%(funcName)s : %(message)s", datefmt="%Y%m%d %H:%M:%S %Z")
+
+logger.basicConfig(
+	level=logger.DEBUG,
+	format="%(levelname)-8s [%(asctime)s] @%(funcName)s : %(message)s",
+	datefmt="%Y%m%d %H:%M:%S %Z",
+)
 logger.getLogger('matplotlib').setLevel(logger.WARNING)
 logger.getLogger('PIL').setLevel(logger.WARNING)
 
@@ -54,7 +59,7 @@ logger.getLogger('PIL').setLevel(logger.WARNING)
 # ~~~~ NOTATION ~~~~ #
 
 def datapath(fn):
-	return os.path.join(os.path.dirname(__file__), "../a_prepare_data/data/", fn)
+	return os.path.join(os.path.dirname(__file__), "../data_preparation/data/", fn)
 
 
 # ~~~~ SETTINGS ~~~~ #
@@ -73,114 +78,62 @@ PARAM = {
 
 # ~~~~ HELPERS ~~~~ #
 
-class NearestNode:
-	RAD_PER_DEGREE = math.pi / 180
-	EARTH_RADIUS_METERS = 6367.5 * 1e3
 
-	def __init__(self, graph):
-		# Point array
-		self.X = pd.DataFrame(data=nx.get_node_attributes(graph, "loc")).T
-		# Nearest neighbors tree
-		self.T = Neighbors(self.X.values * self.RAD_PER_DEGREE, metric="haversine")
-
-	def __call__(self, loc):
-		# Get nearest nodes: distance to X and index in X
-		(d, i) = np.squeeze(self.T.query(np.asarray(loc) * self.RAD_PER_DEGREE, k=1, return_distance=True))
-		# Note: do not sort the Series
-		s = pd.Series(index=(self.X.index[list(map(int, i))]), data=(d * self.EARTH_RADIUS_METERS))
-		return s
-
-
-class GraphPathDist:
-	def __init__(self, graph: nx.DiGraph, edge_weight="len"):
-		self.i2n = pd.Series(index=range(len(graph.nodes)), data=graph.nodes)
-		self.n2i = pd.Series(data=range(len(graph.nodes)), index=graph.nodes)
-		self.graph = nx.convert_node_labels_to_integers(graph)
-		self.edge_weight = edge_weight
-		self.lens = nx.get_edge_attributes(self.graph, name=edge_weight)
-		self.approx_geodist = ApproxGeodistance(self.graph)
-
-	def astar_heuristic(self, u, v):
-		return 2 * self.approx_geodist.node_dist_est(u, v)
-
-	def length_of(self, path):
-		return sum(self.lens[e] for e in pairwise(path))
-
-	def __call__(self, uv):
-		self.graph: nx.DiGraph
-
-		# path = nx.shortest_path(self.graph, source=uv[0], target=uv[1], weight=self.weight)
-		path = nx.astar_path(self.graph, source=self.n2i[uv[0]], target=self.n2i[uv[1]], heuristic=self.astar_heuristic, weight=self.edge_weight)
-		dist = self.length_of(path)
-
-		path = tuple(self.i2n[n] for n in path)
-		return (path, dist)
-
-	def __enter__(self):
-		return self
-
-	def __exit__(self, exc_type, exc_val, exc_tb):
-		return False
 
 
 # ~~~~ GRAPHICS ~~~~ #
 
 @contextmanager
 @retry(KeyboardInterrupt, tries=2, delay=1)
-def nx_draw_met_by_len(graph, edges_met=None, backend="Agg"):
-	mpl.use(backend)
+def nx_draw_met_by_len(graph, edges_met=None, mpl_backend="Agg", printer=None):
+	mpl.use(mpl_backend)
 
-	logger.debug("Preparing to draw graph")
+	with Section("Preparing to draw graph", out=printer):
 
-	nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
-	edges_len = pd.Series(data=nx.get_edge_attributes(graph, name="len"), name="len")
+		nodes = pd.DataFrame(data=nx.get_node_attributes(graph, name="loc"), index=["lat", "lon"]).T
+		edges_len = pd.Series(data=nx.get_edge_attributes(graph, name="len"), name="len")
 
-	if edges_met is not None:
-		edges_met = pd.Series(name="met", data=edges_met)
-	else:
-		edges_met = pd.Series(name="met", data=nx.get_edge_attributes(graph, name="met"))
+		if edges_met is not None:
+			edges_met = pd.Series(name="met", data=edges_met)
+		else:
+			edges_met = pd.Series(name="met", data=nx.get_edge_attributes(graph, name="met"))
 
-	cmap = LinearSegmentedColormap.from_list(name="noname", colors=["g", "y", "r", "brown"])
+		cmap = LinearSegmentedColormap.from_list(name="noname", colors=["g", "y", "r", "brown"])
 
-	# Axes window
-	extent = np.dot(
-		[[min(nodes.lon), max(nodes.lon)], [min(nodes.lat), max(nodes.lat)]],
-		(lambda s: np.asarray([[1 + s, -s], [-s, 1 + s]]))(0.01)
-	).flatten()
+	with Section("Getting the background OSM map", out=printer):
+		extent = maps.ax4(nodes.lat, nodes.lon)
+		osmap = maps.get_map_by_bbox(maps.ax2mb(*extent))
 
-	logger.debug("Getting the background OSM map")
-	osmap = maps.get_map_by_bbox(maps.ax2mb(*extent))
+	with Section("Drawing image", out=printer):
 
-	fig: plt.Figure
-	ax1: plt.Axes
-	(fig, ax1) = plt.subplots()
+		fig: plt.Figure
+		ax1: plt.Axes
+		(fig, ax1) = plt.subplots()
 
-	logger.debug("Drawing image")
+		# The background map
+		ax1.imshow(osmap, extent=extent, interpolation='quadric', zorder=-100)
 
-	# The background map
-	ax1.imshow(osmap, extent=extent, interpolation='quadric', zorder=-100)
+		ax1.axis("off")
 
-	ax1.axis("off")
+		edge_colors = (edges_met / edges_len).clip(lower=0.9, upper=1.5)
 
-	edge_colors = (edges_met / edges_len).clip(lower=0.9, upper=1.5)
+		nx.draw(
+			graph,
+			ax=ax1,
+			pos=nx.get_node_attributes(graph, name="pos"),
+			edge_list=list(edge_colors.index),
+			edge_color=list(edge_colors),
+			edge_cmap=cmap,
+			with_labels=False, arrows=False, node_size=0, alpha=1, width=0.4
+		)
 
-	nx.draw(
-		graph,
-		ax=ax1,
-		pos=nx.get_node_attributes(graph, name="pos"),
-		edges=list(edge_colors.index),
-		edge_color=list(edge_colors),
-		edge_cmap=cmap,
-		with_labels=False, arrows=False, node_size=0, alpha=1, width=0.4
-	)
-
-	ax1.set_xlim(extent[0:2])
-	ax1.set_ylim(extent[2:4])
+		ax1.set_xlim(extent[0:2])
+		ax1.set_ylim(extent[2:4])
 
 	try:
 		# Note:
 		# "yield (fig, ax1)" does not work with the "retry" context manager
-		return iter([ (fig, ax1) ])
+		return iter([(fig, ax1)])
 	finally:
 		plt.close(fig)
 
@@ -199,7 +152,7 @@ def get_taxidata_trips(table_name, where="", orderby="", limit=111111) -> pd.Dat
 	columns = {
 		'locs': ["_".join(c) for c in product(["pickup", "dropoff"], ["latitude", "longitude"])],
 		'time': ["pickup_datetime", "dropoff_datetime"],
-		'dist': ["trip_distance/m"],
+		'dist': ["distance"],
 	}
 
 	# Comma-separated list of all [column]s
@@ -238,7 +191,7 @@ def get_taxidata_trips(table_name, where="", orderby="", limit=111111) -> pd.Dat
 def project(trips: pd.DataFrame, graph: nx.DiGraph):
 	# Nearest-node computer
 	logger.debug("Computing nearest in-graph nodes")
-	nearest_node = NearestNode(graph)
+	nearest_node = GraphNearestNode(graph)
 	# Note: U.index ~ graph node id ,  U.values ~ distance to node
 	U = nearest_node(list(zip(trips['pickup_latitude'], trips['pickup_longitude'])))
 	V = nearest_node(list(zip(trips['dropoff_latitude'], trips['dropoff_longitude'])))
@@ -263,14 +216,13 @@ class options_refine_effective_metric:
 
 
 def refine_effective_metric(
-	graph: nx.DiGraph,
-	trips: pd.DataFrame,
-	opt=options_refine_effective_metric(),
-	callback=None,
-	edges_met=None,
-	skip_rounds=0,
+		graph: nx.DiGraph,
+		trips: pd.DataFrame,
+		opt=options_refine_effective_metric(),
+		callback=None,
+		edges_met=None,
+		skip_rounds=0,
 ) -> pd.Series:
-
 	"""
 	Returns a pandas series edges_met such that edges_met[E] is the effective length of edge E.
 	If edges_met is provided it is used as the initial guess (but not modified).
@@ -282,12 +234,12 @@ def refine_effective_metric(
 
 	# Only nontrivial trips that are not too short or too long
 	trips = trips[trips['u'] != trips['v']]
-	trips = trips[trips['trip_distance/m'] >= opt.min_trip_distance_m]
-	trips = trips[trips['trip_distance/m'] <= opt.max_trip_distance_m]
+	trips = trips[trips['distance'] >= opt.min_trip_distance_m]
+	trips = trips[trips['distance'] <= opt.max_trip_distance_m]
 
 	logger.debug(F"Trip pool has {len(trips)} trips")
 
-	assert((edges_met is not None) == bool(skip_rounds)), "Both or none of (edges_met, skip_rounds) should be provided"
+	assert ((edges_met is not None) == bool(skip_rounds)), "Both or none of (edges_met, skip_rounds) should be provided"
 
 	# Geographic metric as initial guess / prior
 	edges_len = pd.Series(data=nx.get_edge_attributes(graph, name="len"), name="len")
@@ -306,7 +258,7 @@ def refine_effective_metric(
 		if any(~edges_met.notna()):
 			logger.warning(F"There are edges with 'n/a' metric")
 
-		with section("Computing trajectories", print=logger.debug):
+		with Section("Computing trajectories", out=logger.debug):
 
 			nx.set_edge_attributes(graph, name=opt.temp_graph_metric_attr_name, values=dict(edges_met))
 
@@ -319,30 +271,30 @@ def refine_effective_metric(
 				)
 
 			# Per-trajectory correction factor
-			traj['f'] = trips['trip_distance/m'] / traj['dist']
+			traj['f'] = trips['distance'] / traj['dist']
 
 			# # Accept trips/trajectories that are feasibly related
 			# traj = traj[(0.8 < traj.f) & (traj.f < 1.2)]
 
 			logger.debug(F"Weight correction using {sum(traj.f < 1)}(down) + {sum(traj.f > 1)}(up) trips")
 
-		with section("Computing correction factors", print=logger.debug):
+		with Section("Computing correction factors", out=logger.debug):
 
-			with section("Edges of trajectories"):
+			with Section("Edges of trajectories"):
 				edges_loci = dict(zip(edges_met.index, range(len(edges_met))))
 				edges_of_traj = list(tuple(edges_loci[e] for e in pairwise(path)) for path in progressbar(traj.path))
 
-			with section("Incidence matrix [trips x edges]"):
+			with Section("Incidence matrix [trips x edges]"):
 				M = dok_matrix((len(traj), len(edges_met)), dtype=float)
 				for (t, edges, f) in zip(range(M.shape[0]), edges_of_traj, traj.f):
 					M[t, edges] = f
 				del edges_of_traj
 
-			with section("Subsample trips"):
+			with Section("Subsample trips"):
 				I = pd.Series(range(M.shape[0])).sample(frac=0.5, random_state=opt.random_state)
 				M = csr_matrix(M)[I, :]
 
-			with section("Compute correction"):
+			with Section("Compute correction"):
 				M = csc_matrix(M)
 
 				correction = pd.Series(
@@ -356,7 +308,7 @@ def refine_effective_metric(
 				# Clip and moderate the correction factors
 				correction = 2 ** (opt.correction_factor_moderation * np.log2(correction).clip(lower=-1, upper=+1))
 
-		with section("Applying correction factors", print=logger.debug):
+		with Section("Applying correction factors", out=logger.debug):
 
 			edges_met = edges_met * correction
 
@@ -372,7 +324,8 @@ def refine_effective_metric(
 			# 	columns=pd.Index(edges_met.index, name="Edges")
 			# ).astype(pd.SparseDtype('float', np.nan))
 
-			callback(SimpleNamespace(graph=graph, trips=trips, edges_met=edges_met, traj=traj, round=r, correction=correction))
+			callback(SimpleNamespace(graph=graph, trips=trips, edges_met=edges_met, traj=traj, round=r,
+									 correction=correction))
 
 	# Record the estimated metric
 	nx.set_edge_attributes(graph, name=opt.temp_graph_metric_attr_name, values=dict(edges_met))
@@ -385,7 +338,6 @@ def refine_effective_metric(
 # ~~~~ WORKER ~~~~ #
 
 def compute_metric_for_table(table_name):
-
 	# Get the database table timespan
 	with sqlite3.connect(PARAM['taxidata']) as con:
 		sql = F"SELECT min(pickup_datetime), max(dropoff_datetime) FROM [{table_name}]"
@@ -414,16 +366,19 @@ def compute_metric_for_table(table_name):
 				json.dump(info, fd)
 
 		def manhattan_metric_callback(info: SimpleNamespace):
-			assert(info.round is not None)
-			assert(info.trips is not None)
-			assert(info.edges_met is not None)
+			assert (info.round is not None)
+			assert (info.trips is not None)
+			assert (info.edges_met is not None)
 
 			aboutfile_write({**aboutfile_read(), 'valid': False})
 
 			with open(output_edges_fn, 'wb') as fd:
 				pickle.dump(info.edges_met, fd)
 
-			aboutfile_write({**aboutfile_read(), 'valid': True, 'days': list(map(str, days)), 'weekday': weekday, 'hour': hour, '#trips': len(info.trips), 'round': info.round, 'timestamp': datetime.now(tz=timezone.utc).isoformat()})
+			aboutfile_write(
+				{**aboutfile_read(), 'valid': True, 'days': list(map(str, days)), 'weekday': weekday, 'hour': hour,
+				 '#trips': len(info.trips), 'round': info.round,
+				 'timestamp': datetime.now(tz=timezone.utc).isoformat()})
 
 			fn = makedirs(os.path.join(output_path, F"UV/{info.round:04}.jpg"))
 			if os.path.isfile(fn):
@@ -483,7 +438,8 @@ def compute_metric_for_table(table_name):
 
 			# Run the metric computation loop
 			# Note: The callback function records the results
-			refine_effective_metric(graph, trips, opt=opt, callback=manhattan_metric_callback, skip_rounds=skip_rounds, edges_met=edges_met)
+			refine_effective_metric(graph, trips, opt=opt, callback=manhattan_metric_callback, skip_rounds=skip_rounds,
+									edges_met=edges_met)
 
 		except:
 			(exc_type, value, traceback) = sys.exc_info()
@@ -509,4 +465,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-

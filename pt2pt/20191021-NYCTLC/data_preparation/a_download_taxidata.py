@@ -1,24 +1,23 @@
-
 # RA, 2019-10-21
 
 # Download some NYC TLC taxi data
 
+from helpers.commons import parallel_map
 
 import os
+
 import json
+import sqlite3
+
+import numpy as np
+import pandas as pd
+
+from itertools import product
 
 from urllib.request import urlretrieve as wget
 
-import pandas as pd
-import numpy as np
-
-from sqlite3 import connect
-
-from multiprocessing import Pool
-
 from shapely import geometry
 from shapely.prepared import prep as prep_geometry
-
 
 PARAM = {
 	'datapath': "data/taxidata/",
@@ -31,7 +30,7 @@ PARAM = {
 
 PARAM.update(
 	bounding_shape=max(
-		(p for mp in geometry.shape(json.load(open(PARAM['bounding_multipolygon'], 'r'))) for p in mp),
+		(p for mp in geometry.shape(json.load(open(PARAM['bounding_multipolygon_src'], 'r'))) for p in mp),
 		key=(lambda p: p.length)
 	)
 )
@@ -41,7 +40,7 @@ PARAM.update(
 		{
 			# Sources
 			'urls': {
-				# NYC TLC data before 2017 provides lat/lon pairs
+				# NYC TLC data *before* 2017 provides lat/lon pairs
 				"https://s3.amazonaws.com/nyc-tlc/trip+data/yellow_tripdata_2016-05.csv",
 				"https://s3.amazonaws.com/nyc-tlc/trip+data/green_tripdata_2016-05.csv",
 			},
@@ -80,10 +79,17 @@ def data_clean(df: pd.DataFrame) -> pd.DataFrame:
 	for e in ["pickup_datetime", "dropoff_datetime"]:
 		df.columns = map(lambda c: (e if c.endswith(e) else c), df.columns)
 
+	df.columns = map(lambda c: c.replace("latitude", "lat"), df.columns)
+	df.columns = map(lambda c: c.replace("longitude", "lon"), df.columns)
+
+	df = df.rename(columns={"pickup_datetime": "ta"})
+	df = df.rename(columns={"dropoff_datetime": "tb"})
+
+	df['duration'] = (pd.to_datetime(df['tb']) - pd.to_datetime(df['ta'])).dt.total_seconds()
+
 	# Omit rows with bogus lat/lon entries
-	for spot in ["pickup", "dropoff"]:
-		for coor in ["latitude", "longitude"]:
-			df = df[df[spot + "_" + coor] != 0]
+	for c in map("_".join, product(["pickup", "dropoff"], ["lat", "lon"])):
+		df = df[df[c] != 0]
 
 	# Omit rows with small/large trip distance (in miles)
 	df = df[df['trip_distance'] >= PARAM['min_trip_distance_miles']]
@@ -92,16 +98,15 @@ def data_clean(df: pd.DataFrame) -> pd.DataFrame:
 	# Convert travel distance to meters
 	METERS_PER_MILE = 1609.34
 	df['trip_distance'] *= METERS_PER_MILE
-	df = df.rename(columns={"trip_distance": "trip_distance/m"})
+	df = df.rename(columns={"trip_distance": "distance"})
 
 	return df
 
 
 def data_in_polygon(df: pd.DataFrame, selector) -> pd.DataFrame:
 	# Omit rows with pickup/dropoff outside of "area"
-	for spot in ["pickup", "dropoff"]:
-		cols = [F"{spot}_longitude", F"{spot}_latitude"]
-		has = list(map(selector, map(geometry.Point, zip(*df[cols].values.T))))
+	for x in ["pickup", "dropoff"]:
+		has = list(map(selector, (geometry.Point(p) for p in zip(df[x + "_lon"], df[x + "_lat"]))))
 		df = df.loc[has, :]
 	return df
 
@@ -128,11 +133,10 @@ def tosqlite():
 		# https://shapely.readthedocs.io/en/stable/manual.html#object.contains
 		selector = prep_geometry(PARAM['bounding_shape']).contains
 
-		with connect(database) as con:
-			con.cursor().execute("DROP TABLE IF EXISTS [{}]".format(table))
+		with sqlite3.connect(database) as con:
+			con.cursor().execute(F"DROP TABLE IF EXISTS [{table}]")
 
 			for df in pd.read_csv(file, chunksize=(1024 * 1024)):
-
 				df = data_clean(df)
 				df = data_in_polygon(df, selector)
 
@@ -143,4 +147,3 @@ def tosqlite():
 if __name__ == "__main__":
 	download()
 	tosqlite()
-

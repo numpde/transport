@@ -3,6 +3,7 @@
 
 #
 from helpers import maps
+from helpers.commons import Axes
 
 import os
 import math
@@ -37,7 +38,17 @@ PARAM = {
 
 	'out_images_path': "exploration/",
 
-	'savefig_args': dict(bbox_inches='tight', pad_inches=0, dpi=300),
+	'mpl_style': {
+		'font.size': 3,
+		'xtick.major.size': 2,
+		'ytick.major.size': 0,
+		'xtick.major.pad': 1,
+		'ytick.major.pad': 1,
+
+		'savefig.bbox': "tight",
+		'savefig.pad_inches': 0,
+		'savefig.dpi': 300,
+	},
 }
 
 
@@ -60,7 +71,7 @@ def query(sql) -> pd.DataFrame:
 def trip_distance_histogram(table_name):
 	mpl.use("Agg")
 
-	col_name = 'trip_distance/m'
+	col_name = 'distance'
 	sql = F"SELECT [{col_name}] FROM [{table_name}]"
 	trip_distance = query(sql)[col_name]
 
@@ -161,7 +172,7 @@ def pickup_hour_heatmap(table_name):
 def trip_speed_histogram(table_name):
 	mpl.use("Agg")
 
-	sql = F"SELECT [pickup_datetime] as a, [dropoff_datetime] as b, [trip_distance/m] as m FROM [{table_name}]"
+	sql = F"SELECT [pickup_datetime] as a, [dropoff_datetime] as b, [distance] as m FROM [{table_name}]"
 	# sql += "ORDER BY RANDOM() LIMIT 1000"  # DEBUG
 	df: pd.DataFrame
 	df = query(sql)
@@ -240,35 +251,44 @@ def running_number_of_trips(table_name):
 	df = df.groupby(['d', 'h']).mean().reset_index()
 	df = df.pivot(index='d', columns='h', values='n').fillna(0).sort_index()
 
-	style = {
-		'font.size': 3,
-		'xtick.major.size': 2,
-		'ytick.major.size': 0,
-		'xtick.major.pad': 1,
-		'ytick.major.pad': 1,
-	}
+	with plt.style.context(PARAM['mpl_style']):
+		with Axes() as ax1:
+			im = ax1.imshow(df, cmap=plt.get_cmap("Blues"), origin="upper")
 
-	with plt.style.context(style):
-		fig: plt.Figure
-		ax1: plt.Axes
-		(fig, ax1) = plt.subplots()
+			(xlim, ylim) = (ax1.get_xlim(), ax1.get_ylim())
+			ax1.set_xticks(np.linspace(-0.5, 23.5, 25))
+			ax1.set_xticklabels(range(25))
+			ax1.set_yticks(range(len(df.index)))
+			ax1.set_yticklabels(df.index.date)
+			ax1.set_xlim(*xlim)
+			ax1.set_ylim(*ylim)
 
-		im = ax1.imshow(df, cmap=plt.get_cmap("Blues"), origin="upper")
+			for (j, c) in enumerate(df.columns):
+				for (i, x) in enumerate(df[c]):
+					im.axes.text(j, i, int(x), ha="center", va="center")
 
-		(xlim, ylim) = (ax1.get_xlim(), ax1.get_ylim())
-		ax1.set_xticks(np.linspace(-0.5, 23.5, 25))
-		ax1.set_xticklabels(range(25))
-		ax1.set_yticks(range(len(df.index)))
-		ax1.set_yticklabels(df.index.date)
-		ax1.set_xlim(*xlim)
-		ax1.set_ylim(*ylim)
+			fn = os.path.join(PARAM['out_images_path'], F"{myname()}/{table_name}.png")
+			ax1.figure.savefig(makedirs(fn))
 
-		for (j, c) in enumerate(df.columns):
-			for (i, x) in enumerate(df[c]):
-				im.axes.text(j, i, int(x), ha="center", va="center")
 
-		fn = os.path.join(PARAM['out_images_path'], F"{myname()}/{table_name}.png")
-		fig.savefig(makedirs(fn), **PARAM['savefig_args'])
+def trip_duration_vs_distance(table_name):
+	mpl.use("Agg")
+
+	sql = F"""
+		SELECT [pickup_datetime] as t0, [dropoff_datetime] as t1, [distance] as ds
+		FROM [{table_name}]
+		WHERE ('2016-05-02 08:00' <= t0) and (t1 <= '2016-05-02 08:30')
+	"""
+
+	df = query(sql)
+	df['dt'] = pd.to_datetime(df.t1) - pd.to_datetime(df.t0)
+
+	with plt.style.context(PARAM['mpl_style']):
+		with Axes() as ax1:
+			ax1.scatter(df['ds'], df['dt'].dt.total_seconds())
+
+			fn = os.path.join(PARAM['out_images_path'], F"{myname()}/{table_name}.png")
+			ax1.figure.savefig(makedirs(fn))
 
 
 
@@ -281,6 +301,7 @@ def main():
 		# pickup_hour_heatmap(table_name)
 		# trip_speed_histogram(table_name)
 		# running_number_of_trips(table_name)
+		trip_duration_vs_distance(table_name)
 		pass
 
 

@@ -1,6 +1,6 @@
 # RA, 2019-11-05
 
-from math import ceil
+from math import ceil, pi
 
 import numpy as np
 import pandas as pd
@@ -8,10 +8,16 @@ import networkx as nx
 
 from inclusive import range
 
+from sklearn.neighbors import BallTree
+
 from geopy.distance import distance as geodistance
 
 from itertools import groupby
 from more_itertools import pairwise
+
+from typing import Tuple, ContextManager
+
+from functools import lru_cache
 
 
 def odd_king_graph(xn=8, yn=8, scale=1.0) -> nx.DiGraph:
@@ -186,3 +192,69 @@ class ApproxGeodistance:
 
 	def node_dist_est(self, u, v):
 		return self.loc_dist_est(self.node_loc[u], self.node_loc[v])
+
+
+class GraphNearestNode(ContextManager):
+	RAD_PER_DEGREE = pi / 180
+	EARTH_RADIUS_METERS = 6367.5 * 1e3
+
+	def __init__(self, graph):
+		# Point array
+		self.X = pd.DataFrame(data=nx.get_node_attributes(graph, "loc")).T
+		# Nearest neighbors tree
+		self.T = BallTree(self.X.values * self.RAD_PER_DEGREE, metric="haversine")
+
+	def __call__(self, locs):
+		# Get nearest nodes: distance to X and index in X
+		(d, i) = np.squeeze(self.T.query(np.asarray(locs) * self.RAD_PER_DEGREE, k=1, return_distance=True))
+		# Note: do not sort the Series
+		s = pd.Series(index=(self.X.index[list(map(int, i))]), data=(d * self.EARTH_RADIUS_METERS))
+		return s
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		return None
+
+
+class GraphPathDist(ContextManager):
+	def __init__(self, graph: nx.DiGraph, edge_weight="len"):
+		self.i2n = pd.Series(index=range(len(graph.nodes)), data=graph.nodes).to_dict()
+		self.n2i = pd.Series(index=graph.nodes, data=range(len(graph.nodes))).to_dict()
+		self.graph = nx.convert_node_labels_to_integers(graph)
+		self.edge_weight = edge_weight
+		self.lens = nx.get_edge_attributes(self.graph, name=edge_weight)
+		self.geodist = ApproxGeodistance(self.graph)
+
+	def astar_heuristic(self, u, v):
+		return 2 * self.geodist.node_dist_est(u, v)
+
+	def length_of(self, path):
+		return sum(self.lens[e] for e in pairwise(path))
+
+	@lru_cache(maxsize=100)
+	def __call__(self, uv) -> Tuple[Tuple, float]:
+		self.graph: nx.DiGraph
+
+		# path = nx.shortest_path(
+		path = nx.astar_path(
+			self.graph,
+			source=self.n2i[uv[0]],
+			target=self.n2i[uv[1]],
+			heuristic=self.astar_heuristic,
+			weight=self.edge_weight
+		)
+		dist = self.length_of(path)
+
+		path = tuple(self.i2n[n] for n in path)
+		return (path, dist)
+
+	def path_only(self, uv):
+		return (self(uv))[0]
+
+	def dist_only(self, uv):
+		return (self(uv))[1]
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		return None

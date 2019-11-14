@@ -1,4 +1,3 @@
-
 # RA, 2019-10-29
 
 import os
@@ -30,7 +29,7 @@ def this_module_body(goback=1):
 
 # Create path leading to file
 def makedirs(filename) -> str:
-	os.makedirs(os.path.dirname(filename), exist_ok=True)
+	os.makedirs(os.path.dirname(str(filename)), exist_ok=True)
 	return filename
 
 
@@ -38,22 +37,33 @@ def makedirs(filename) -> str:
 def parallel_map(func, generator) -> list:
 	with Pool(6) as pool:
 		return list(pool.imap(func, generator, chunksize=1000))
-		# return list(pool.map(func, generator))
-
-
-# Context manager for plt.subplots(1, 1)
-@contextmanager
-def figax() -> ContextManager[Tuple[plt.Figure, plt.Axes]]:
-	(fig, ax1) = plt.subplots()
-	yield (fig, ax1)
-	plt.close(fig)
+	# return list(pool.map(func, generator))
 
 
 @contextmanager
-def section(description: str, print=None):
+def Section(description: str, out=None):
 	fname = inspect.currentframe().f_back.f_back.f_code.co_name
-	print and print(F"{fname} -- {description}")
+	out and out(F"{fname} -- {description}")
 	start = tic()
 	yield
-	print and print(F"{fname} -- {description} [{(tic() - start):.2g}s]")
+	out and out(F"{fname} -- {description} [{(tic() - start):.2g}s]")
 
+
+class Axes(ContextManager):
+	"""
+	Example:
+		with Axes() as ax:
+			ax.plot(...)
+	"""
+
+	def __init__(self):
+		# self.style = style or {}
+		pass
+
+	def __enter__(self, *args, **kwargs) -> plt.Axes:
+		(self.fig, self.ax) = plt.subplots(*args, **kwargs)
+		return self.ax
+
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		plt.close(self.fig)
+		return False

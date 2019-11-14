@@ -1,4 +1,3 @@
-
 # RA, 2018-11-07
 # RA, 2019-10-24
 
@@ -7,7 +6,10 @@
 import io
 import os
 
+import numpy as np
+
 import urllib
+
 WGET_TIMEOUT = 20  # In seconds
 
 from enum import Enum
@@ -20,21 +22,20 @@ from socket import timeout as TimeoutError
 from retry import retry
 
 import percache
+
 cache = percache.Cache("/tmp/percache_mapbox_maps", livesync=True)
 
 # Load the MapBox token, if present
 import dotenv
+
 dotenv.load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 import matplotlib as mpl
-
-
 
 PARAM = {
 	'do_retina': True,
 	'do_snap_to_dyadic': True,
 }
-
 
 # Convert geographical coordinates to pixels
 # https://en.wikipedia.org/wiki/Web_Mercator_projection
@@ -90,13 +91,22 @@ def mb2ax(left, bottom, right, top):
 	return (left, right, bottom, top)
 
 
-def bbox_for_points(pp):
-	(left, bottom, right, top) = [
-		min(lon for (lat, lon) in pp),
-		min(lat for (lat, lon) in pp),
-		max(lon for (lat, lon) in pp),
-		max(lat for (lat, lon) in pp)
-	]
+def ax4(lat, lon, extra_space=0.01):
+	extent = np.dot(
+		[
+			[min(lon), max(lon)],
+			[min(lat), max(lat)],
+		],
+		(
+			lambda s:
+			np.asarray([[1 + s, -s], [-s, 1 + s]])
+		)(extra_space)
+	)
+	return tuple(extent.flatten())
+
+
+def mb4(lat, lon):
+	(left, bottom, right, top) = [min(lon), min(lat), max(lon), max(lat)]
 	return (left, bottom, right, top)
 
 
@@ -109,7 +119,6 @@ def wget(url: str) -> bytes:
 
 # bbox = (left, bottom, right, top) in degrees
 def get_map_by_bbox(bbox, token=os.getenv("MAPBOX_TOKEN"), style=MapBoxStyle.light):
-
 	if not token:
 		raise RuntimeError("An API token is required")
 
@@ -176,7 +185,6 @@ def get_map_by_bbox(bbox, token=os.getenv("MAPBOX_TOKEN"), style=MapBoxStyle.lig
 	))
 
 	return i
-
 
 # def write_track_img(waypoints, tracks, fd, mapbox_api_token=None, plotter=None, dpi=180):
 # 	mpl.use('Agg')
