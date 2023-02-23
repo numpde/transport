@@ -8,7 +8,7 @@ To download `manhattan.geojson`:
  - Try [geojson.io](http://geojson.io/#map=12/40.7823/-73.9767) to visualize the geometry. 
 
 
-Overpass query `manhattan.ql` was composed using 
+Overpass query `manhattan.overpassql` was composed using 
 
  - [OSM relation info](https://www.openstreetmap.org/relation/8398124).
  - [Overpass QL reference](https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL).

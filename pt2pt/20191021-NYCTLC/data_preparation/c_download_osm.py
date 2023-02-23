@@ -12,7 +12,7 @@ PARAM = {
 	'api_url': "https://overpass-api.de/api/interpreter",
 	# Note: check http://overpass-api.de/api/status
 
-	'query': open("data/osm/manhattan/manhattan.ql", 'r').read(),
+	'query': open("data/osm/manhattan/manhattan.overpassql", 'r').read(),
 
 	'out_osm_archive': "data/manhattan/osm_json.zip",
 	'zipped_name': "data",
